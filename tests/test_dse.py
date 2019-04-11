@@ -46,7 +46,7 @@ def run_acoustic_forward(dse=None):
     geometry = AcquisitionGeometry(model, rec_coordinates, src_coordinates,
                                    t0=t0, tn=tn, src_type='Ricker', f0=0.010)
 
-    solver = AcousticWaveSolver(model, geometry, dse=dse, dle='basic')
+    solver = AcousticWaveSolver(model, geometry, dse=dse, dle='noop')
     rec, u, _ = solver.forward(save=False)
 
     return u, rec
@@ -139,12 +139,12 @@ def test_tti_rewrite_aggressive(tti_nodse):
     # * four Arrays are allocated on the heap
     # * two Arrays are allocated on the stack and only appear within an efunc
     arrays = [i for i in FindSymbols().visit(op) if i.is_Array]
-    assert len(arrays) == 4
+    assert len(arrays) == 3
     assert all(i._mem_heap and not i._mem_external for i in arrays)
     arrays = [i for i in FindSymbols().visit(op._func_table['bf0'].root) if i.is_Array]
-    assert len(arrays) == 6
+    assert len(arrays) == 5
     assert all(not i._mem_external for i in arrays)
-    assert len([i for i in arrays if i._mem_heap]) == 4
+    assert len([i for i in arrays if i._mem_heap]) == 3
     assert len([i for i in arrays if i._mem_stack]) == 2
 
 
@@ -162,7 +162,7 @@ def test_tti_rewrite_aggressive_wmpi():
 
 @switchconfig(profiling='advanced')
 @pytest.mark.parametrize('kernel,space_order,expected', [
-    ('centered', 8, 168), ('centered', 16, 300)
+    ('centered', 8, 148), ('centered', 16, 264)
 ])
 def test_tti_rewrite_aggressive_opcounts(kernel, space_order, expected):
     operator = tti_operator(dse='aggressive', space_order=space_order)
@@ -409,7 +409,7 @@ def test_makeit_ssa(exprs, exp_u, exp_v):
 
 
 @pytest.mark.parametrize('dse', ['noop', 'basic', 'advanced', 'aggressive'])
-@pytest.mark.parametrize('dle', ['noop', 'basic', 'advanced', 'speculative'])
+@pytest.mark.parametrize('dle', ['noop', 'advanced', 'speculative'])
 def test_time_dependent_split(dse, dle):
     grid = Grid(shape=(10, 10))
     u = TimeFunction(name='u', grid=grid, time_order=2, space_order=2, save=3)
