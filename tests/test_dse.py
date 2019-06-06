@@ -81,6 +81,7 @@ def test_skew_vs_advanced():
     op_adv.apply(time=300)
     assert np.all(u_skew.data[0] == u_adv.data[0])
 
+
 @pytest.mark.parametrize('exprs,expected', [
     # Simple cases
     (['Eq(tu, 2/(t0 + t1))', 'Eq(ti0, t0 + t1)', 'Eq(ti1, t0 + t1)'],
