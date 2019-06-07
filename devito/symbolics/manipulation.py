@@ -3,9 +3,13 @@ from collections.abc import Iterable
 from functools import singledispatch
 
 import sympy
+<<<<<<< HEAD
 from sympy import Number, Indexed, Symbol, LM, LC
 from sympy.core.add import _addsort
 from sympy.core.mul import _mulsort
+=======
+from sympy import Number, Indexed, Symbol, LM, LC, Expr
+>>>>>>> dse: Blocked limits work after testing
 
 from devito.symbolics.search import retrieve_indexed, retrieve_functions
 from devito.tools import as_tuple, flatten
@@ -152,8 +156,9 @@ def as_symbol(expr):
         return Symbol(expr)
     elif isinstance(expr, Dimension):
         return Symbol(expr.name)
-    elif isinstance(expr, sympy.Mul):
-        return Symbol("time")
+    elif (isinstance(expr, sympy.mul.Mul) and isinstance(expr.args[0], Number)
+          and isinstance(expr.args[1], Dimension)):
+        return expr
     elif expr.is_Symbol:
         return expr
     elif isinstance(expr, Indexed):

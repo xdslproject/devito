@@ -75,8 +75,8 @@ def test_skew_vs_advanced():
     eq_skew = Eq(u_skew.forward, u_skew + 0.1)
     eq_adv = Eq(u_adv.forward, u_adv + 0.1)
 
-    op_skew = Operator(eq_skew, dse='skewing', dle='noop')
-    op_adv = Operator(eq_adv, dse='advanced', dle='noop')
+    op_skew = Operator(eq_skew, dse='skewing', dle='advanced')
+    op_adv = Operator(eq_adv, dse='advanced', dle='advanced')
     op_skew.apply(time=300)
     op_adv.apply(time=300)
     assert np.all(u_skew.data[0] == u_adv.data[0])
@@ -1075,29 +1075,174 @@ class TestAliases(object):
         e = TimeFunction(name="e", grid=grid, space_order=4)
         f = TimeFunction(name="f", grid=grid, space_order=4)
 
-        subexpr0 = sqrt(1. + 1./a)
-        subexpr1 = 1/(8.*subexpr0 - 8./b)
-        eqns = [Eq(e.forward, e + 1),
-                Eq(f.forward, f*subexpr0 - f*subexpr1 + e.forward.dx)]
+    f = Function(name='f', grid=grid)
+    f.data_with_halo[:] = 1.
+    u = TimeFunction(name='u', grid=grid, space_order=3)
+    u.data_with_halo[:] = 0.
 
+    # Leads to 3D aliases
+    eqn = Eq(u.forward, ((u[t, x, y, z] + u[t, x+1, y+1, z+1])*3*f +
+                         (u[t, x+2, y+2, z+2] + u[t, x+3, y+3, z+3])*3*f + 1))
+    op0 = Operator(eqn, dse='noop', dle=('advanced', {'openmp': True}))
+    op1 = Operator(eqn, dse='aggressive', dle=('advanced', {'openmp': True}))
+
+    x0_blk_size = op1.parameters[6]
+    y0_blk_size = op1.parameters[10]
+    z_size = op1.parameters[-1]
+
+    # Check Array shape
+    arrays = [i for i in FindSymbols().visit(op1._func_table['bf0'].root) if i.is_Array]
+    assert len(arrays) == 1
+    a = arrays[0]
+    assert len(a.dimensions) == 3
+    assert a.halo == ((1, 1), (1, 1), (1, 1))
+    assert Add(*a.symbolic_shape[0].args) == x0_blk_size + 2
+    assert Add(*a.symbolic_shape[1].args) == y0_blk_size + 2
+    assert Add(*a.symbolic_shape[2].args) == z_size + 2
+    # Check numerical output
+    op0(time_M=1)
+    exp = np.copy(u.data[:])
+    u.data_with_halo[:] = 0.
+    op1(time_M=1)
+    assert np.all(u.data == exp)
+
+
+@patch("devito.dse.rewriters.AdvancedRewriter.MIN_COST_ALIAS", 1)
+def test_contracted_alias_shape_after_blocking():
+    """
+    Like `test_full_alias_shape_after_blocking`, but a different
+    Operator is used, leading to contracted Arrays (2D instead of 3D).
+    """
+    grid = Grid(shape=(3, 3, 3))
+    x, y, z = grid.dimensions  # noqa
+    t = grid.stepping_dim
+
+<<<<<<< HEAD
         op = Operator(eqns, opt=('advanced', {'cire-repeats-inv': 2,
                                               'cire-mincost-inv': 28}))
+=======
+    f = Function(name='f', grid=grid)
+    f.data_with_halo[:] = 1.
+    u = TimeFunction(name='u', grid=grid, space_order=3)
+    u.data_with_halo[:] = 0.
 
-        trees = retrieve_iteration_tree(op)
-        assert len(trees) == 3
-        arrays = [i for i in FindSymbols().visit(trees[0].root) if i.is_Array]
-        assert len(arrays) == 2
-        assert all(i._mem_heap and not i._mem_external for i in arrays)
+    # Leads to 2D aliases
+    eqn = Eq(u.forward, ((u[t, x, y, z] + u[t, x, y+1, z+1])*3*f +
+                         (u[t, x, y+2, z+2] + u[t, x, y+3, z+3])*3*f + 1))
+    op0 = Operator(eqn, dse='basic', dle=('advanced', {'openmp': True}))
+    op1 = Operator(eqn, dse='aggressive', dle=('advanced', {'openmp': True}))
 
-    def test_drop_redundants_after_fusion(self):
-        """
-        Test for detection of redundant aliases that get exposed after
-        Cluster fusion.
-        """
-        grid = Grid(shape=(10, 10))
+    y0_blk_size = op1.parameters[9]
+    z_size = op1.parameters[-1]
 
-        t = cos(Function(name="t", grid=grid))
-        p = sin(Function(name="p", grid=grid))
+    arrays = [i for i in FindSymbols().visit(op1._func_table['bf0'].root) if i.is_Array]
+    assert len(arrays) == 1
+    a = arrays[0]
+    assert len(a.dimensions) == 2
+    assert a.halo == [(1, 1), (1, 1)]
+    assert Add(*a.symbolic_shape[0].args) == y0_blk_size + 2
+    assert Add(*a.symbolic_shape[1].args) == z_size + 2
+    # Check numerical output
+    op0(time_M=1)
+    exp = np.copy(u.data[:])
+    u.data_with_halo[:] = 0.
+    op1(time_M=1)
+    assert np.all(u.data == exp)
+
+
+@patch("devito.dse.rewriters.AdvancedRewriter.MIN_COST_ALIAS", 1)
+def test_contracted_alias_shape_after_blocking_skewing():
+    """
+    Like `test_full_alias_shape_after_blocking`, but a different
+    Operator is used, leading to contracted Arrays (2D instead of 3D).
+    """
+    grid = Grid(shape=(3, 3, 3))
+    x, y, z = grid.dimensions  # noqa
+    t = grid.stepping_dim
+>>>>>>> dse: Blocked limits work after testing
+
+    f = Function(name='f', grid=grid)
+    f.data_with_halo[:] = 1.
+    u = TimeFunction(name='u', grid=grid, space_order=3)
+    u.data_with_halo[:] = 0.
+
+    # Leads to 2D aliases
+    eqn = Eq(u.forward, ((u[t, x, y, z] + u[t, x, y+1, z+1])*3*f +
+                         (u[t, x, y+2, z+2] + u[t, x, y+3, z+3])*3*f + 1))
+    op0 = Operator(eqn, dse='skewing', dle=('advanced', {'openmp': True}))
+    op1 = Operator(eqn, dse='aggressive', dle=('advanced', {'openmp': True}))
+
+    y0_blk_size = op1.parameters[9]
+    z_size = op1.parameters[-1]
+
+    arrays = [i for i in FindSymbols().visit(op1._func_table['bf0'].root) if i.is_Array]
+    assert len(arrays) == 1
+    a = arrays[0]
+    assert len(a.dimensions) == 2
+    assert a.halo == ((1, 1), (1, 1))
+    assert Add(*a.symbolic_shape[0].args) == y0_blk_size + 2
+    assert Add(*a.symbolic_shape[1].args) == z_size + 2
+    # Check numerical output
+    op0(time_M=1)
+    exp = np.copy(u.data[:])
+    u.data_with_halo[:] = 0.
+    op1(time_M=1)
+    assert np.all(u.data == exp)
+
+
+@patch("devito.dse.rewriters.AdvancedRewriter.MIN_COST_ALIAS", 1)
+def test_full_alias_shape_with_subdims():
+    """
+    Like `test_full_alias_shape_after_blocking`, but SubDomains (and therefore
+    SubDimensions) are used. Nevertheless, the temporary shape should still be
+    dictated by the root Dimensions.
+    """
+    grid = Grid(shape=(3, 3, 3))
+    x, y, z = grid.dimensions  # noqa
+    t = grid.stepping_dim
+
+    f = Function(name='f', grid=grid)
+    f.data_with_halo[:] = 1.
+    u = TimeFunction(name='u', grid=grid, space_order=3)
+    u.data_with_halo[:] = 0.
+
+    # Leads to 3D aliases
+    eqn = Eq(u.forward, ((u[t, x, y, z] + u[t, x+1, y+1, z+1])*3*f +
+                         (u[t, x+2, y+2, z+2] + u[t, x+3, y+3, z+3])*3*f + 1),
+             subdomain=grid.interior)
+    op0 = Operator(eqn, dse='noop', dle=('advanced', {'openmp': True}))
+    op1 = Operator(eqn, dse='aggressive', dle=('advanced', {'openmp': True}))
+
+    xi0_blk_size = op1.parameters[9]
+    yi0_blk_size = op1.parameters[15]
+    z_size = op1.parameters[20]
+
+    # Check Array shape
+    arrays = [i for i in FindSymbols().visit(op1._func_table['bf0'].root) if i.is_Array]
+    assert len(arrays) == 1
+    a = arrays[0]
+    assert len(a.dimensions) == 3
+    assert a.halo == ((1, 1), (1, 1), (1, 1))
+    assert Add(*a.symbolic_shape[0].args) == xi0_blk_size + 2
+    assert Add(*a.symbolic_shape[1].args) == yi0_blk_size + 2
+    assert Add(*a.symbolic_shape[2].args) == z_size + 2
+    # Check numerical output
+    op0(time_M=1)
+    exp = np.copy(u.data[:])
+    u.data_with_halo[:] = 0.
+    op1(time_M=1)
+    assert np.all(u.data == exp)
+
+
+
+
+def test_alias_composite():
+    """
+    Check that composite alias are optimized away through "smaller" aliases.
+
+    Examples
+    --------
+    Instead of the following:
 
         a = TimeFunction(name="a", grid=grid)
         b = TimeFunction(name="b", grid=grid)
@@ -1362,6 +1507,7 @@ def test_acoustic_rewrite_skewing():
 
 # TTI
 <<<<<<< HEAD
+<<<<<<< HEAD
 >>>>>>> tests: Initialize testing
 class TestTTI(object):
 
@@ -1517,6 +1663,8 @@ class TestTTIv2(object):
         assert sections[0].sops == 4
         assert sections[1].sops == expected
 =======
+=======
+>>>>>>> dse: Blocked limits work after testing
 
 def tti_operator(dse=False, dle='advanced', space_order=4):
     nrec = 101
@@ -1545,7 +1693,7 @@ def tti_operator(dse=False, dle='advanced', space_order=4):
     return AnisotropicWaveSolver(model, geometry, space_order=space_order, dse=dse)
 
 
-def tti_operator_skew(dse=False, dle='noop', space_order=4):
+def tti_operator_skew(dse='skewing', dle='advanced', space_order=4):
     nrec = 101
     t0 = 0.0
     tn = 250.
@@ -1581,6 +1729,14 @@ def tti_nodse():
 
 def test_tti_rewrite_basic(tti_nodse):
     operator = tti_operator(dse='basic')
+    rec, u, v, _ = operator.forward()
+
+    assert np.allclose(tti_nodse[0].data, v.data, atol=10e-3)
+    assert np.allclose(tti_nodse[1].data, rec.data, atol=10e-3)
+
+
+def test_tti_rewrite_skew(tti_nodse):
+    operator = tti_operator(dse='skewing')
     rec, u, v, _ = operator.forward()
 
     assert np.allclose(tti_nodse[0].data, v.data, atol=10e-3)
@@ -1694,4 +1850,3 @@ def test_tti_v2_rewrite_aggressive_opcounts(space_order, expected):
 
 if __name__ == "__main__":
     test_tti_rewrite_aggressive_opcounts(16, 270)
->>>>>>> tests: Initialize testing
