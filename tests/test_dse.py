@@ -42,44 +42,25 @@ def test_scheduling_after_rewrite():
     assert all(trees[1].root.dim is tree.root.dim for tree in trees[1:])
 
 
-def test_trivial_skew_test():
+@pytest.mark.parametrize("skew_factor", [(2), (4), (6), (7)])
+@pytest.mark.parametrize("nx,ny", [(5,6), (4,16), (20,20), (100,100)])
+def test_skew_vs_advanced(skew_factor, nx, ny):
     """Trivial testing for DSE skewing"""
-    grid = Grid((10, 10))
-    u1 = TimeFunction(name="u1", grid=grid, save=10, time_order=2)
-    u2 = TimeFunction(name="u2", grid=grid, time_order=2)
-    sf1 = SparseTimeFunction(name='sf1', grid=grid, npoint=1, nt=10)
-    const = Function(name="const", grid=grid, space_order=2)
-
-    # Deliberately inject into u1, rather than u1.forward, to create a WAR
-    eqn1 = Eq(u1.forward, u1 + sin(const))
-    eqn2 = sf1.inject(u1.forward, expr=sf1)
-    eqn3 = Eq(u2.forward, u2 - u1.dt2 + sin(const))
-
-    op = Operator([eqn1] + eqn2 + [eqn3], dse='skewing')
-    trees = retrieve_iteration_tree(op)
-
-    # Check loop nest structure
-    assert len(trees) == 4
-    assert all(i.dim == j for i, j in zip(trees[0], grid.dimensions))  # time invariant
-    assert trees[1][0].dim == trees[2][0].dim == trees[3][0].dim == grid.time_dim
-
-
-def test_skew_vs_advanced():
-    """Trivial testing for DSE skewing"""
-    nx = 200
-    ny = 200
+    nx = 10
+    ny = 10
+    timesteps = 1
     grid = Grid(shape=(nx, ny))
+    configuration['skew_factor'] = skew_factor
     u_skew = TimeFunction(name='u_skew', grid=grid)
-    u_adv = TimeFunction(name='u_adv', grid=grid)
+    u = TimeFunction(name='u', grid=grid)
 
-    eq_skew = Eq(u_skew.forward, u_skew + 0.1)
-    eq_adv = Eq(u_adv.forward, u_adv + 0.1)
-
+    eq_skew = Eq(u_skew.forward, u_skew.dx + u_skew.dy + u_skew.dy.dy)
+    eq = Eq(u.forward, u.dx + u.dy + u.dy.dy)
     op_skew = Operator(eq_skew, dse='skewing', dle='advanced')
-    op_adv = Operator(eq_adv, dse='advanced', dle='advanced')
-    op_skew.apply(time=300)
-    op_adv.apply(time=300)
-    assert np.all(u_skew.data[0] == u_adv.data[0])
+    op = Operator(eq, dse=None, dle='advanced')
+    op_skew.apply(time=timesteps)
+    op.apply(time=timesteps)
+    assert np.all(u_skew.data[0] == u.data[0])
 
 
 @pytest.mark.parametrize('exprs,expected', [
@@ -1117,49 +1098,8 @@ def test_contracted_alias_shape_after_blocking():
     x, y, z = grid.dimensions  # noqa
     t = grid.stepping_dim
 
-<<<<<<< HEAD
         op = Operator(eqns, opt=('advanced', {'cire-repeats-inv': 2,
                                               'cire-mincost-inv': 28}))
-=======
-    f = Function(name='f', grid=grid)
-    f.data_with_halo[:] = 1.
-    u = TimeFunction(name='u', grid=grid, space_order=3)
-    u.data_with_halo[:] = 0.
-
-    # Leads to 2D aliases
-    eqn = Eq(u.forward, ((u[t, x, y, z] + u[t, x, y+1, z+1])*3*f +
-                         (u[t, x, y+2, z+2] + u[t, x, y+3, z+3])*3*f + 1))
-    op0 = Operator(eqn, dse='basic', dle=('advanced', {'openmp': True}))
-    op1 = Operator(eqn, dse='aggressive', dle=('advanced', {'openmp': True}))
-
-    y0_blk_size = op1.parameters[9]
-    z_size = op1.parameters[-1]
-
-    arrays = [i for i in FindSymbols().visit(op1._func_table['bf0'].root) if i.is_Array]
-    assert len(arrays) == 1
-    a = arrays[0]
-    assert len(a.dimensions) == 2
-    assert a.halo == [(1, 1), (1, 1)]
-    assert Add(*a.symbolic_shape[0].args) == y0_blk_size + 2
-    assert Add(*a.symbolic_shape[1].args) == z_size + 2
-    # Check numerical output
-    op0(time_M=1)
-    exp = np.copy(u.data[:])
-    u.data_with_halo[:] = 0.
-    op1(time_M=1)
-    assert np.all(u.data == exp)
-
-
-@patch("devito.dse.rewriters.AdvancedRewriter.MIN_COST_ALIAS", 1)
-def test_contracted_alias_shape_after_blocking_skewing():
-    """
-    Like `test_full_alias_shape_after_blocking`, but a different
-    Operator is used, leading to contracted Arrays (2D instead of 3D).
-    """
-    grid = Grid(shape=(3, 3, 3))
-    x, y, z = grid.dimensions  # noqa
-    t = grid.stepping_dim
->>>>>>> dse: Blocked limits work after testing
 
     f = Function(name='f', grid=grid)
     f.data_with_halo[:] = 1.
@@ -1188,52 +1128,6 @@ def test_contracted_alias_shape_after_blocking_skewing():
     u.data_with_halo[:] = 0.
     op1(time_M=1)
     assert np.all(u.data == exp)
-
-
-@patch("devito.dse.rewriters.AdvancedRewriter.MIN_COST_ALIAS", 1)
-def test_full_alias_shape_with_subdims():
-    """
-    Like `test_full_alias_shape_after_blocking`, but SubDomains (and therefore
-    SubDimensions) are used. Nevertheless, the temporary shape should still be
-    dictated by the root Dimensions.
-    """
-    grid = Grid(shape=(3, 3, 3))
-    x, y, z = grid.dimensions  # noqa
-    t = grid.stepping_dim
-
-    f = Function(name='f', grid=grid)
-    f.data_with_halo[:] = 1.
-    u = TimeFunction(name='u', grid=grid, space_order=3)
-    u.data_with_halo[:] = 0.
-
-    # Leads to 3D aliases
-    eqn = Eq(u.forward, ((u[t, x, y, z] + u[t, x+1, y+1, z+1])*3*f +
-                         (u[t, x+2, y+2, z+2] + u[t, x+3, y+3, z+3])*3*f + 1),
-             subdomain=grid.interior)
-    op0 = Operator(eqn, dse='noop', dle=('advanced', {'openmp': True}))
-    op1 = Operator(eqn, dse='aggressive', dle=('advanced', {'openmp': True}))
-
-    xi0_blk_size = op1.parameters[9]
-    yi0_blk_size = op1.parameters[15]
-    z_size = op1.parameters[20]
-
-    # Check Array shape
-    arrays = [i for i in FindSymbols().visit(op1._func_table['bf0'].root) if i.is_Array]
-    assert len(arrays) == 1
-    a = arrays[0]
-    assert len(a.dimensions) == 3
-    assert a.halo == ((1, 1), (1, 1), (1, 1))
-    assert Add(*a.symbolic_shape[0].args) == xi0_blk_size + 2
-    assert Add(*a.symbolic_shape[1].args) == yi0_blk_size + 2
-    assert Add(*a.symbolic_shape[2].args) == z_size + 2
-    # Check numerical output
-    op0(time_M=1)
-    exp = np.copy(u.data[:])
-    u.data_with_halo[:] = 0.
-    op1(time_M=1)
-    assert np.all(u.data == exp)
-
-
 
 
 def test_alias_composite():
@@ -1495,8 +1389,7 @@ class TestIsoAcoustic(object):
         assert np.allclose(rec0.data, rec1.data, atol=10e-5)
 
 
-<<<<<<< HEAD
-=======
+
 def test_acoustic_rewrite_skewing():
     ret1 = run_acoustic_forward(dse=None)
     ret2 = run_acoustic_forward(dse='skewing')
@@ -1506,9 +1399,7 @@ def test_acoustic_rewrite_skewing():
 
 
 # TTI
-<<<<<<< HEAD
-<<<<<<< HEAD
->>>>>>> tests: Initialize testing
+
 class TestTTI(object):
 
     @cached_property
@@ -1662,9 +1553,6 @@ class TestTTIv2(object):
         assert len(sections) == 2
         assert sections[0].sops == 4
         assert sections[1].sops == expected
-=======
-=======
->>>>>>> dse: Blocked limits work after testing
 
 def tti_operator(dse=False, dle='advanced', space_order=4):
     nrec = 101
@@ -1692,8 +1580,9 @@ def tti_operator(dse=False, dle='advanced', space_order=4):
 
     return AnisotropicWaveSolver(model, geometry, space_order=space_order, dse=dse)
 
+@pytest.mark.parametrize('dse', [(False), ('skewing')])
+def tti_operator(dse='dse', dle='advanced', space_order=4):
 
-def tti_operator_skew(dse='skewing', dle='advanced', space_order=4):
     nrec = 101
     t0 = 0.0
     tn = 250.
