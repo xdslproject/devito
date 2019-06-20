@@ -7,14 +7,12 @@ import sympy
 from sympy import Number, Indexed, Symbol, LM, LC
 from sympy.core.add import _addsort
 from sympy.core.mul import _mulsort
-from sympy import Number, Indexed, Symbol, LM, LC, Expr
-from sympy import Number, Indexed, Symbol, LM, LC
 
 from devito.symbolics.search import retrieve_indexed, retrieve_functions
 from devito.tools import as_tuple, flatten
 from devito.types.equation import Eq
 
-__all__ = ['yreplace', 'xreplace_indices', 'pow_to_mul', 'as_symbol', 'indexify',
+__all__ = ['xreplace_indices', 'pow_to_mul', 'as_symbol', 'indexify',
            'split_affine', 'subs_op_args', 'uxreplace', 'aligned_indices']
 
 
@@ -202,12 +200,12 @@ def as_symbol(expr):
         return Symbol(expr)
     elif isinstance(expr, Dimension):
         return Symbol(expr.name)
-    elif (isinstance(expr.args[0], Number) and isinstance(expr.args[1], Dimension)):
-        return expr
     elif expr.is_Symbol:
         return expr
     elif isinstance(expr, Indexed):
         return expr.base.label
+    elif isinstance(expr, Expr):
+        return expr
     else:
         raise TypeError("Cannot extract symbol from type %s" % type(expr))
 

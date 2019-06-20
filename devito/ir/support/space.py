@@ -122,10 +122,17 @@ class Interval(AbstractInterval):
 
     is_Defined = True
 
+<<<<<<< HEAD
     def __init__(self, dim, lower, upper, stamp=0):
         assert is_integer(lower) or isinstance(lower, Expr)
         assert is_integer(upper) or isinstance(upper, Expr)
         super(Interval, self).__init__(dim, stamp)
+=======
+    def __init__(self, dim, lower, upper):
+        assert (is_integer(lower) or isinstance(lower, sympy.Expr))
+        assert (is_integer(upper) or isinstance(upper, sympy.Expr))
+        super(Interval, self).__init__(dim)
+>>>>>>> ir/symbolics: Some expr changes
         self.lower = lower
         self.upper = upper
 
