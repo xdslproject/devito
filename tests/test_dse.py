@@ -42,15 +42,13 @@ def test_scheduling_after_rewrite():
     assert all(trees[1].root.dim is tree.root.dim for tree in trees[1:])
 
 
-@pytest.mark.parametrize("skew_factor", [(2), (4), (6), (7)])
-@pytest.mark.parametrize("nx,ny", [(5,6), (4,16), (20,20), (100,100)])
-def test_skew_vs_advanced(skew_factor, nx, ny):
+@pytest.mark.parametrize("nx,ny", [(5, 6), (4, 16), (20, 20), (100, 100)])
+def test_skew_vs_advanced(nx, ny):
     """Trivial testing for DSE skewing"""
     nx = 10
     ny = 10
     timesteps = 1
     grid = Grid(shape=(nx, ny))
-    configuration['skew_factor'] = skew_factor
     u_skew = TimeFunction(name='u_skew', grid=grid)
     u = TimeFunction(name='u', grid=grid)
 
