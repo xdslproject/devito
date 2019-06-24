@@ -11,14 +11,12 @@ from devito.dse.manipulation import (collect_nested, common_subexprs_elimination
                                      make_is_time_invariant)
 from devito.exceptions import DSEException
 from devito.logger import dse_warning as warning
-from devito.parameters import configuration
 from devito.symbolics import (bhaskara_cos, bhaskara_sin, estimate_cost, freeze,
                               iq_timeinvariant, pow_to_mul, retrieve_indexed,
                               q_affine, q_leaf, q_scalar, q_sum_of_product,
                               q_terminalop, xreplace_constrained, xreplace_indices)
 from devito.tools import flatten, generator
 from devito.types import Array, Scalar
-from devito.types import TimeDimension, SpaceDimension
 
 __all__ = ['BasicRewriter', 'AdvancedRewriter', 'AggressiveRewriter', 'CustomRewriter']
 
@@ -374,7 +372,7 @@ class AggressiveRewriter(AdvancedRewriter):
             else:
                 mapper[i.dim] = i.dim + skew_factor*skew_dim
                 intervals.append(Interval(i.dim, -skew_factor*skew_dim,
-                                         -skew_factor*skew_dim))
+                                          -skew_factor*skew_dim))
 
         ispace = IterationSpace(intervals, sub_iterators, directions)
         cluster = Cluster(cluster.exprs, ispace, cluster.dspace, cluster.atomics,
