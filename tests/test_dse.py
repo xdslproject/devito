@@ -45,8 +45,8 @@ def test_scheduling_after_rewrite():
 @pytest.mark.parametrize("nx,ny", [(5, 6), (4, 16), (20, 20), (100, 100)])
 def test_skew_vs_advanced(nx, ny):
     """Trivial testing for DSE skewing"""
-    nx = 10
-    ny = 10
+    nx = nx
+    ny = ny
     timesteps = 1
     grid = Grid(shape=(nx, ny))
     u_skew = TimeFunction(name='u_skew', grid=grid)
@@ -236,7 +236,7 @@ def test_makeit_ssa(exprs, exp_u, exp_v):
     assert np.all(v.data == exp_v)
 
 
-@pytest.mark.parametrize('dse', ['noop', 'basic', 'skewing', 'advanced', 'aggressive'])
+@pytest.mark.parametrize('dse', ['noop', 'basic', 'advanced', 'aggressive'])
 @pytest.mark.parametrize('dle', ['noop', 'advanced', 'speculative'])
 def test_time_dependent_split(dse, dle):
     grid = Grid(shape=(10, 10))
@@ -1177,7 +1177,7 @@ def test_full_alias_shape_with_subdims():
 def test_alias_composite():
     """
     Check that composite alias are optimized away through "smaller" aliases.
-
+    
     Examples
     --------
     Instead of the following:
