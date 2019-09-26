@@ -60,6 +60,28 @@ def test_skew_vs_advanced(nx, ny):
     op.apply(time=timesteps)
     assert np.all(u_skew.data[0] == u.data[0])
 
+@pytest.mark.parametrize("nx, nt, ny, nz", [(5, 20, 6, 10), (4, 30, 16, 10),
+                                            (20, 20, 20, 10), (100, 100, 100, 10)])
+def test_complex_skew_cases_I(nx, nt, ny, nz):
+    """Trivial testing for DSE skewing"""
+    nx = nx
+    ny = ny
+    nz = nz
+    nt = nt
+    grid = Grid(shape=(nx, ny, nz))
+    x, y, z = grid.dimensions
+    t = grid.stepping_dim
+
+    f_skew = TimeFunction(name='f', dimensions=(x, t, y, z), shape=(nx, nt, ny, nz))
+    f = TimeFunction(name='f', dimensions=(x, t, y, z), shape=(nx, nt, ny, nz))
+
+    op = Operator(Eq(f_skew[x, t+1, y, z], f_skew[x, t, y, z] + 1), dse='skewing')
+    op2 = Operator(Eq(f[x, t+1, y, z], f[x, t, y, z] + 1))
+
+    op.apply(time=100)
+    op2.apply(time=100)
+    assert np.all(f_skew.data[0] == f.data[0])
+
 
 @pytest.mark.parametrize('exprs,expected', [
     # Simple cases
