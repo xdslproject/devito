@@ -12,9 +12,9 @@ from devito.dse.manipulation import (collect_nested, common_subexprs_elimination
 from devito.exceptions import DSEException
 from devito.logger import dse_warning as warning
 from devito.symbolics import (bhaskara_cos, bhaskara_sin, estimate_cost, freeze,
-                              iq_timeinvariant, pow_to_mul, retrieve_indexed,
-                              q_affine, q_leaf, q_scalar, q_sum_of_product,
-                              q_terminalop, xreplace_constrained, xreplace_indices)
+                              iq_timeinvariant, pow_to_mul, q_leaf, q_scalar,
+                              q_sum_of_product, q_terminalop, xreplace_constrained,
+                              xreplace_indices)
 from devito.tools import flatten, generator
 from devito.types import Array, Scalar
 
@@ -361,11 +361,6 @@ class AggressiveRewriter(AdvancedRewriter):
         _, sub_iterators, directions = cluster.ispace.args
 
         skew_dim, mapper, intervals = None, {}, []
-
-        # Check if time dim exists
-        #for i in cluster.ispace.intervals:
-        #    if i.dim.is_Time:
-        #        skew_dim = i.dim
 
         skew_dims = {i.dim for i in cluster.ispace.intervals if i.dim.is_Time}
         try:
