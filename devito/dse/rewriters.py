@@ -360,8 +360,8 @@ class AggressiveRewriter(AdvancedRewriter):
             for j = 2, m-1
                 a[i,j] = (a[a-1,j] + a[i,j-1] + a[i+1,j] + a[i,j+1]) / 4
             end for
-        end for
-        
+        end for     
+
         to
 
         for i = 2, n-1
@@ -374,8 +374,6 @@ class AggressiveRewriter(AdvancedRewriter):
         skew_factor = self.DEFAULT_SKEW_FACTOR
 
         _, sub_iterators, directions = cluster.ispace.args
-
-        #skew_dim, mapper, intervals = None, {}, []
 
         skew_dims = {i.dim for i in cluster.ispace.intervals if i.dim.is_Time}
         try:
@@ -390,7 +388,7 @@ class AggressiveRewriter(AdvancedRewriter):
 
         # Initializing a default time_dim index position in loop
         index = 0
-        #if skew_dim is not None:
+        # Skew dim will not be none here:
         for i in cluster.ispace.intervals:
             if i.dim.is_Time:
                 intervals.append(Interval(i.dim, 0, 0))
@@ -399,7 +397,7 @@ class AggressiveRewriter(AdvancedRewriter):
             elif index < cluster.ispace.intervals.index(i):
                 mapper[i.dim] = i.dim + skew_factor*skew_dim
                 intervals.append(Interval(i.dim, -skew_factor*skew_dim,
-                                           -skew_factor*skew_dim))
+                                          -skew_factor*skew_dim))
             else:
                 intervals.append(i)
 
