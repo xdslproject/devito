@@ -3,15 +3,13 @@ from itertools import combinations, product
 from functools import total_ordering
 import resource
 
-import psutil
-
-from devito.archinfo import KNL
-from devito.dle import BlockDimension
+from devito.archinfo import KNL, KNL7210
 from devito.ir import Backward, retrieve_iteration_tree
 from devito.logger import perf, warning as _warning
 from devito.mpi.distributed import MPI, MPINeighborhood
 from devito.mpi.routines import MPIMsgEnriched
 from devito.parameters import configuration
+from devito.passes import BlockDimension
 from devito.symbolics import evaluate
 from devito.tools import filter_ordered, flatten, prod
 
@@ -60,7 +58,7 @@ def autotune(operator, args, level, mode):
     if mode in ['preemptive', 'destructive']:
         for p in operator.parameters:
             if isinstance(p, MPINeighborhood):
-                at_args.update(MPINeighborhood(p.fields)._arg_values())
+                at_args.update(MPINeighborhood(p.neighborhood)._arg_values())
                 for i in p.fields:
                     setattr(at_args[p.name]._obj, i, MPI.PROC_NULL)
             elif isinstance(p, MPIMsgEnriched):
@@ -80,7 +78,7 @@ def autotune(operator, args, level, mode):
         timesteps = 1
     elif len(steppers) == 1:
         stepper = steppers.pop()
-        timesteps = init_time_bounds(stepper, at_args)
+        timesteps = init_time_bounds(stepper, at_args, args)
         if timesteps is None:
             return args, {}
     else:
@@ -99,7 +97,7 @@ def autotune(operator, args, level, mode):
             tunable.append(generate_nthreads(operator.nthreads, args, level))
             tunable = list(product(*tunable))
         except ValueError:
-            # Some arguments are cumpolsory, otherwise autotuning is skipped
+            # Some arguments are compulsory, otherwise autotuning is skipped
             continue
 
         # Symbolic number of loop-blocking blocks per thread
@@ -124,7 +122,7 @@ def autotune(operator, args, level, mode):
                 if int(evaluate(stack_footprint, **at_args)) > options['stack_limit']:
                     continue
             except TypeError:
-                warning("couldn't determine stack size; skipping run %s" % str(i))
+                warning("could not determine stack size; skipping run %s" % str(i))
                 continue
             except AttributeError:
                 assert stack_footprint == 0
@@ -158,7 +156,7 @@ def autotune(operator, args, level, mode):
         best.pop(None, None)
         log("selected <%s>" % (','.join('%s=%s' % i for i in best.items())))
     except ValueError:
-        warning("couldn't perform any runs")
+        warning("could not perform any runs")
         return args, {}
 
     # Update the argument list with the tuned arguments
@@ -198,17 +196,23 @@ class Record(object):
         return self.time < other.time
 
 
-def init_time_bounds(stepper, at_args):
+def init_time_bounds(stepper, at_args, args):
     if stepper is None:
         return
     dim = stepper.dim.root
     if stepper.direction is Backward:
         at_args[dim.min_name] = at_args[dim.max_name] - options['squeezer']
+        if dim.size_name in args:
+            # May need to shrink to avoid OOB accesses
+            at_args[dim.min_name] = max(at_args[dim.min_name], args[dim.min_name])
         if at_args[dim.max_name] < at_args[dim.min_name]:
             warning("too few time iterations; skipping")
             return False
     else:
         at_args[dim.max_name] = at_args[dim.min_name] + options['squeezer']
+        if dim.size_name in args:
+            # May need to shrink to avoid OOB accesses
+            at_args[dim.max_name] = min(at_args[dim.max_name], args[dim.max_name])
         if at_args[dim.min_name] > at_args[dim.max_name]:
             warning("too few time iterations; skipping")
             return False
@@ -269,23 +273,26 @@ def generate_block_shapes(blockable, args, level):
     if not blockable:
         raise ValueError
 
-    # Max attemptable block shape
-    max_bs = tuple((d.step.name, d.max_step.subs(args)) for d in blockable)
+    mapper = OrderedDict()
+    for d in blockable:
+        mapper[d] = mapper.get(d.parent, -1) + 1
 
-    # Attempted block shapes:
-    # 1) Defaults (basic mode)
-    ret = [tuple((d.step.name, v) for d in blockable) for v in options['blocksize']]
-    # 2) Always try the entire iteration space (degenerate block)
+    # Generate level-0 block shapes
+    level_0 = [d for d, v in mapper.items() if v == 0]
+    # Max attemptable block shape
+    max_bs = tuple((d.step, d.max_step.subs(args)) for d in level_0)
+    # Defaults (basic mode)
+    ret = [tuple((d.step, v) for d in level_0) for v in options['blocksize-l0']]
+    # Always try the entire iteration space (degenerate block)
     ret.append(max_bs)
-    # 3) More attempts if auto-tuning in aggressive mode
+    # More attempts if autotuning in aggressive mode
     if level in ['aggressive', 'max']:
         # Ramp up to larger block shapes
-        handle = tuple((i, options['blocksize'][-1]) for i, _ in ret[0])
+        handle = tuple((i, options['blocksize-l0'][-1]) for i, _ in ret[0])
         for i in range(3):
             new_bs = tuple((b, v*2) for b, v in handle)
             ret.insert(ret.index(handle) + 1, new_bs)
             handle = new_bs
-
         handle = []
         # Extended shuffling for the smaller block shapes
         for bs in ret[:4]:
@@ -298,12 +305,31 @@ def generate_block_shapes(blockable, args, level):
                 for j in combinations(dict(bs), i+1):
                     handle.append(tuple((b, v*2 if b in j else v) for b, v in bs))
         ret.extend(handle)
-
-    # Drop unnecessary attempts:
-    # 1) Block shapes exceeding the iteration space extent
+    # Drop block shapes exceeding the iteration space extent
     ret = [i for i in ret if all(dict(i)[k] <= v for k, v in max_bs)]
-    # 2) Redundant block shapes
+    # Drop redundant block shapes
     ret = filter_ordered(ret)
+
+    # Generate level-1 block shapes
+    level_1 = [d for d, v in mapper.items() if v == 1]
+    if level_1:
+        assert len(level_1) == len(level_0)
+        assert all(d1.parent is d0 for d0, d1 in zip(level_0, level_1))
+        for bs in list(ret):
+            handle = []
+            for v in options['blocksize-l1']:
+                # To be a valid blocksize, it must be smaller than and divide evenly
+                # the parent's block size
+                if all(v <= i and i % v == 0 for _, i in bs):
+                    ret.append(bs + tuple((d.step, v) for d in level_1))
+            ret.remove(bs)
+
+    # Generate level-n (n > 1) block shapes
+    # TODO -- currently, there's no DLE rewriter producing depth>2 hierarchical blocking,
+    # so for simplicity we ignore this for the time being
+
+    # Normalize
+    ret = [tuple((k.name, v) for k, v in bs) for bs in ret]
 
     return ret
 
@@ -312,26 +338,36 @@ def generate_nthreads(nthreads, args, level):
     if nthreads == 1:
         return [((None, 1),)]
 
-    ret = [((nthreads.name, args[nthreads.name]),)]
+    ret = []
+    basic = ((nthreads.name, args[nthreads.name]),)
 
-    if level == 'max':
+    if level != 'max':
+        ret.append(basic)
+    else:
         # Be sure to try with:
         # 1) num_threads == num_physical_cores
-        # 2) num_threads == num_hyperthreads
-        if configuration['platform'] is KNL:
-            ret.extend([((nthreads.name, psutil.cpu_count() // 4),),
-                        ((nthreads.name, psutil.cpu_count() // 2),),
-                        ((nthreads.name, psutil.cpu_count()),)])
+        # 2) num_threads == num_logical_cores
+        platform = configuration['platform']
+        if platform in (KNL, KNL7210):
+            ret.extend([((nthreads.name, platform.cores_physical),),
+                        ((nthreads.name, platform.cores_physical * 2),),
+                        ((nthreads.name, platform.cores_logical),)])
         else:
-            ret.extend([((nthreads.name, psutil.cpu_count() // 2),),
-                        ((nthreads.name, psutil.cpu_count()),)])
+            ret.extend([((nthreads.name, platform.cores_physical),),
+                        ((nthreads.name, platform.cores_logical),)])
+
+        if basic not in ret:
+            warning("skipping `%s`; perhaps you've set OMP_NUM_THREADS to a "
+                    "non-standard value while attempting autotuning in "
+                    "`max` mode?" % dict(basic))
 
     return filter_ordered(ret)
 
 
 options = {
     'squeezer': 4,
-    'blocksize': sorted({8, 16, 24, 32, 40, 64, 128}),
+    'blocksize-l0': (8, 16, 24, 32, 64, 96, 128),
+    'blocksize-l1': (8, 16, 32),
     'stack_limit': resource.getrlimit(resource.RLIMIT_STACK)[0] / 4
 }
 """Autotuning options."""

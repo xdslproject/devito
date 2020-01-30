@@ -8,7 +8,6 @@ import numpy as np
 import ctypes
 from ctypes.util import find_library
 
-from devito.archinfo import KNL
 from devito.logger import logger
 from devito.parameters import configuration
 from devito.tools import dtype_to_ctype
@@ -79,7 +78,13 @@ class MemoryAllocator(object):
         # cast to 1D array of the specified size
         ctype_1d = ctype * size
         buf = ctypes.cast(c_pointer, ctypes.POINTER(ctype_1d)).contents
-        pointer = np.frombuffer(buf, dtype=dtype).reshape(shape)
+        pointer = np.frombuffer(buf, dtype=dtype)
+        # pointer.reshape should not be used here because it may introduce a copy
+        # From https://docs.scipy.org/doc/numpy/reference/generated/numpy.reshape.html:
+        # It is not always possible to change the shape of an array without copying the
+        # data. If you want an error to be raised when the data is copied, you should
+        # assign the new shape to the shape attribute of the array:
+        pointer.shape = shape
 
         return (pointer, memfree_args)
 
@@ -144,6 +149,7 @@ class PosixAllocator(MemoryAllocator):
 
 
 class GuardAllocator(PosixAllocator):
+
     """
     Memory allocator based on ``posix`` functions. The allocated memory is
     aligned to page boundaries.  Additionally, it allocates extra memory
@@ -301,6 +307,56 @@ class NumaAllocator(MemoryAllocator):
         return self._node == 'local'
 
 
+class ExternalAllocator(MemoryAllocator):
+
+    """
+    An ExternalAllocator is used to assign pre-existing user data to Functions.
+    Thus, Devito does not allocate any memory.
+
+    Parameters
+    ----------
+    array : array-like
+        Any object exposing the buffer interface, such as a numpy.ndarray.
+
+    Notes
+    -------
+    * Use ExternalAllocator and pass a reference to the external memory when
+      creating a Function. This Function will now use this memory as its f.data.
+
+    * If the data present in this external memory is valuable, provide a noop
+      initialiser, or else Devito will reset it to 0.
+
+    Example
+    --------
+    >>> from devito import Grid, Function
+    >>> from devito.data.allocators import ExternalAllocator
+    >>> import numpy as np
+    >>> shape = (2, 2)
+    >>> numpy_array = np.ones(shape, dtype=np.float32)
+    >>> g = Grid(shape)
+    >>> space_order = 0
+    >>> f = Function(name='f', grid=g, space_order=space_order,
+    ...      allocator=ExternalAllocator(numpy_array), initializer=lambda x: None)
+    >>> f.data[0, 1] = 2
+    >>> numpy_array
+    array([[1., 2.],
+           [1., 1.]], dtype=float32)
+    """
+
+    def __init__(self, numpy_array):
+        self.numpy_array = numpy_array
+
+    def alloc(self, shape, dtype):
+        assert shape == self.numpy_array.shape, \
+            "Provided array has shape %s. Expected %s" %\
+            (str(self.numpy_array.shape), str(shape))
+        assert dtype == self.numpy_array.dtype, \
+            "Provided array has dtype %s. Expected %s" %\
+            (str(self.numpy_array.dtype), str(dtype))
+
+        return (self.numpy_array, None)
+
+
 ALLOC_GUARD = GuardAllocator(1048576)
 ALLOC_FLAT = PosixAllocator()
 ALLOC_KNL_DRAM = NumaAllocator(0)
@@ -310,7 +366,7 @@ ALLOC_NUMA_LOCAL = NumaAllocator('local')
 
 
 def infer_knl_mode():
-    path = os.path.join('sys', 'bus', 'node', 'devices', 'node1')
+    path = os.path.join('/sys', 'bus', 'node', 'devices', 'node1')
     return 'flat' if os.path.exists(path) else 'cache'
 
 
@@ -343,7 +399,7 @@ def default_allocator():
     if configuration['develop-mode']:
         return ALLOC_GUARD
     elif NumaAllocator.available():
-        if configuration['platform'] is KNL and infer_knl_mode() == 'flat':
+        if configuration['platform'].name == 'knl' and infer_knl_mode() == 'flat':
             return ALLOC_KNL_MCDRAM
         else:
             return ALLOC_NUMA_LOCAL

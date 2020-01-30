@@ -3,18 +3,13 @@ from sympy import Eq, diff, cos, sin, nan
 from devito.tools import as_tuple, is_integer
 
 
-__all__ = ['q_leaf', 'q_indexed', 'q_terminal', 'q_trigonometry', 'q_op',
-           'q_terminalop', 'q_sum_of_product', 'q_indirect', 'q_timedimension',
-           'q_constant', 'q_affine', 'q_linear', 'q_identity', 'q_inc', 'q_scalar',
-           'q_multivar', 'q_monoaffine', 'iq_timeinvariant', 'iq_timevarying']
+__all__ = ['q_leaf', 'q_indexed', 'q_terminal', 'q_trigonometry', 'q_routine', 'q_xop',
+           'q_terminalop', 'q_sum_of_product', 'q_indirect', 'q_constant', 'q_affine',
+           'q_linear', 'q_identity', 'q_inc', 'q_scalar', 'q_multivar', 'q_monoaffine']
 
 
 """
-The q_* functions are to be applied directly to expression objects.
-The iq_* functions return functions to be applied to expressions objects
-('iq' stands for 'indirect query')
-
-The following SymPy objects are considered as tree leaves: ::
+The following SymPy objects are considered tree leaves:
 
     * Number
     * Symbol
@@ -23,7 +18,10 @@ The following SymPy objects are considered as tree leaves: ::
 
 
 def q_scalar(expr):
-    return expr.is_Number or expr.is_Symbol
+    try:
+        return expr.is_Scalar
+    except AttributeError:
+        return False
 
 
 def q_leaf(expr):
@@ -47,21 +45,31 @@ def q_trigonometry(expr):
     return expr.is_Function and expr.func in [sin, cos]
 
 
-def q_op(expr):
-    return expr.is_Add or expr.is_Mul or expr.is_Function
+def q_routine(expr):
+    from devito.types.basic import AbstractFunction
+    return expr.is_Function and not isinstance(expr, AbstractFunction)
+
+
+def q_xop(expr):
+    return (expr.is_Add or expr.is_Mul or expr.is_Pow or q_routine(expr))
 
 
 def q_terminalop(expr):
-    from devito.symbolics.manipulation import as_symbol
-    if not q_op(expr):
-        return False
-    else:
+    if expr.is_Function:
+        return True
+    elif expr.is_Add or expr.is_Mul:
         for a in expr.args:
-            try:
-                as_symbol(a)
-            except TypeError:
+            if a.is_Pow:
+                elems = a.args
+            else:
+                elems = [a]
+            if any(not q_leaf(i) for i in elems):
                 return False
         return True
+    elif expr.is_Pow:
+        return all(q_leaf(i) for i in expr.args)
+    else:
+        return False
 
 
 def q_sum_of_product(expr):
@@ -81,11 +89,6 @@ def q_indirect(expr):
     if not expr.is_Indexed:
         return False
     return any(retrieve_indexed(i) for i in expr.indices)
-
-
-def q_timedimension(expr):
-    from devito.types import Dimension
-    return isinstance(expr, Dimension) and expr.is_Time
 
 
 def q_inc(expr):
@@ -142,16 +145,16 @@ def q_affine(expr, vars):
         # The vast majority of calls here are incredibly simple tests
         # like q_affine(x+1, [x]).  Catch these quickly and
         # explicitly, instead of calling the very slow function `diff`.
-        if expr == x:
+        if expr is x:
             continue
         if expr.is_Add and len(expr.args) == 2:
-            if expr.args[0] == x and expr.args[1].is_Number:
+            if expr.args[1] is x and expr.args[0].is_Number:
                 continue
-            if expr.args[1] == x and expr.args[0].is_Number:
+            if expr.args[0] is x and expr.args[1].is_Number:
                 continue
 
         try:
-            if diff(expr, x) == nan or not Eq(diff(expr, x, x), 0):
+            if diff(expr, x) is nan or not Eq(diff(expr, x, x), 0):
                 return False
         except TypeError:
             return False
@@ -173,7 +176,7 @@ def q_linear(expr, vars):
     Return True if ``expr`` is (separately) linear in the variables ``vars``,
     False otherwise.
     """
-    return q_affine(expr, vars) and all(not i.is_Number for i in expr.args)
+    return q_affine(expr, vars) and all(not i.is_Number for i in expr.args + (expr,))
 
 
 def q_identity(expr, var):
@@ -189,11 +192,3 @@ def q_identity(expr, var):
     x + 2 -> True
     """
     return len(as_tuple(var)) == 1 and q_affine(expr, var) and (expr - var).is_Number
-
-
-def iq_timeinvariant(graph):
-    return lambda e: not e.is_Number and graph.time_invariant(e)
-
-
-def iq_timevarying(graph):
-    return lambda e: e.is_Number or not graph.time_invariant(e)

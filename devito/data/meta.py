@@ -5,38 +5,34 @@ __all__ = ['DOMAIN', 'CORE', 'OWNED', 'HALO', 'NOPAD', 'FULL',
 
 
 class DataRegion(Tag):
-    pass
+
+    def __str__(self):
+        return self.name
+
+    __repr__ = __str__
 
 
-CORE = DataRegion('core')  # within DOMAIN
-OWNED = DataRegion('owned')  # within DOMAIN
-DOMAIN = DataRegion('domain')  # == CORE + OWNED
-HALO = DataRegion('halo')
-NOPAD = DataRegion('nopad')  # == DOMAIN+HALO
-FULL = DataRegion('full')  # == DOMAIN+HALO+PADDING
+HALO = DataRegion('halo', 0)
+CORE = DataRegion('core', 1)  # within DOMAIN
+OWNED = DataRegion('owned', 2)  # within DOMAIN
+DOMAIN = DataRegion('domain', 3)  # == CORE + OWNED
+NOPAD = DataRegion('nopad', 4)  # == DOMAIN+HALO
+FULL = DataRegion('full', 5)  # == DOMAIN+HALO+PADDING
 
 
 class DataSide(Tag):
 
     def __init__(self, name, val, flipto=None):
         super(DataSide, self).__init__(name, val)
+        self.flipto = flipto
         if flipto is not None:
-            self.flip = lambda: flipto
-            flipto.flip = lambda: self
+            flipto.flipto = self
+
+    def flip(self):
+        if self.flipto is not None:
+            return self.flipto
         else:
-            self.flip = lambda: self
-
-    def __lt__(self, other):
-        return self.val < other.val
-
-    def __le__(self, other):
-        return self.val <= other.val
-
-    def __gt__(self, other):
-        return self.val > other.val
-
-    def __ge__(self, other):
-        return self.val >= other.val
+            return self
 
     def __str__(self):
         return self.name

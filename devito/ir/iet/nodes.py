@@ -4,17 +4,17 @@ import abc
 import inspect
 import numbers
 from cached_property import cached_property
-from collections import Iterable, OrderedDict, namedtuple
+from collections import OrderedDict, namedtuple
+from collections.abc import Iterable
 
 import cgen as c
 
-from devito.cgen_utils import ccode
 from devito.data import FULL
 from devito.ir.equations import ClusterizedEq
-from devito.ir.iet import (IterationProperty, SEQUENTIAL, PARALLEL, PARALLEL_IF_ATOMIC,
-                           VECTOR, WRAPPABLE, AFFINE, USELESS, OVERLAPPABLE)
-from devito.ir.support import Forward, detect_io
-from devito.symbolics import FunctionFromPointer, as_symbol
+from devito.ir.support import (SEQUENTIAL, PARALLEL, PARALLEL_IF_ATOMIC, VECTORIZED,
+                               WRAPPABLE, ROUNDABLE, AFFINE, TILABLE, OVERLAPPABLE,
+                               Property, Forward, detect_io)
+from devito.symbolics import ListInitializer, FunctionFromPointer, as_symbol, ccode
 from devito.tools import (Signer, as_tuple, filter_ordered, filter_sorted, flatten,
                           validate_type, dtype_to_cstr)
 from devito.types import Symbol, Indexed
@@ -23,7 +23,7 @@ from devito.types.basic import AbstractFunction
 __all__ = ['Node', 'Block', 'Expression', 'Element', 'Callable', 'Call', 'Conditional',
            'Iteration', 'List', 'LocalExpression', 'Section', 'TimedList', 'Prodder',
            'MetaCall', 'ArrayCast', 'ForeignExpression', 'HaloSpot', 'IterationTree',
-           'ExpressionBundle', 'Increment', 'Return']
+           'ExpressionBundle', 'AugmentedExpression', 'Increment', 'Return', 'While']
 
 # First-class IET nodes
 
@@ -36,6 +36,7 @@ class Node(Signer):
     is_Block = False
     is_Iteration = False
     is_IterationFold = False
+    is_While = False
     is_Expression = False
     is_Increment = False
     is_ForeignExpression = False
@@ -128,24 +129,32 @@ class Node(Signer):
         return (str(self.ccode),)
 
 
-# Some useful mixins
-
-
-class Simple(object):
+class ExprStmt(object):
 
     """
-    A mixin to decorate Nodes that do *not* contain other Nodes (IOW,
-    their ``_traversable`` list is empty).
+    A mixin for Nodes that represent C expression statements, which are expressions
+    followed by a semicolon. For example, the lines:
+
+        * i = 0;
+        * j = a[i] + 8;
+        * int a = 3;
+        * foo(b)
+
+    are all expression statements.
+
+    Notes
+    -----
+    An ExprStmt does *not* have children Nodes.
     """
 
     pass
 
 
-class Block(Node):
+class List(Node):
 
-    """A sequence of nodes, wrapped in a block {...}."""
+    """A sequence of Nodes."""
 
-    is_Block = True
+    is_List = True
 
     _traversable = ['body']
 
@@ -171,11 +180,11 @@ class Block(Node):
         return ()
 
 
-class List(Block):
+class Block(List):
 
-    """A sequence of nodes."""
+    """A sequence of Nodes, wrapped in a block {...}."""
 
-    is_List = True
+    is_Block = True
 
 
 class Element(Node):
@@ -196,7 +205,7 @@ class Element(Node):
         return "Element::\n\t%s" % (self.element)
 
 
-class Call(Simple, Node):
+class Call(ExprStmt, Node):
 
     """A function call."""
 
@@ -212,6 +221,10 @@ class Call(Simple, Node):
     @property
     def functions(self):
         return tuple(i for i in self.arguments if isinstance(i, AbstractFunction))
+
+    @property
+    def children(self):
+        return tuple(i for i in self.arguments if isinstance(i, Call))
 
     @cached_property
     def free_symbols(self):
@@ -230,7 +243,7 @@ class Call(Simple, Node):
         return ()
 
 
-class Expression(Simple, Node):
+class Expression(ExprStmt, Node):
 
     """A node encapsulating a ClusterizedEq."""
 
@@ -289,13 +302,16 @@ class Expression(Simple, Node):
         return not self.is_scalar
 
     @property
-    def is_scalar_assign(self):
-        """True if a scalar, non-increment expression."""
-        return self.is_scalar and not self.is_Increment
+    def is_definition(self):
+        """
+        True if it is an assignment, False otherwise
+        """
+        return ((self.is_scalar and not self.is_Increment) or
+                (self.is_tensor and isinstance(self.expr.rhs, ListInitializer)))
 
     @property
     def defines(self):
-        return (self.write,) if self.is_scalar else ()
+        return (self.write,) if self.is_definition else ()
 
     @property
     def free_symbols(self):
@@ -309,11 +325,23 @@ class Expression(Simple, Node):
         return tuple(filter_ordered(functions))
 
 
-class Increment(Expression):
+class AugmentedExpression(Expression):
 
-    """A node representing a += increment."""
+    """A node representing an augmented assignment, such as +=, -=, &=, ...."""
 
     is_Increment = True
+
+    def __init__(self, expr, op):
+        super(AugmentedExpression, self).__init__(expr)
+        self.op = op
+
+
+class Increment(AugmentedExpression):
+
+    """Shortcut for ``AugmentedExpression(expr, '+'), since it's so widely used."""
+
+    def __init__(self, expr):
+        super(Increment, self).__init__(expr, '+')
 
 
 class Iteration(Node):
@@ -338,7 +366,7 @@ class Iteration(Node):
         The for-loop direction. Accepted:
         - ``Forward``: i += stepping (defaults)
         - ``Backward``: i -= stepping
-    properties : IterationProperty or list of IterationProperty, optional
+    properties : Property or list of Property, optional
         Iteration decorators, denoting properties such as parallelism.
     pragmas : cgen.Pragma or list of cgen.Pragma, optional
         A bag of pragmas attached to this Iteration.
@@ -374,11 +402,11 @@ class Iteration(Node):
 
         # Track this Iteration's properties, pragmas and unbounded indices
         properties = as_tuple(properties)
-        assert (i in IterationProperty._KNOWN for i in properties)
+        assert (i in Property._KNOWN for i in properties)
         self.properties = as_tuple(filter_sorted(properties))
         self.pragmas = as_tuple(pragmas)
         self.uindices = as_tuple(uindices)
-        assert all(i.is_Derived and i.root is self.dim for i in self.uindices)
+        assert all(i.is_Derived and self.dim in i._defines for i in self.uindices)
 
     def __repr__(self):
         properties = ""
@@ -411,12 +439,20 @@ class Iteration(Node):
         return self.is_Parallel or self.is_ParallelAtomic
 
     @property
-    def is_Vectorizable(self):
-        return VECTOR in self.properties
+    def is_Vectorized(self):
+        return VECTORIZED in self.properties
 
     @property
     def is_Wrappable(self):
         return WRAPPABLE in self.properties
+
+    @property
+    def is_Tilable(self):
+        return TILABLE in self.properties
+
+    @property
+    def is_Roundable(self):
+        return ROUNDABLE in self.properties
 
     @property
     def ncollapsed(self):
@@ -440,7 +476,7 @@ class Iteration(Node):
         except TypeError:
             # A symbolic expression
             pass
-        return (_min + as_symbol(self.offsets[0]), _max + as_symbol(self.offsets[1]))
+        return (_min + self.offsets[0], _max + self.offsets[1])
 
     @property
     def symbolic_size(self):
@@ -508,6 +544,31 @@ class Iteration(Node):
     def write(self):
         """All Functions written to in this Iteration"""
         return []
+
+
+class While(Node):
+
+    """
+    Implement a while-loop.
+
+    Parameters
+    ----------
+    condition : sympy.Function or sympy.Relation or bool
+        The while-loop exit condition.
+    body : Node or list of Node, optional
+        The whie-loop body.
+    """
+
+    is_While = True
+
+    _traversable = ['body']
+
+    def __init__(self, condition, body=None):
+        self.condition = condition
+        self.body = as_tuple(body)
+
+    def __repr__(self):
+        return "<While %s; %d>" % (self.condition, len(self.body))
 
 
 class Callable(Node):
@@ -649,6 +710,9 @@ class ArrayCast(Node):
     def __init__(self, function):
         self.function = function
 
+    def __repr__(self):
+        return "<ArrayCast(%s)>" % self.function
+
     @property
     def castshape(self):
         """The shape used in the left-hand side and right-hand side of the ArrayCast."""
@@ -766,9 +830,9 @@ class ExpressionBundle(List):
 
     is_ExpressionBundle = True
 
-    def __init__(self, shape, ops, traffic, body=None):
+    def __init__(self, ispace, ops, traffic, body=None):
         super(ExpressionBundle, self).__init__(body=body)
-        self.shape = shape
+        self.ispace = ispace
         self.ops = ops
         self.traffic = traffic
 
@@ -778,6 +842,10 @@ class ExpressionBundle(List):
     @property
     def exprs(self):
         return self.body
+
+    @property
+    def shape(self):
+        return tuple(self.ispace.dimension_map.values())
 
 
 class Prodder(Call):
@@ -862,6 +930,10 @@ class HaloSpot(Node):
         return self.halo_scheme.dimensions
 
     @property
+    def arguments(self):
+        return self.halo_scheme.arguments
+
+    @property
     def is_empty(self):
         return len(self.halo_scheme) == 0
 
@@ -881,8 +953,11 @@ class HaloSpot(Node):
         return ()
 
     @property
-    def is_Useless(self):
-        return USELESS in self.properties
+    def useless(self):
+        for i in self.properties:
+            if i.name == 'useless':
+                return i.val
+        return ()
 
     @property
     def is_Overlappable(self):

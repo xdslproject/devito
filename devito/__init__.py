@@ -1,24 +1,27 @@
 from collections import namedtuple
 from itertools import product
 
+# Import the global `configuration` dict
+from devito.parameters import *  # noqa
+
 # API imports
 from devito.base import *  # noqa
 from devito.builtins import *  # noqa
 from devito.data.allocators import *  # noqa
-from devito.equation import *  # noqa
 from devito.finite_differences import *  # noqa
-from devito.types import NODE, CELL, Buffer, SubDomain, SubDomainSet  # noqa
+from devito.mpi import MPI  # noqa
+from devito.types import _SymbolCache, NODE, CELL, Buffer, SubDomain, SubDomainSet  # noqa
 from devito.types.dimension import *  # noqa
+from devito.types.equation import *  # noqa
+from devito.types.tensor import *  # noqa
 
 # Imports required to initialize Devito
 from devito.archinfo import platform_registry
 from devito.backends import backends_registry, init_backend
 from devito.compiler import compiler_registry
-from devito.dle import dle_registry
-from devito.dse import dse_registry
 from devito.logger import error, warning, info, logger_registry, set_log_level  # noqa
-from devito.parameters import *  # noqa
-from devito.profiling import profiler_registry
+from devito.operator import profiler_registry, operator_registry
+from devito.passes import dse_registry
 
 
 from ._version import get_versions  # noqa
@@ -50,6 +53,9 @@ configuration.add('log-level', 'INFO', list(logger_registry),
 # overwrite the user-modified files (thus entirely bypassing code generation),
 # and will instead use the custom kernel
 configuration.add('jit-backdoor', 0, [0, 1], lambda i: bool(i), False)
+
+# Enable/disable automatic padding for allocated data
+configuration.add('autopadding', False, [False, True])
 
 # Execution mode setup
 def _reinit_compiler(val):  # noqa
@@ -90,7 +96,8 @@ configuration.add('develop-mode', True, [False, True])
 configuration.add('dse', 'advanced', list(dse_registry))
 
 # Setup DLE
-configuration.add('dle', 'advanced', list(dle_registry))
+# Note: for backwards compatibility, this config option is still called 'dle'
+configuration.add('dle', 'advanced', list(operator_registry._accepted))
 configuration.add('dle-options', {})
 
 # Setup Operator profiling
@@ -120,10 +127,3 @@ def mode_performance():
     # With the autotuner in `aggressive` mode, a more aggressive blocking strategy
     # which also tiles the innermost loop) is beneficial
     configuration['dle-options']['blockinner'] = True
-
-
-def mode_benchmark():
-    """Like ``mode_performance``, but also switch YASK's autotuner mode to
-    ``preemptive``."""
-    mode_performance()
-    configuration['autotuning'] = ['aggressive', 'preemptive']

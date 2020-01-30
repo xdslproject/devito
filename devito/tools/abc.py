@@ -1,7 +1,8 @@
 import abc
 from hashlib import sha1
 
-__all__ = ['Tag', 'Signer', 'Pickable']
+
+__all__ = ['Tag', 'Signer', 'Pickable', 'Evaluable', 'Singleton']
 
 
 class Tag(abc.ABC):
@@ -22,6 +23,18 @@ class Tag(abc.ABC):
         if not isinstance(other, self.__class__):
             return False
         return self.name == other.name and self.val == other.val
+
+    def __lt__(self, other):
+        return self.val < other.val
+
+    def __le__(self, other):
+        return self.val <= other.val
+
+    def __gt__(self, other):
+        return self.val > other.val
+
+    def __ge__(self, other):
+        return self.val >= other.val
 
     def __hash__(self):
         return hash((self.name, self.val))
@@ -104,6 +117,10 @@ class Pickable(object):
     _pickle_kwargs = []
     """The keyword arguments that need to be passed to __new__ upon unpickling."""
 
+    @staticmethod
+    def _pickle_wrapper(cls, args, kwargs):
+        return cls.__new__(cls, *args, **kwargs)
+
     @property
     def _pickle_reconstruct(self):
         """
@@ -119,11 +136,70 @@ class Pickable(object):
             return ret
         else:
             # Instead of the following wrapper function, we could use Python's copyreg
-            def wrapper(cls, args, kwargs):
-                return cls.__new__(cls, *args, **kwargs)
             _, (_, args, kwargs), state, iter0, iter1 = ret
-            return (wrapper, (reconstructor, args, kwargs), state, iter0, iter1)
+            return (
+                Pickable._pickle_wrapper,
+                (reconstructor, args, kwargs),
+                state,
+                iter0,
+                iter1,
+            )
 
     def __getnewargs_ex__(self):
         return (tuple(getattr(self, i) for i in self._pickle_args),
                 {i.lstrip('_'): getattr(self, i) for i in self._pickle_kwargs})
+
+
+class Evaluable(object):
+
+    """
+    A mixin class for types that may carry nested unevaluated arguments.
+
+    This mixin is useful to implement systems based upon lazy evaluation.
+    """
+
+    @classmethod
+    def _evaluate_maybe_nested(cls, maybe_evaluable):
+        if isinstance(maybe_evaluable, Evaluable):
+            return maybe_evaluable.evaluate
+        try:
+            # Not an Evaluable, but some Evaluables may still be hidden within `args`
+            if maybe_evaluable.args:
+                evaluated = [Evaluable._evaluate_maybe_nested(i)
+                             for i in maybe_evaluable.args]
+                return maybe_evaluable.func(*evaluated)
+            else:
+                return maybe_evaluable
+        except AttributeError:
+            # No `args` to be visited
+            return maybe_evaluable
+
+    @property
+    def args(self):
+        return ()
+
+    @property
+    def func(self):
+        return self.__class__
+
+    def _evaluate_args(self):
+        return [Evaluable._evaluate_maybe_nested(i) for i in self.args]
+
+    @property
+    def evaluate(self):
+        """Return a new object from the evaluation of ``self``."""
+        return self.func(*self._evaluate_args())
+
+
+class Singleton(type):
+
+    """
+    Metaclass for singleton classes.
+    """
+
+    _instances = {}
+
+    def __call__(cls, *args, **kwargs):
+        if cls not in cls._instances:
+            cls._instances[cls] = super(Singleton, cls).__call__(*args, **kwargs)
+        return cls._instances[cls]

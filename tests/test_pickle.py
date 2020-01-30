@@ -1,14 +1,15 @@
 import pytest
 import numpy as np
 from sympy import Symbol
-import cloudpickle as pickle
+import pickle
 
 from conftest import skipif
 from devito import (Constant, Eq, Function, TimeFunction, SparseFunction, Grid,
-                    TimeDimension, SteppingDimension, Operator)
+                    Dimension, SubDimension, ConditionalDimension, TimeDimension,
+                    SteppingDimension, Operator)
 from devito.mpi.routines import MPIStatusObject, MPIRequestObject
+from devito.operator.profiling import Timer
 from devito.types import Symbol as dSymbol, Scalar
-from devito.profiling import Timer
 from devito.symbolics import IntDiv, ListInitializer, FunctionFromPointer
 from examples.seismic import (demo_model, AcquisitionGeometry,
                               TimeAxis, RickerSource, Receiver)
@@ -27,6 +28,16 @@ def test_constant():
     # .data is initialized, so it should have been pickled too
     assert np.all(c.data == 1.)
     assert np.all(new_c.data == 1.)
+
+
+def test_dimension():
+    d = Dimension(name='d')
+
+    pkl_d = pickle.dumps(d)
+    new_d = pickle.loads(pkl_d)
+
+    assert d.name == new_d.name
+    assert d.dtype == new_d.dtype
 
 
 def test_function():
@@ -81,6 +92,39 @@ def test_internal_symbols():
     assert new_s.dtype is np.int32
     assert new_s.is_const is True
 
+    s = Scalar(name='s', nonnegative=True)
+    pkl_s = pickle.dumps(s)
+    new_s = pickle.loads(pkl_s)
+    assert new_s.name == s.name
+    assert new_s.assumptions0['nonnegative'] is True
+
+
+def test_sub_dimension():
+    di = SubDimension.middle('di', Dimension(name='d'), 1, 1)
+
+    pkl_di = pickle.dumps(di)
+    new_di = pickle.loads(pkl_di)
+
+    assert di.name == new_di.name
+    assert di.dtype == new_di.dtype
+    assert di.parent == new_di.parent
+    assert di._thickness == new_di._thickness
+    assert di._interval == new_di._interval
+
+
+def test_conditional_dimension():
+    d = Dimension(name='d')
+    s = Scalar(name='s')
+    cd = ConditionalDimension(name='ci', parent=d, factor=4, condition=s > 3)
+
+    pkl_cd = pickle.dumps(cd)
+    pkl_cd = pickle.loads(pkl_cd)
+
+    assert cd.name == pkl_cd.name
+    assert cd.parent == pkl_cd.parent
+    assert cd.factor == pkl_cd.factor
+    assert cd.condition == pkl_cd.condition
+
 
 def test_receiver():
     grid = Grid(shape=(3,))
@@ -102,13 +146,13 @@ def test_geometry():
 
     shape = (50, 50, 50)
     spacing = [10. for _ in shape]
-    nbpml = 10
+    nbl = 10
     nrec = 10
     tn = 150.
 
     # Create two-layer model from preset
     model = demo_model(preset='layers-isotropic', vp_top=1., vp_bottom=2.,
-                       spacing=spacing, shape=shape, nbpml=nbpml)
+                       spacing=spacing, shape=shape, nbl=nbl)
     # Source and receiver geometries
     src_coordinates = np.empty((1, len(spacing)))
     src_coordinates[0, :] = np.array(model.domain_size) * .5
@@ -316,16 +360,16 @@ def test_full_model():
 
     shape = (50, 50, 50)
     spacing = [10. for _ in shape]
-    nbpml = 10
+    nbl = 10
 
     # Create two-layer model from preset
     model = demo_model(preset='layers-isotropic', vp_top=1., vp_bottom=2.,
-                       spacing=spacing, shape=shape, nbpml=nbpml)
+                       spacing=spacing, shape=shape, nbl=nbl)
 
     # Test Model pickling
     pkl_model = pickle.dumps(model)
     new_model = pickle.loads(pkl_model)
-    assert np.isclose(np.linalg.norm(model.vp-new_model.vp), 0)
+    assert np.isclose(np.linalg.norm(model.vp.data[:]-new_model.vp.data[:]), 0)
 
     f0 = .010
     dt = model.critical_dt

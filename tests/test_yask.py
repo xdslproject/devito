@@ -117,10 +117,10 @@ class TestOperatorSimple(object):
             1 4 4 ... 4 1
             1 1 1 ... 1 1
         """
-        grid = Grid(shape=(16, 16, 16))
+        grid = Grid(shape=(17, 17, 17))
         v = TimeFunction(name='yv4D', grid=grid, space_order=space_order)
         v.data_with_halo[:] = 1.
-        op = Operator(Eq(v.forward, v.laplace + 6*v), subs=grid.spacing_map)
+        op = Operator(Eq(v.forward, v.laplace + 6.0*v), subs=grid.spacing_map)
         op(yv4D=v, time=0)
         assert 'run_solution' in str(op)
         # Chech that the domain size has actually been written to
@@ -192,11 +192,11 @@ class TestOperatorSimple(object):
     def test_irregular_write(self):
         """
         Compute a simple stencil S w/o offloading it to YASK because of the presence
-        of indirect write accesses (e.g. A[B[i]] = ...); YASK grid functions are however
+        of indirect write accesses (e.g. A[B[i]] = ...); YASK var functions are however
         used in the generated code to access the data at the right location. This
         test checks that the numerical output is correct after this transformation.
 
-        Initially, the input array (a YASK grid, under the hood), at t=0 is (2D view):
+        Initially, the input array (a YASK var, under the hood), at t=0 is (2D view):
 
             0 1 2 3
             0 1 2 3
@@ -249,7 +249,7 @@ class TestOperatorSimple(object):
         Check that all vector temporaries appearing in a offloaded stencil
         equation are: ::
 
-            * mapped to a YASK grid, directly in Python-land,
+            * mapped to a YASK var, directly in Python-land,
             * so no memory needs to be allocated in C-land, and
             * passed down to the generated code, and
             * re-initializaed to 0. at each operator application
@@ -263,16 +263,16 @@ class TestOperatorSimple(object):
         assert 'posix_memalign' not in str(op)
         assert 'run_solution' in str(op)
         # No data has been allocated for the temporaries yet
-        assert list(op.yk_solns.values())[0].grids['r1'].is_storage_allocated() is False
+        assert list(op.yk_solns.values())[0].vars['r1'].is_storage_allocated() is False
         op.apply(yu4D=u, yv3D=v, time=0)
         # Temporary data has already been released after execution
-        assert list(op.yk_solns.values())[0].grids['r1'].is_storage_allocated() is False
+        assert list(op.yk_solns.values())[0].vars['r1'].is_storage_allocated() is False
         assert np.all(v.data == 0.)
         assert np.all(u.data[1] == 5.)
 
     def test_constants(self):
         """
-        Check that :class:`Constant` objects are treated correctly.
+        Check that Constant objects are treated correctly.
         """
         grid = Grid(shape=(4, 4, 4))
         c = Constant(name='c', value=2., dtype=grid.dtype)
@@ -282,7 +282,7 @@ class TestOperatorSimple(object):
         op = Operator([Eq(u.forward, u + c), Eq(p[0, 0], 1. + c)])
         assert 'run_solution' in str(op)
         op.apply(yu4D=u, c=c, time=9)
-        # Check YASK did its job and could read constant grids w/o problems
+        # Check YASK did its job and could read constant vars w/o problems
         assert np.all(u.data[0] == 20.)
         # Check the Constant could be read correctly even in Devito-land, i.e.,
         # outside of run_solution
@@ -296,7 +296,7 @@ class TestOperatorSimple(object):
 
     def test_partial_offloading(self):
         """
-        Check that :class:`Function` objects not using any :class:`SpaceDimension`
+        Check that Function objects not using any SpaceDimension
         are computed in Devito-land, rather than via YASK.
         """
         shape = (4, 4, 4)
@@ -351,7 +351,7 @@ class TestOperatorSimple(object):
         grid = Grid(shape=(4, 4, 4))
         u = TimeFunction(name='yu4D', grid=grid, space_order=0)
         u.data[:] = 0.
-        op = Operator(Eq(u, u + 1.))
+        op = Operator(Eq(u.forward, u + 1.))
         assert 'run_solution' in str(op)
         assert 'pragma omp' not in str(op)
 
@@ -366,8 +366,7 @@ class TestOperatorAdvanced(object):
 
     def test_misc_dims(self):
         """
-        Tests grid-independent :class:`Function`s, which require YASK's "misc"
-        dimensions.
+        Tests grid-independent Functions, which require YASK's "misc" dimensions.
         """
         dx = Dimension(name='dx')
         grid = Grid(shape=(10, 10))
@@ -455,7 +454,7 @@ class TestIsotropicAcoustic(object):
         return (60, 70, 80)
 
     @cached_property
-    def nbpml(self):
+    def nbl(self):
         return 10
 
     @cached_property
@@ -470,7 +469,7 @@ class TestIsotropicAcoustic(object):
     def model(self):
         return demo_model(spacing=[15., 15., 15.], dtype=self.dtype,
                           space_order=self.space_order, shape=self.shape,
-                          nbpml=self.nbpml, preset='layers-isotropic', ratio=3)
+                          nbl=self.nbl, preset='layers-isotropic', ratio=3)
 
     @cached_property
     def time_params(self):
@@ -483,6 +482,10 @@ class TestIsotropicAcoustic(object):
     @cached_property
     def m(self):
         return self.model.m
+
+    @cached_property
+    def vp(self):
+        return self.model.vp
 
     @cached_property
     def damp(self):
@@ -535,7 +538,7 @@ class TestIsotropicAcoustic(object):
         op = Operator(self.eqn, subs=self.model.spacing_map)
         assert 'run_solution' in str(op)
 
-        op.apply(u=self.u, m=self.m, damp=self.damp, time=10, dt=dt)
+        op.apply(u=self.u, vp=self.vp, damp=self.damp, time=10, dt=dt)
 
         assert np.linalg.norm(self.u.data[:]) == 0.0
 
@@ -551,7 +554,7 @@ class TestIsotropicAcoustic(object):
         op = Operator(eqns, subs=self.model.spacing_map)
         assert 'run_solution' in str(op)
 
-        op.apply(u=self.u, m=self.m, damp=self.damp, src=self.src, dt=dt)
+        op.apply(u=self.u, vp=self.vp, damp=self.damp, src=self.src, dt=dt)
 
         exp_u = 154.05
         assert np.isclose(np.linalg.norm(self.u.data[:]), exp_u, atol=exp_u*1.e-2)
@@ -569,12 +572,12 @@ class TestIsotropicAcoustic(object):
         op = Operator(eqns, subs=self.model.spacing_map)
         assert 'run_solution' in str(op)
 
-        op.apply(u=self.u, m=self.m, damp=self.damp, src=self.src, rec=self.rec, dt=dt)
+        op.apply(u=self.u, vp=self.vp, damp=self.damp, src=self.src, rec=self.rec, dt=dt)
 
         # The expected norms have been computed "by hand" looking at the output
         # of test_adjointA's forward operator w/o using the YASK backend.
         exp_u = 154.05
-        exp_rec = 212.15
+        exp_rec = 251.02
 
         assert np.isclose(np.linalg.norm(self.u.data[:]), exp_u, atol=exp_u*1.e-2)
         assert np.isclose(np.linalg.norm(self.rec.data.reshape(-1)), exp_rec,
@@ -585,8 +588,7 @@ class TestIsotropicAcoustic(object):
         Full acoustic wave test, forward + adjoint operators
         """
         from test_adjoint import TestAdjoint
-        TestAdjoint().test_adjoint_F('layers', self.shape, self.kernel,
-                                     self.space_order, self.nbpml)
+        TestAdjoint().test_adjoint_F('layers', self.shape, self.kernel, self.space_order)
 
     @switchconfig(openmp=True)
     def test_acoustic_adjoint_omp(self):
@@ -595,5 +597,4 @@ class TestIsotropicAcoustic(object):
         sparse loops.
         """
         from test_adjoint import TestAdjoint
-        TestAdjoint().test_adjoint_F('layers', self.shape, self.kernel,
-                                     self.space_order, self.nbpml)
+        TestAdjoint().test_adjoint_F('layers', self.shape, self.kernel, self.space_order)

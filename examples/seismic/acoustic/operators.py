@@ -10,29 +10,42 @@ def laplacian(field, m, s, kernel):
     order in time formulation, the 4th order time derivative is replaced by a
     double laplacian:
     H = (laplacian + s**2/12 laplacian(1/m*laplacian))
-    :param field: Symbolic TimeFunction object, solution to be computed
-    :param m: square slowness
-    :param s: symbol for the time-step
-    :return: H
+
+    Parameters
+    ----------
+    field : TimeFunction
+        The computed solution.
+    m : Function or float
+        Square slowness.
+    s : float or Scalar
+        The time dimension spacing.
     """
     if kernel not in ['OT2', 'OT4']:
         raise ValueError("Unrecognized kernel")
 
-    biharmonic = field.laplace2(1/m) if kernel == 'OT4' else 0
+    biharmonic = field.biharmonic(1/m) if kernel == 'OT4' else 0
     return field.laplace + s**2/12 * biharmonic
 
 
 def iso_stencil(field, m, s, damp, kernel, **kwargs):
     """
     Stencil for the acoustic isotropic wave-equation:
-    u.dt2 - H + damp*u.dt = 0
-    :param field: Symbolic TimeFunction object, solution to be computed
-    :param m: square slowness
-    :param s: symbol for the time-step
-    :param damp: ABC dampening field (Function)
-    :param kwargs: forwad/backward wave equation (sign of u.dt will change accordingly
-    as well as the updated time-step (u.forwad or u.backward)
-    :return: Stencil for the wave-equation
+    u.dt2 - H + damp*u.dt = 0.
+
+    Parameters
+    ----------
+    field : TimeFunction
+        The computed solution.
+    m : Function or float
+        Square slowness.
+    s : float or Scalar
+        The time dimension spacing.
+    damp : Function
+        The damping field for absorbing boundary condition.
+    forward : bool
+        The propagation direction. Defaults to True.
+    q : TimeFunction, Function or float
+        Full-space/time source of the wave-equation.
     """
 
     # Creat a temporary symbol for H to avoid expensive sympy solve
@@ -42,7 +55,7 @@ def iso_stencil(field, m, s, damp, kernel, **kwargs):
     # Define PDE
     eq = m * field.dt2 - H - kwargs.get('q', 0)
     # Add dampening field according to the propagation direction
-    eq += damp * field.dt if kwargs.get('forward', True) else -damp * field.dt
+    eq += damp * field.dt if kwargs.get('forward', True) else damp * field.dt.T
     # Solve the symbolic equation for the field to be updated
     eq_time = solve(eq, next)
     # Get the spacial FD
@@ -54,13 +67,20 @@ def iso_stencil(field, m, s, damp, kernel, **kwargs):
 def ForwardOperator(model, geometry, space_order=4,
                     save=False, kernel='OT2', **kwargs):
     """
-    Constructor method for the forward modelling operator in an acoustic media
+    Construct a forward modelling operator in an acoustic media.
 
-    :param model: :class:`Model` object containing the physical parameters
-    :param source: :class:`PointData` object containing the source geometry
-    :param receiver: :class:`PointData` object containing the acquisition geometry
-    :param space_order: Space discretization order
-    :param save: Saving flag, True saves all time steps, False only the three
+    Parameters
+    ----------
+    model : Model
+        Object containing the physical parameters.
+    geometry : AcquisitionGeometry
+        Geometry object that contains the source (SparseTimeFunction) and
+        receivers (SparseTimeFunction) and their position.
+    space_order : int, optional
+        Space discretization order.
+    save : int or Buffer, optional
+        Saving flag, True saves all time steps. False saves three timesteps.
+        Defaults to False.
     """
     m, damp = model.m, model.damp
 
@@ -90,13 +110,19 @@ def ForwardOperator(model, geometry, space_order=4,
 def AdjointOperator(model, geometry, space_order=4,
                     kernel='OT2', **kwargs):
     """
-    Constructor method for the adjoint modelling operator in an acoustic media
+    Construct an adjoint modelling operator in an acoustic media.
 
-    :param model: :class:`Model` object containing the physical parameters
-    :param source: :class:`PointData` object containing the source geometry
-    :param receiver: :class:`PointData` object containing the acquisition geometry
-    :param time_order: Time discretization order
-    :param space_order: Space discretization order
+    Parameters
+    ----------
+    model : Model
+        Object containing the physical parameters.
+    geometry : AcquisitionGeometry
+        Geometry object that contains the source (SparseTimeFunction) and
+        receivers (SparseTimeFunction) and their position.
+    space_order : int, optional
+        Space discretization order.
+    kernel : str, optional
+        Type of discretization, centered or shifted.
     """
     m, damp = model.m, model.damp
 
@@ -124,13 +150,21 @@ def AdjointOperator(model, geometry, space_order=4,
 def GradientOperator(model, geometry, space_order=4, save=True,
                      kernel='OT2', **kwargs):
     """
-    Constructor method for the gradient operator in an acoustic media
+    Construct a gradient operator in an acoustic media.
 
-    :param model: :class:`Model` object containing the physical parameters
-    :param source: :class:`PointData` object containing the source geometry
-    :param receiver: :class:`PointData` object containing the acquisition geometry
-    :param time_order: Time discretization order
-    :param space_order: Space discretization order
+    Parameters
+    ----------
+    model : Model
+        Object containing the physical parameters.
+    geometry : AcquisitionGeometry
+        Geometry object that contains the source (SparseTimeFunction) and
+        receivers (SparseTimeFunction) and their position.
+    space_order : int, optional
+        Space discretization order.
+    save : int or Buffer, optional
+        Option to store the entire (unrolled) wavefield.
+    kernel : str, optional
+        Type of discretization, centered or shifted.
     """
     m, damp = model.m, model.damp
 
@@ -149,7 +183,7 @@ def GradientOperator(model, geometry, space_order=4, save=True,
     if kernel == 'OT2':
         gradient_update = Inc(grad, - u.dt2 * v)
     elif kernel == 'OT4':
-        gradient_update = Inc(grad, - (u.dt2 + s**2 / 12.0 * u.laplace2(m**(-2))) * v)
+        gradient_update = Inc(grad, - (u.dt2 + s**2 / 12.0 * u.biharmonic(m**(-2))) * v)
     # Add expression for receiver injection
     receivers = rec.inject(field=v.backward, expr=rec * s**2 / m)
 
@@ -161,13 +195,19 @@ def GradientOperator(model, geometry, space_order=4, save=True,
 def BornOperator(model, geometry, space_order=4,
                  kernel='OT2', **kwargs):
     """
-    Constructor method for the Linearized Born operator in an acoustic media
+    Construct an Linearized Born operator in an acoustic media.
 
-    :param model: :class:`Model` object containing the physical parameters
-    :param source: :class:`PointData` object containing the source geometry
-    :param receiver: :class:`PointData` object containing the acquisition geometry
-    :param time_order: Time discretization order
-    :param space_order: Space discretization order
+    Parameters
+    ----------
+    model : Model
+        Object containing the physical parameters.
+    geometry : AcquisitionGeometry
+        Geometry object that contains the source (SparseTimeFunction) and
+        receivers (SparseTimeFunction) and their position.
+    space_order : int, optional
+        Space discretization order.
+    kernel : str, optional
+        Type of discretization, centered or shifted.
     """
     m, damp = model.m, model.damp
 

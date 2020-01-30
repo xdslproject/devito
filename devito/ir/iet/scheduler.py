@@ -1,17 +1,16 @@
 from collections import OrderedDict
 
-from devito.cgen_utils import Allocator
-from devito.ir.iet import (ArrayCast, Expression, Increment, LocalExpression, Element,
-                           Iteration, List, Conditional, Section, HaloSpot,
-                           ExpressionBundle, MapSections, Transformer, FindNodes,
-                           FindSymbols, XSubs, iet_analyze, filter_iterations)
+from devito.ir.iet import (Expression, Increment, Iteration, List, Conditional,
+                           Section, HaloSpot, ExpressionBundle, FindNodes, FindSymbols,
+                           XSubs, iet_analyze)
 from devito.symbolics import IntDiv, xreplace_indices
-from devito.tools import as_mapper, as_tuple
+from devito.tools import as_mapper, timed_pass
 from devito.types import ConditionalDimension
 
-__all__ = ['iet_build', 'iet_insert_decls', 'iet_insert_casts']
+__all__ = ['iet_build']
 
 
+@timed_pass(name='lowering.IET')
 def iet_build(stree):
     """
     Create an Iteration/Expression tree (IET) from a ScheduleTree.
@@ -42,7 +41,7 @@ def iet_make(stree):
 
         elif i.is_Exprs:
             exprs = [Increment(e) if e.is_Increment else Expression(e) for e in i.exprs]
-            body = ExpressionBundle(i.shape, i.ops, i.traffic, body=exprs)
+            body = ExpressionBundle(i.ispace, i.ops, i.traffic, body=exprs)
 
         elif i.is_Conditional:
             body = Conditional(i.guard, queues.pop(i))
@@ -51,8 +50,9 @@ def iet_make(stree):
             # Order to ensure deterministic code generation
             uindices = sorted(i.sub_iterators, key=lambda d: d.name)
             # Generate Iteration
-            body = Iteration(queues.pop(i), i.dim, i.dim._limits, offsets=i.limits,
-                             direction=i.direction, uindices=uindices)
+            body = Iteration(queues.pop(i), i.dim, i.limits, offsets=i.offsets,
+                             direction=i.direction, properties=i.properties,
+                             uindices=uindices)
 
         elif i.is_Section:
             body = Section('section%d' % nsections, body=queues.pop(i))
@@ -100,91 +100,4 @@ def iet_lower_dimensions(iet):
     mapper = {d: IntDiv(d.index, d.factor) for d in cdims}
     iet = XSubs(mapper).visit(iet)
 
-    return iet
-
-
-def iet_insert_decls(iet, external):
-    """
-    Transform the input IET inserting the necessary symbol declarations.
-    Declarations are placed as close as possible to the first symbol occurrence.
-
-    Parameters
-    ----------
-    iet : Node
-        The input Iteration/Expression tree.
-    external : tuple, optional
-        The symbols defined in some outer Callable, which therefore must not
-        be re-defined.
-    """
-    iet = as_tuple(iet)
-
-    # Classify and then schedule declarations to stack/heap
-    allocator = Allocator()
-    mapper = OrderedDict()
-    for k, v in MapSections().visit(iet).items():
-        if k.is_Expression:
-            if k.is_scalar_assign:
-                # Inline declaration
-                mapper[k] = LocalExpression(**k.args)
-                continue
-            objs = [k.write]
-        elif k.is_Call:
-            objs = k.arguments
-
-        for i in objs:
-            try:
-                if i.is_LocalObject:
-                    # On the stack
-                    site = v if v else iet
-                    allocator.push_stack(site[-1], i)
-                elif i.is_Array:
-                    if i in as_tuple(external):
-                        # The Array is defined in some other IET
-                        continue
-                    elif i._mem_stack:
-                        # On the stack
-                        key = lambda i: not i.is_Parallel
-                        site = filter_iterations(v, key=key) or iet
-                        allocator.push_stack(site[-1], i)
-                    else:
-                        # On the heap, as a tensor that must be globally accessible
-                        allocator.push_heap(i)
-            except AttributeError:
-                # E.g., a generic SymPy expression
-                pass
-
-    # Introduce declarations on the stack
-    for k, v in allocator.onstack:
-        mapper[k] = tuple(Element(i) for i in v)
-    iet = Transformer(mapper, nested=True).visit(iet)
-
-    # Introduce declarations on the heap (if any)
-    if allocator.onheap:
-        decls, allocs, frees = zip(*allocator.onheap)
-        iet = List(header=decls + allocs, body=iet, footer=frees)
-
-    return iet
-
-
-def iet_insert_casts(iet, parameters):
-    """
-    Transform the input IET inserting the necessary type casts.
-    The type casts are placed at the top of the IET.
-
-    Parameters
-    ----------
-    iet : Node
-        The input Iteration/Expression tree.
-    parameters : tuple, optional
-        The symbol that might require casting.
-    """
-    # Make the generated code less verbose: if a non-Array parameter does not
-    # appear in any Expression, that is, if the parameter is merely propagated
-    # down to another Call, then there's no need to cast it
-    exprs = FindNodes(Expression).visit(iet)
-    need_cast = {i for i in set().union(*[i.functions for i in exprs]) if i.is_Tensor}
-    need_cast.update({i for i in parameters if i.is_Array})
-
-    casts = [ArrayCast(i) for i in parameters if i in need_cast]
-    iet = List(body=casts + [iet])
     return iet

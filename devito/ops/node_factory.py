@@ -1,9 +1,10 @@
-from collections import OrderedDict
+from collections import defaultdict, OrderedDict
 
-from devito import Dimension, TimeFunction
-from devito.ops.utils import namespace
-from devito.symbolics import Macro, split_affine
-from devito.types import Indexed, Array
+from devito import Constant, TimeFunction
+from devito.types.dimension import SpaceDimension
+from devito.symbolics import split_affine
+from devito.ops.types import OpsAccess, OpsAccessible
+from devito.ops.utils import AccessibleInfo
 
 
 class OPSNodeFactory(object):
@@ -16,46 +17,67 @@ class OPSNodeFactory(object):
 
     def __init__(self):
         self.ops_args = OrderedDict()
+        self.ops_args_accesses = defaultdict(list)
+        self.ops_params = []
 
-    def new_ops_arg(self, indexed):
+    def new_ops_arg(self, indexed, is_write):
         """
-        Create an :class:`Indexed` node using OPS representation.
+        Create an Indexed node using OPS representation.
 
         Parameters
         ----------
-        indexed : :class:`Indexed`
+        indexed : Indexed
             Indexed object using devito representation.
 
         Returns
         -------
-        :class:`Indexed`
+        Indexed
             Indexed node using OPS representation.
         """
 
         # Build the OPS arg identifier
         time_index = split_affine(indexed.indices[TimeFunction._time_position])
-        ops_arg_id = '%s%s%s' % (indexed.name, time_index.var, time_index.shift)
+        ops_arg_id = ('%s%s%s' % (indexed.name, time_index.var, time_index.shift)
+                      if indexed.function.is_TimeFunction else indexed.name)
 
         if ops_arg_id not in self.ops_args:
-            # Create the indexed object
-            ops_arg = Array(name=ops_arg_id,
-                            dimensions=[Dimension(name=namespace['ops_acc'])],
-                            dtype=indexed.dtype)
+            symbol_to_access = OpsAccessible(
+                ops_arg_id,
+                dtype=indexed.dtype,
+                read_only=not is_write
+            )
 
-            self.ops_args[ops_arg_id] = ops_arg
+            accessible_info = AccessibleInfo(
+                symbol_to_access,
+                time_index.var if indexed.function.is_TimeFunction else None,
+                time_index.shift if indexed.function.is_TimeFunction else None,
+                indexed.function.name)
+
+            self.ops_args[ops_arg_id] = accessible_info
+            self.ops_params.append(symbol_to_access)
         else:
-            ops_arg = self.ops_args[ops_arg_id]
+            symbol_to_access = self.ops_args[ops_arg_id].accessible
 
         # Get the space indices
-        space_indices = [e for i, e in enumerate(
-            indexed.indices) if i != TimeFunction._time_position]
+        space_indices = [
+            split_affine(i).shift for i in indexed.indices
+            if isinstance(split_affine(i).var, SpaceDimension)
+        ]
 
-        # Define the Macro used in OPS arg index
-        access_macro = Macro('OPS_ACC%d(%s)' % (list(self.ops_args).index(ops_arg_id),
-                                                ','.join(str(split_affine(i).shift)
-                                                         for i in space_indices)))
+        if space_indices not in self.ops_args_accesses[symbol_to_access]:
+            self.ops_args_accesses[symbol_to_access].append(space_indices)
 
-        # Create Indexed object representing the OPS arg access
-        new_indexed = Indexed(ops_arg.indexed, access_macro)
+        return OpsAccess(symbol_to_access, space_indices)
 
-        return new_indexed
+    def new_ops_gbl(self, c):
+        if c in self.ops_args:
+            return self.ops_args[c].accessible
+
+        new_c = AccessibleInfo(Constant(name='*%s' % c.name, dtype=c.dtype),
+                               None,
+                               None,
+                               None)
+        self.ops_args[c] = new_c
+        self.ops_params.append(new_c.accessible)
+
+        return new_c.accessible

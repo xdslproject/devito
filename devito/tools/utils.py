@@ -1,7 +1,8 @@
 import ctypes
-from collections import Iterable, OrderedDict
+from collections import OrderedDict
+from collections.abc import Iterable
 from functools import reduce
-from itertools import chain, combinations, product, zip_longest
+from itertools import chain, combinations, groupby, product, zip_longest
 from operator import attrgetter, mul
 
 import numpy as np
@@ -11,11 +12,18 @@ from cgen import dtype_to_ctype as cgen_dtype_to_ctype
 __all__ = ['prod', 'as_tuple', 'is_integer', 'generator', 'grouper', 'split', 'roundm',
            'powerset', 'invert', 'flatten', 'single_or', 'filter_ordered', 'as_mapper',
            'filter_sorted', 'dtype_to_cstr', 'dtype_to_ctype', 'dtype_to_mpitype',
-           'ctypes_to_cstr', 'ctypes_pointer', 'pprint', 'sweep']
+           'ctypes_to_cstr', 'ctypes_pointer', 'pprint', 'sweep', 'all_equal', 'as_list']
 
 
 def prod(iterable, initial=1):
     return reduce(mul, iterable, initial)
+
+
+def as_list(item, type=None, length=None):
+    """
+    Force item to a list.
+    """
+    return list(as_tuple(item, type=type, length=length))
 
 
 def as_tuple(item, type=None, length=None):
@@ -27,7 +35,7 @@ def as_tuple(item, type=None, length=None):
     # Empty list if we get passed None
     if item is None:
         t = ()
-    elif isinstance(item, str):
+    elif isinstance(item, (str, sympy.Function)):
         t = (item,)
     else:
         # Convert iterable to list...
@@ -82,6 +90,12 @@ def grouper(iterable, n):
     return ([e for e in t if e is not None] for t in zip_longest(*args))
 
 
+def all_equal(iterable):
+    "Returns True if all the elements are equal to each other"
+    g = groupby(iterable)
+    return next(g, True) and not next(g, False)
+
+
 def split(iterable, f):
     """Split an iterable ``I`` into two iterables ``I1`` and ``I2`` of the
     same type as ``I``. ``I1`` contains all elements ``e`` in ``I`` for
@@ -115,7 +129,7 @@ def flatten(l):
     """Flatten a hierarchy of nested lists into a plain list."""
     newlist = []
     for el in l:
-        if isinstance(el, Iterable) and not isinstance(el, (str, bytes)):
+        if isinstance(el, Iterable) and not isinstance(el, (str, bytes, np.ndarray)):
             for sub in flatten(el):
                 newlist.append(sub)
         else:

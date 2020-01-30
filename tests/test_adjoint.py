@@ -1,9 +1,8 @@
 import numpy as np
 import pytest
-from numpy import linalg
 
-from conftest import unit_box, points, skipif
-from devito import clear_cache, Operator
+from conftest import skipif
+from devito import Operator, norm, Function, Grid, SparseFunction
 from devito.logger import info
 from examples.seismic import demo_model, Receiver
 from examples.seismic.acoustic import acoustic_setup
@@ -12,34 +11,27 @@ pytestmark = skipif(['yask', 'ops'])
 
 presets = {
     'constant': {'preset': 'constant-isotropic'},
-    'layers': {'preset': 'layers-isotropic', 'ratio': 3},
+    'layers': {'preset': 'layers-isotropic', 'nlayers': 2},
 }
 
 
 class TestAdjoint(object):
 
-    def setup_method(self, method):
-        # Some of these tests are memory intensive as it requires to store the entire
-        # forward wavefield to compute the gradient (nx.ny.nz.nt). We therefore call
-        # 'clear_cache()' to release any remaining memory from the previous tests or
-        # previous instances (different parametrizations) of these tests
-        clear_cache()
-
-    @pytest.mark.parametrize('mkey, shape, kernel, space_order, nbpml', [
+    @pytest.mark.parametrize('mkey, shape, kernel, space_order', [
         # 1 tests with varying time and space orders
-        ('layers', (60, ), 'OT2', 4, 10), ('layers', (60, ), 'OT2', 8, 10),
-        ('layers', (60, ), 'OT4', 4, 10),
+        ('layers', (60, ), 'OT2', 12), ('layers', (60, ), 'OT2', 8),
+        ('layers', (60, ), 'OT4', 4),
         # 2D tests with varying time and space orders
-        ('layers', (60, 70), 'OT2', 4, 10), ('layers', (60, 70), 'OT2', 8, 10),
-        ('layers', (60, 70), 'OT2', 12, 10), ('layers', (60, 70), 'OT4', 8, 10),
+        ('layers', (60, 70), 'OT2', 12), ('layers', (60, 70), 'OT2', 8),
+        ('layers', (60, 70), 'OT2', 4), ('layers', (60, 70), 'OT4', 2),
         # 3D tests with varying time and space orders
-        ('layers', (60, 70, 80), 'OT2', 4, 10), ('layers', (60, 70, 80), 'OT2', 8, 10),
-        ('layers', (60, 70, 80), 'OT2', 12, 10), ('layers', (60, 70, 80), 'OT4', 4, 10),
+        ('layers', (60, 70, 80), 'OT2', 8), ('layers', (60, 70, 80), 'OT2', 6),
+        ('layers', (60, 70, 80), 'OT2', 4), ('layers', (60, 70, 80), 'OT4', 2),
         # Constant model in 2D and 3D
-        ('constant', (60, 70), 'OT2', 8, 14), ('constant', (60, 70, 80), 'OT2', 8, 14),
-        ('constant', (60, 70), 'OT4', 12, 14), ('constant', (60, 70, 80), 'OT4', 4, 14),
+        ('constant', (60, 70), 'OT2', 10), ('constant', (60, 70, 80), 'OT2', 8),
+        ('constant', (60, 70), 'OT2', 4), ('constant', (60, 70, 80), 'OT4', 2),
     ])
-    def test_adjoint_F(self, mkey, shape, kernel, space_order, nbpml):
+    def test_adjoint_F(self, mkey, shape, kernel, space_order):
         """
         Adjoint test for the forward modeling operator.
         The forward modeling operator F generates a shot record (measurements)
@@ -51,7 +43,7 @@ class TestAdjoint(object):
 
         # Create solver from preset
         solver = acoustic_setup(shape=shape, spacing=[15. for _ in shape], kernel=kernel,
-                                nbpml=nbpml, tn=tn, space_order=space_order,
+                                nbl=10, tn=tn, space_order=space_order,
                                 **(presets[mkey]), dtype=np.float64)
 
         # Create adjoint receiver symbol
@@ -65,10 +57,10 @@ class TestAdjoint(object):
 
         # Adjoint test: Verify <Ax,y> matches  <x, A^Ty> closely
         term1 = np.dot(srca.data.reshape(-1), solver.geometry.src.data)
-        term2 = linalg.norm(rec.data.reshape(-1)) ** 2
+        term2 = norm(rec) ** 2
         info('<Ax,y>: %f, <x, A^Ty>: %f, difference: %4.4e, ratio: %f'
              % (term1, term2, (term1 - term2)/term1, term1 / term2))
-        assert np.isclose((term1 - term2)/term1, 0., rtol=1.e-10)
+        assert np.isclose((term1 - term2)/term1, 0., atol=1.e-12)
 
     @pytest.mark.parametrize('space_order', [4, 8, 12])
     @pytest.mark.parametrize('shape', [(60,), (60, 70), (40, 50, 30)])
@@ -82,35 +74,35 @@ class TestAdjoint(object):
         < Jx, y> = <x ,J^T y>
         """
         tn = 500.  # Final time
-        nbpml = 10 + space_order / 2
+        nbl = 10 + space_order / 2
         spacing = tuple([10.]*len(shape))
         # Create solver from preset
-        solver = acoustic_setup(shape=shape, spacing=spacing,
-                                nbpml=nbpml, tn=tn, space_order=space_order,
+        solver = acoustic_setup(shape=shape, spacing=spacing, nlayers=2, vp_bottom=2,
+                                nbl=nbl, tn=tn, space_order=space_order,
                                 preset='layers-isotropic', dtype=np.float64)
 
         # Create initial model (m0) with a constant velocity throughout
-        model0 = demo_model('layers-isotropic', ratio=3, vp_top=1.5, vp_bottom=1.5,
+        model0 = demo_model('layers-isotropic', vp_top=1.5, vp_bottom=1.5,
                             spacing=spacing, space_order=space_order, shape=shape,
-                            nbpml=nbpml, dtype=np.float64, grid=solver.model.grid)
+                            nbl=nbl, dtype=np.float64, grid=solver.model.grid)
 
         # Compute the full wavefield u0
-        _, u0, _ = solver.forward(save=True, m=model0.m)
+        _, u0, _ = solver.forward(save=True, vp=model0.vp)
 
         # Compute initial born perturbation from m - m0
-        dm = (solver.model.m.data - model0.m.data)
+        dm = (solver.model.vp.data**(-2) - model0.vp.data**(-2))
 
-        du, _, _, _ = solver.born(dm, m=model0.m)
+        du, _, _, _ = solver.born(dm, vp=model0.vp)
 
         # Compute gradientfrom initial perturbation
-        im, _ = solver.gradient(du, u0, m=model0.m)
+        im, _ = solver.gradient(du, u0, vp=model0.vp)
 
         # Adjoint test: Verify <Ax,y> matches  <x, A^Ty> closely
         term1 = np.dot(im.data.reshape(-1), dm.reshape(-1))
-        term2 = linalg.norm(du.data.reshape(-1))**2
+        term2 = norm(du)**2
         info('<Jx,y>: %f, <x, J^Ty>: %f, difference: %4.4e, ratio: %f'
              % (term1, term2, (term1 - term2)/term1, term1 / term2))
-        assert np.isclose((term1 - term2)/term1, 0., rtol=1.e-10)
+        assert np.isclose((term1 - term2)/term1, 0., atol=1.e-12)
 
     @pytest.mark.parametrize('shape, coords', [
         ((11, 11), [(.05, .9), (.01, .8)]),
@@ -121,18 +113,23 @@ class TestAdjoint(object):
         Verify that p.inject is the adjoint of p.interpolate for a
         devito SparseFunction p
         """
-        a = unit_box(shape=shape)
+        grid = Grid(shape)
+        a = Function(name="a", grid=grid)
         a.data[:] = 0.
-        c = unit_box(shape=shape, name='c', grid=a.grid)
+        c = Function(name='c', grid=grid)
         c.data[:] = 27.
 
         assert a.grid == c.grid
         # Inject receiver
-        p = points(a.grid, ranges=coords, npoints=npoints)
+        p = SparseFunction(name="p", grid=grid, npoint=npoints)
+        for i, r in enumerate(coords):
+            p.coordinates.data[:, i] = np.linspace(r[0], r[1], npoints)
         p.data[:] = 1.2
         expr = p.inject(field=a, expr=p)
         # Read receiver
-        p2 = points(a.grid, name='points2', ranges=coords, npoints=npoints)
+        p2 = SparseFunction(name="p2", grid=grid, npoint=npoints)
+        for i, r in enumerate(coords):
+            p2.coordinates.data[:, i] = np.linspace(r[0], r[1], npoints)
         expr2 = p2.interpolate(expr=c)
         Operator(expr + expr2)(a=a, c=c)
         # < P x, y > - < x, P^T y>

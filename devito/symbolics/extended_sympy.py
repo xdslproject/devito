@@ -4,16 +4,16 @@ Extended SymPy hierarchy.
 
 import numpy as np
 import sympy
-from sympy import Expr, Integer, Float, Symbol
+from sympy import Expr, Integer, Function, Symbol
 from sympy.core.basic import _aresame
-from sympy.functions.elementary.trigonometric import TrigonometricFunction
 
-from devito.tools import Pickable, as_tuple
+from devito.symbolics.printer import ccode
+from devito.tools import Pickable, as_tuple, is_integer
 
 __all__ = ['FrozenExpr', 'Eq', 'CondEq', 'CondNe', 'Mul', 'Add', 'Pow', 'IntDiv',
            'FunctionFromPointer', 'FieldFromPointer', 'FieldFromComposite',
-           'ListInitializer', 'Byref', 'IndexedPointer', 'Macro', 'taylor_sin',
-           'taylor_cos', 'bhaskara_sin', 'bhaskara_cos']
+           'ListInitializer', 'Byref', 'IndexedPointer', 'Macro', 'Literal',
+           'INT', 'FLOAT', 'DOUBLE', 'FLOOR', 'cast_mapper']
 
 
 class FrozenExpr(Expr):
@@ -261,6 +261,8 @@ class ListInitializer(sympy.Expr, Pickable):
         for p in as_tuple(params):
             if isinstance(p, str):
                 args.append(Symbol(p))
+            elif is_integer(p):
+                args.append(Integer(p))
             elif not isinstance(p, Expr):
                 raise ValueError("`params` must be an iterable of Expr or str")
             else:
@@ -300,9 +302,9 @@ class Byref(sympy.Expr, Pickable):
 
     def __str__(self):
         if self.base.is_Symbol:
-            return "&%s" % self.base
+            return "&%s" % ccode(self.base)
         else:
-            return "&(%s)" % self.base
+            return "&(%s)" % ccode(self.base)
 
     __repr__ = __str__
 
@@ -356,75 +358,17 @@ class Macro(sympy.Symbol):
     pass
 
 
-class taylor_sin(TrigonometricFunction):
+class Literal(sympy.Symbol):
 
     """
-    Approximation of the sine function using a Taylor polynomial.
+    Symbolic representation of a Literal element.
     """
-
-    @classmethod
-    def eval(cls, arg):
-        return eval_taylor_sin(arg)
+    pass
 
 
-class taylor_cos(TrigonometricFunction):
+INT = Function('INT')
+FLOAT = Function('FLOAT')
+DOUBLE = Function('DOUBLE')
+FLOOR = Function('floor')
 
-    """
-    Approximation of the cosine function using a Taylor polynomial.
-    """
-
-    @classmethod
-    def eval(cls, arg):
-        return 1.0 if arg == 0.0 else eval_taylor_cos(arg)
-
-
-class bhaskara_sin(TrigonometricFunction):
-
-    """
-    Approximation of the sine function using a Bhaskara polynomial.
-    """
-
-    @classmethod
-    def eval(cls, arg):
-        return eval_bhaskara_sin(arg)
-
-
-class bhaskara_cos(TrigonometricFunction):
-
-    """
-    Approximation of the cosine function using a Bhaskara polynomial.
-    """
-
-    @classmethod
-    def eval(cls, arg):
-        return 1.0 if arg == 0.0 else eval_bhaskara_sin(arg + 1.5708)
-
-
-# Utils
-
-def eval_bhaskara_sin(expr):
-    return 16.0*expr*(3.1416-abs(expr))/(49.3483-4.0*abs(expr)*(3.1416-abs(expr)))
-
-
-def eval_taylor_sin(expr):
-    v = expr + Mul(-1/6.0,
-                   Mul(expr, expr, expr, evaluate=False),
-                   1.0 + Mul(Mul(expr, expr, evaluate=False), -0.05, evaluate=False),
-                   evaluate=False)
-    try:
-        Float(expr)
-        return v.doit()
-    except (TypeError, ValueError):
-        return v
-
-
-def eval_taylor_cos(expr):
-    v = 1.0 + Mul(-0.5,
-                  Mul(expr, expr, evaluate=False),
-                  1.0 + Mul(expr, expr, -1/12.0, evaluate=False),
-                  evaluate=False)
-    try:
-        Float(expr)
-        return v.doit()
-    except (TypeError, ValueError):
-        return v
+cast_mapper = {np.float32: FLOAT, float: DOUBLE, np.float64: DOUBLE}
