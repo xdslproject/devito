@@ -6,6 +6,9 @@
 #include "pmmintrin.h"
 #include "omp.h"
 
+#define min(a, b) (((a) < (b)) ? (a) : (b))
+#define max(a, b) (((a) > (b)) ? (a) : (b))
+
 int *malloc3d_and_init_int_cont(int dim1, int dim2, int dim3, int value)
 {
 
@@ -128,7 +131,7 @@ struct profiler
   double section1;
 };
 
-void bf0(const float h_x, const float h_y, const float h_z, struct dataobj *restrict u_vec, const int t0, const int t1, const int x0_blk0_M, const int x0_blk0_m, const int x0_blk0_size, const int y0_blk0_M, const int y0_blk0_m, const int y0_blk0_size, const int z_M, const int z_m, const int nthreads, const int time, int **sparse_source_mask_NNZ, int ***sparse_source_mask, int ***source_mask);
+void bf0(const float h_x, const float h_y, const float h_z, struct dataobj *restrict u_vec, const int x0_blk0_M, const int x0_blk0_m, const int x0_blk0_size, const int y0_blk0_M, const int y0_blk0_m, const int y0_blk0_size, const int z_M, const int z_m, const int nthreads, int **sparse_source_mask_NNZ, int ***sparse_source_mask, int ***source_mask, int ***source_id, float **save_src, int sf, int time_M, int t_blk, int t_blk_size);
 
 int Kernel(const float h_x, const float h_y, const float h_z, const float o_x, const float o_y, const float o_z, struct dataobj *restrict src_vec, struct dataobj *restrict src_coords_vec, struct dataobj *restrict u_vec, const int x_M, const int x_m, const int y_M, const int y_m, const int z_M, const int z_m, const int p_src_M, const int p_src_m, const int time_M, const int time_m, struct profiler *timers, const int x0_blk0_size, const int y0_blk0_size, const int nthreads, const int nthreads_nonaffine)
 {
@@ -141,13 +144,15 @@ int Kernel(const float h_x, const float h_y, const float h_z, const float o_x, c
 
   /*Allocate for inspection data structures */
 
-  int *_source_id, *_source_mask; //
   int id = 0;
-  _source_id = malloc3d_and_init_int_cont(u_vec->size[1], u_vec->size[2], u_vec->size[3], 0);
-  _source_mask = malloc3d_and_init_int_cont(u_vec->size[1], u_vec->size[2], u_vec->size[3], 0);
 
-  int(*source_id)[u_vec->size[1]][u_vec->size[2]] = (int(*)[u_vec->size[1]][u_vec->size[2]])_source_id;
-  int(*source_mask)[u_vec->size[1]][u_vec->size[2]] = (int(*)[u_vec->size[1]][u_vec->size[2]])_source_mask;
+  int ***source_id; //Grid 1
+  source_id = malloc_3d_int(u_vec->size[1], u_vec->size[2], u_vec->size[3]);
+  initialize3_int(u_vec->size[1], u_vec->size[2], u_vec->size[3], source_id, 0);
+
+  int ***source_mask; //Grid 1
+  source_mask = malloc_3d_int(u_vec->size[1], u_vec->size[2], u_vec->size[3]);
+  initialize3_int(u_vec->size[1], u_vec->size[2], u_vec->size[3], source_mask, 0);
 
   // Inspection start
   for (int time = time_m; time <= time_M; time += 1)
@@ -162,9 +167,7 @@ int Kernel(const float h_x, const float h_y, const float h_z, const float o_x, c
         int ii_src_3 = (int)(floor((-o_z + src_coords[p_src][2]) / h_z)) + 1;
         int ii_src_4 = (int)(floor((-o_y + src_coords[p_src][1]) / h_y)) + 1;
         int ii_src_5 = (int)(floor((-o_x + src_coords[p_src][0]) / h_x)) + 1;
-        //float px = (float)(-h_x * (int)(floor((-o_x + src_coords[p_src][0]) / h_x)) - o_x + src_coords[p_src][0]);
-        //float py = (float)(-h_y * (int)(floor((-o_y + src_coords[p_src][1]) / h_y)) - o_y + src_coords[p_src][1]);
-        //float pz = (float)(-h_z * (int)(floor((-o_z + src_coords[p_src][2]) / h_z)) - o_z + src_coords[p_src][2]);
+
         if (ii_src_0 >= x_m - 1 && ii_src_1 >= y_m - 1 && ii_src_2 >= z_m - 1 && ii_src_0 <= x_M + 1 && ii_src_1 <= y_M + 1 && ii_src_2 <= z_M + 1)
         {
           if (source_mask[ii_src_0 + 8][ii_src_1 + 8][ii_src_2 + 8] == 0)
@@ -279,8 +282,6 @@ int Kernel(const float h_x, const float h_y, const float h_z, const float o_x, c
   save_src = malloc_2d_float(id, time_M);
   initialize2(id, time_M, save_src, 0.0F);
 
-
-
   for (int time = time_m; time <= time_M; time += 1)
   {
     /* Begin section1 */
@@ -348,29 +349,22 @@ int Kernel(const float h_x, const float h_y, const float h_z, const float o_x, c
       }
     }
     /* End section1 */
-
-    //for (int p_src = 0; p_src < p_src_M; p_src++)
-    //{
-    //printf("\n Validate source: %d", p_src);
-
-    //xx = src_coords[p_src][0];
-    //yy = src_coords[p_src][1];
-    //zz = src_coords[p_src][2];
-    //printf("\n B Saved src is with : %d, %d, %d, %f ti = %d", xx, yy, zz, save_src[source_id[xx][yy][zz]][ti], ti);
-    //save_src[(source_id[xx][yy][zz])][ti] += src[ti][p_src];
-    //printf("\n A Saved src is with : %d, %d, %d, %f ti = %d", xx, yy, zz, save_src[source_id[xx][yy][zz]][ti], ti);
-    //}
   }
 
-  for (int time = time_m, t0 = (time) % (3), t1 = (time + 1) % (3); time <= time_M; time += 1, t0 = (time) % (3), t1 = (time + 1) % (3))
+  int sf = 4;
+  int t_blk_size = 16;
+
+  for (int t_blk = time_m; t_blk < sf * time_M; t_blk += t_blk_size) // for each t block
   {
+    //for (int time = time_m, t0 = (time) % (3), t1 = (time + 1) % (3); time <= time_M; time += 1, t0 = (time) % (3), t1 = (time + 1) % (3))
+    //{
     struct timeval start_section0, end_section0;
     gettimeofday(&start_section0, NULL);
     /* Begin section0 */
-    bf0(h_x, h_y, h_z, u_vec, t0, t1, x_M - (x_M - x_m + 1) % (x0_blk0_size), x_m, x0_blk0_size, y_M - (y_M - y_m + 1) % (y0_blk0_size), y_m, y0_blk0_size, z_M, z_m, nthreads, time, sparse_source_mask_NNZ, sparse_source_mask, source_mask);
-    bf0(h_x, h_y, h_z, u_vec, t0, t1, x_M - (x_M - x_m + 1) % (x0_blk0_size), x_m, x0_blk0_size, y_M, y_M - (y_M - y_m + 1) % (y0_blk0_size) + 1, (y_M - y_m + 1) % (y0_blk0_size), z_M, z_m, nthreads, time, sparse_source_mask_NNZ, sparse_source_mask, source_mask);
-    bf0(h_x, h_y, h_z, u_vec, t0, t1, x_M, x_M - (x_M - x_m + 1) % (x0_blk0_size) + 1, (x_M - x_m + 1) % (x0_blk0_size), y_M - (y_M - y_m + 1) % (y0_blk0_size), y_m, y0_blk0_size, z_M, z_m, nthreads, time, sparse_source_mask_NNZ, sparse_source_mask, source_mask);
-    bf0(h_x, h_y, h_z, u_vec, t0, t1, x_M, x_M - (x_M - x_m + 1) % (x0_blk0_size) + 1, (x_M - x_m + 1) % (x0_blk0_size), y_M, y_M - (y_M - y_m + 1) % (y0_blk0_size) + 1, (y_M - y_m + 1) % (y0_blk0_size), z_M, z_m, nthreads, time, sparse_source_mask_NNZ, sparse_source_mask, source_mask);
+    bf0(h_x, h_y, h_z, u_vec, x_M - (x_M - x_m + 1) % (x0_blk0_size), x_m, x0_blk0_size, y_M - (y_M - y_m + 1) % (y0_blk0_size), y_m, y0_blk0_size, z_M, z_m, nthreads, sparse_source_mask_NNZ, sparse_source_mask, source_mask, source_id, save_src, sf, time_M, t_blk, t_blk_size);
+    bf0(h_x, h_y, h_z, u_vec, x_M - (x_M - x_m + 1) % (x0_blk0_size), x_m, x0_blk0_size, y_M, y_M - (y_M - y_m + 1) % (y0_blk0_size) + 1, (y_M - y_m + 1) % (y0_blk0_size), z_M, z_m, nthreads, sparse_source_mask_NNZ, sparse_source_mask, source_mask, source_id, save_src, sf, time_M, t_blk, t_blk_size);
+    bf0(h_x, h_y, h_z, u_vec, x_M, x_M - (x_M - x_m + 1) % (x0_blk0_size) + 1, (x_M - x_m + 1) % (x0_blk0_size), y_M - (y_M - y_m + 1) % (y0_blk0_size), y_m, y0_blk0_size, z_M, z_m, nthreads, sparse_source_mask_NNZ, sparse_source_mask, source_mask, source_id, save_src, sf, time_M, t_blk, t_blk_size);
+    bf0(h_x, h_y, h_z, u_vec, x_M, x_M - (x_M - x_m + 1) % (x0_blk0_size) + 1, (x_M - x_m + 1) % (x0_blk0_size), y_M, y_M - (y_M - y_m + 1) % (y0_blk0_size) + 1, (y_M - y_m + 1) % (y0_blk0_size), z_M, z_m, nthreads, sparse_source_mask_NNZ, sparse_source_mask, source_mask, source_id, save_src, sf, time_M, t_blk, t_blk_size);
     /* End section0 */
     gettimeofday(&end_section0, NULL);
     timers->section0 += (double)(end_section0.tv_sec - start_section0.tv_sec) + (double)(end_section0.tv_usec - start_section0.tv_usec) / 1000000;
@@ -385,40 +379,46 @@ int Kernel(const float h_x, const float h_y, const float h_z, const float o_x, c
   return 0;
 }
 
-void bf0(const float h_x, const float h_y, const float h_z, struct dataobj *restrict u_vec, const int t0, const int t1, const int x0_blk0_M, const int x0_blk0_m, const int x0_blk0_size, const int y0_blk0_M, const int y0_blk0_m, const int y0_blk0_size, const int z_M, const int z_m, const int nthreads, const int time, int **sparse_source_mask_NNZ, int ***sparse_source_mask, int ***source_mask)
+void bf0(const float h_x, const float h_y, const float h_z, struct dataobj *restrict u_vec, const int x0_blk0_M, const int x0_blk0_m, const int x0_blk0_size, const int y0_blk0_M, const int y0_blk0_m, const int y0_blk0_size, const int z_M, const int z_m, const int nthreads, int **sparse_source_mask_NNZ, int ***sparse_source_mask, int ***source_mask, int ***source_id, float **save_src, int sf, int time_M, int t_blk, int t_blk_size)
 {
   float(*restrict u)[u_vec->size[1]][u_vec->size[2]][u_vec->size[3]] __attribute__((aligned(64))) = (float(*)[u_vec->size[1]][u_vec->size[2]][u_vec->size[3]])u_vec->data;
   if (x0_blk0_size == 0)
   {
     return;
   }
+  int zind = 0;
   //#pragma omp parallel num_threads(nthreads)
   {
-  //#pragma omp for collapse(1) schedule(dynamic, 1)
-    for (int x0_blk0 = x0_blk0_m; x0_blk0 <= x0_blk0_M; x0_blk0 += x0_blk0_size)
+#pragma omp for collapse(1) schedule(dynamic, 1)
+    for (int x0_blk0 = x0_blk0_m; x0_blk0 <= (x0_blk0_M + sf * time_M); x0_blk0 += x0_blk0_size)
     {
-      for (int y0_blk0 = y0_blk0_m; y0_blk0 <= y0_blk0_M; y0_blk0 += y0_blk0_size)
+      for (int y0_blk0 = y0_blk0_m; y0_blk0 <= (y0_blk0_M + sf * time_M); y0_blk0 += y0_blk0_size)
       {
-        for (int x = x0_blk0; x <= x0_blk0 + x0_blk0_size - 1; x += 1)
+        for (int time = t_blk, t0 = (time) % (3), t1 = (time + 1) % (3); time <= min(t_blk + t_blk_size, sf * time_M); time += sf, t0 = (time) % (3), t1 = (time + 1) % (3))
         {
-          for (int y = y0_blk0; y <= y0_blk0 + y0_blk0_size - 1; y += 1)
+          /* code */
+
+          for (int x = x0_blk0; x <= x0_blk0 + x0_blk0_size - 1; x += 1)
           {
-            #pragma omp simd aligned(u : 32)
-            for (int z = z_m; z <= z_M; z += 1)
+            for (int y = y0_blk0; y <= y0_blk0 + y0_blk0_size - 1; y += 1)
             {
-              float r2 = 1.0 / (h_z * h_z);
-              float r1 = 1.0 / (h_y * h_y);
-              float r0 = 1.0 / (h_x * h_x);
-              u[t1][x + 8][y + 8][z + 8] = r0 * (-1.78571429e-3F * (u[t0][x + 4][y + 8][z + 8] + u[t0][x + 12][y + 8][z + 8]) + 2.53968254e-2F * (u[t0][x + 5][y + 8][z + 8] + u[t0][x + 11][y + 8][z + 8]) - 2.0e-1F * (u[t0][x + 6][y + 8][z + 8] + u[t0][x + 10][y + 8][z + 8]) + 1.6F * (u[t0][x + 7][y + 8][z + 8] + u[t0][x + 9][y + 8][z + 8]) - 2.84722222F * u[t0][x + 8][y + 8][z + 8]) + r1 * (-1.78571429e-3F * (u[t0][x + 8][y + 4][z + 8] + u[t0][x + 8][y + 12][z + 8]) + 2.53968254e-2F * (u[t0][x + 8][y + 5][z + 8] + u[t0][x + 8][y + 11][z + 8]) - 2.0e-1F * (u[t0][x + 8][y + 6][z + 8] + u[t0][x + 8][y + 10][z + 8]) + 1.6F * (u[t0][x + 8][y + 7][z + 8] + u[t0][x + 8][y + 9][z + 8]) - 2.84722222F * u[t0][x + 8][y + 8][z + 8]) + r2 * (-1.78571429e-3F * (u[t0][x + 8][y + 8][z + 4] + u[t0][x + 8][y + 8][z + 12]) + 2.53968254e-2F * (u[t0][x + 8][y + 8][z + 5] + u[t0][x + 8][y + 8][z + 11]) - 2.0e-1F * (u[t0][x + 8][y + 8][z + 6] + u[t0][x + 8][y + 8][z + 10]) + 1.6F * (u[t0][x + 8][y + 8][z + 7] + u[t0][x + 8][y + 8][z + 9]) - 2.84722222F * u[t0][x + 8][y + 8][z + 8]);
-            }
-            //#pragma omp simd aligned(u : 32)
-            for (int spzi = 0; spzi < sparse_source_mask_NNZ[x][y]; spzi++) // Inner block loop
-            {
-              int zind = sparse_source_mask[x][y][spzi];
-              //printf("\n zind is : %d", sparse_source_mask[xi - titer2][yi - titer2][spzi]);
-              u[t1][x + 8][y + 8][zind + 8] += source_mask[x][y][zind] * save_src[(source_id[x][y][zind])][time];
-              //printf("\n Inject source in grid[%d][%d][%d], src = %f, ", xi-titer2, yi-titer2, zind, save_src[(source_id[xi - titer2][yi - titer2][zind])][titer2]);
-              //printf("\n update : %d, %d, %d in %d", xi - titer2, yi - titer2, zi ,titer2);
+#pragma omp simd aligned(u : 32)
+              for (int z = z_m; z <= z_M; z += 1)
+              {
+                float r2 = 1.0 / (h_z * h_z);
+                float r1 = 1.0 / (h_y * h_y);
+                float r0 = 1.0 / (h_x * h_x);
+                u[t1][x + 8 - time][y + 8 - time][z + 8] = r0 * (-1.78571429e-3F * (u[t0][x + 4 - time][y + 8 - time][z + 8] + u[t0][x + 12 - time][y + 8 - time][z + 8]) + 2.53968254e-2F * (u[t0][x + 5 - time][y + 8 - time][z + 8] + u[t0][x + 11 - time][y + 8 - time][z + 8]) - 2.0e-1F * (u[t0][x + 6 - time][y + 8 - time][z + 8] + u[t0][x + 10 - time][y + 8 - time][z + 8]) + 1.6F * (u[t0][x + 7 - time][y + 8 - time][z + 8] + u[t0][x + 9 - time][y + 8 - time][z + 8]) - 2.84722222F * u[t0][x + 8 - time][y + 8 - time][z + 8]) + r1 * (-1.78571429e-3F * (u[t0][x + 8 - time][y + 4 - time][z + 8] + u[t0][x + 8 - time][y + 12 - time][z + 8]) + 2.53968254e-2F * (u[t0][x + 8 - time][y + 5 - time][z + 8] + u[t0][x + 8 - time][y + 11 - time][z + 8]) - 2.0e-1F * (u[t0][x + 8 - time][y + 6 - time][z + 8] + u[t0][x + 8 - time][y + 10 - time][z + 8]) + 1.6F * (u[t0][x + 8 - time][y + 7 - time][z + 8] + u[t0][x + 8 - time][y + 9 - time][z + 8]) - 2.84722222F * u[t0][x + 8 - time][y + 8 - time][z + 8]) + r2 * (-1.78571429e-3F * (u[t0][x + 8 - time][y + 8 - time][z + 4] + u[t0][x + 8 - time][y + 8 - time][z + 12]) + 2.53968254e-2F * (u[t0][x + 8 - time][y + 8 - time][z + 5] + u[t0][x + 8 - time][y + 8 - time][z + 11]) - 2.0e-1F * (u[t0][x + 8 - time][y + 8 - time][z + 6] + u[t0][x + 8 - time][y + 8 - time][z + 10]) + 1.6F * (u[t0][x + 8 - time][y + 8 - time][z + 7] + u[t0][x + 8 - time][y + 8 - time][z + 9]) - 2.84722222F * u[t0][x + 8 - time][y + 8 - time][z + 8]);
+              }
+#pragma omp simd aligned(u : 32)
+              for (int spzi = 0; spzi < sparse_source_mask_NNZ[x - time][y - time]; spzi++) // Inner block loop
+              {
+                zind = sparse_source_mask[x - time][y - time][spzi];
+                //printf("\n zind is : %d", sparse_source_mask[xi - titer2][yi - titer2][spzi]);
+                u[t1][x + 8 - time][y + 8 - time][zind + 8] += source_mask[x - time][y - time][zind] * save_src[(source_id[x - time][y - time][zind])][time];
+                //printf("\n Inject source in grid[%d][%d][%d], src = %f, ", xi-titer2, yi-titer2, zind, save_src[(source_id[xi - titer2][yi - titer2][zind])][titer2]);
+                //printf("\n update : %d, %d, %d in %d", xi - titer2, yi - titer2, zi ,titer2);
+              }
             }
           }
         }

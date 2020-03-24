@@ -3,6 +3,7 @@ from devito import Grid, Eq, solve, TimeFunction, Operator, configuration
 from examples.cfd import plot_field, init_hat
 from examples.seismic import RickerSource, TimeAxis
 
+
 configuration['openmp'] = 1
 configuration['dse'] = 'advanced'
 configuration['dle'] = 'advanced'
@@ -11,7 +12,7 @@ configuration['dle'] = 'advanced'
 nx = 81
 ny = 81
 nz = 81
-nt = 100
+nt = 10
 c = 1.
 dx = 2. / (nx - 1)
 dy = 2. / (ny - 1)
@@ -63,7 +64,7 @@ op = Operator([Eq(u.forward, pde)] + src_term)
 
 # test = op.ccode
 
-op(time=100)
-
+op(time=3)
+print(u.data[1,:,:,:])
 print('--------------------------------------')
 #print(type(op.ccode))
