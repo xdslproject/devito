@@ -353,11 +353,11 @@ int Forward(const float dt, const float o_x, const float o_y, const float o_z, s
   gettimeofday(&end_section1, NULL);
   timers->section1 += (double)(end_section1.tv_sec - start_section1.tv_sec) + (double)(end_section1.tv_usec - start_section1.tv_usec) / 1000000;
 
-  x0_blk0_size = 512;
-  y0_blk0_size = 512; // to fix as 8/16 etc
+  x0_blk0_size = 32;
+  y0_blk0_size = 32; // to fix as 8/16 etc
   int sf = 4;
   //int t_blk_size = time_M - time_m ;
-  int t_blk_size = 15*(time_M - time_m);
+  int t_blk_size = 20*(time_M - time_m);
   //printf("Global time loop to timesteps = %d \n", time_M - time_m +1 );
   for (int t_blk = time_m; t_blk < sf * (time_M - time_m); t_blk += sf*t_blk_size) // for each t block
   //int t_blk = time_m;
@@ -393,8 +393,8 @@ void bf0(const float dt, struct dataobj *restrict u_vec, struct dataobj *restric
 
   //printf("From x: %d to %d \n", x_m, (x_M + sf * (time_M - time_m)));
   //printf("From y: %d to %d \n", y_m, (y_M + sf * (time_M - time_m)));
-  int sbx = 64;
-  int sby = 64;
+  int sbx = 8;
+  int sby = 8;
   for (int x0_blk0 = x_m; x0_blk0 <= (x_M + sf * (time_M - time_m)); x0_blk0 += x0_blk0_size + 1)
   {
     //printf(" Change of xblock \n");
