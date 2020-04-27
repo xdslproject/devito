@@ -300,15 +300,12 @@ int Forward(const float dt, const float o_x, const float o_y, const float o_z, s
       if (ii_src_0 >= x_m - 1 && ii_src_1 >= y_m - 1 && ii_src_2 >= z_m - 1 && ii_src_0 <= x_M + 1 && ii_src_1 <= y_M + 1 && ii_src_2 <= z_M + 1)
       {
         float r0 = (dt * dt) * (vp[ii_src_0 + 4][ii_src_1 + 4][ii_src_2 + 4] * vp[ii_src_0 + 4][ii_src_1 + 4][ii_src_2 + 4]) * (-2.96296e-4F * px * py * pz + 4.44445e-3F * px * py + 4.44445e-3F * px * pz - 6.66667e-2F * px + 4.44445e-3F * py * pz - 6.66667e-2F * py - 6.66667e-2F * pz + 1) * src[time][p_src];
-        //u[t1][ii_src_0 + 4][ii_src_1 + 4][ii_src_2 + 4] += r0;
         save_src[(source_id[ii_src_0 + 4][ii_src_1 + 4][ii_src_2 + 4])][time] += r0;
-        //printf("\n src_addition is : [%d, %d, %d] = %f at time %d ", ii_src_0 + 4, ii_src_1 + 4, ii_src_2 + 4, r0, time);
       }
       if (ii_src_0 >= x_m - 1 && ii_src_1 >= y_m - 1 && ii_src_3 >= z_m - 1 && ii_src_0 <= x_M + 1 && ii_src_1 <= y_M + 1 && ii_src_3 <= z_M + 1)
       {
         float r1 = (dt * dt) * (vp[ii_src_0 + 4][ii_src_1 + 4][ii_src_3 + 4] * vp[ii_src_0 + 4][ii_src_1 + 4][ii_src_3 + 4]) * (2.96296e-4F * px * py * pz - 4.44445e-3F * px * pz - 4.44445e-3F * py * pz + 6.66667e-2F * pz) * src[time][p_src];
         save_src[(source_id[ii_src_0 + 4][ii_src_1 + 4][ii_src_3 + 4])][time] += r1;
-        //printf("\n src_addition is : [%d, %d, %d] = %f at time %d ", ii_src_0 + 4, ii_src_1 + 4, ii_src_3 + 4, r1, time);
         //u[t1][ii_src_0 + 4][ii_src_1 + 4][ii_src_3 + 4] += r1;
       }
       if (ii_src_0 >= x_m - 1 && ii_src_2 >= z_m - 1 && ii_src_4 >= y_m - 1 && ii_src_0 <= x_M + 1 && ii_src_2 <= z_M + 1 && ii_src_4 <= y_M + 1)
@@ -345,7 +342,6 @@ int Forward(const float dt, const float o_x, const float o_y, const float o_z, s
       {
         float r7 = 2.96296e-4F * px * py * pz * (dt * dt) * (vp[ii_src_5 + 4][ii_src_4 + 4][ii_src_3 + 4] * vp[ii_src_5 + 4][ii_src_4 + 4][ii_src_3 + 4]) * src[time][p_src];
         save_src[(source_id[ii_src_5 + 4][ii_src_4 + 4][ii_src_3 + 4])][time] += r7;
-        //u[t1][ii_src_5 + 4][ii_src_4 + 4][ii_src_3 + 4] += r7;
       }
     }
   }
