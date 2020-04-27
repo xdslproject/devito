@@ -7,7 +7,7 @@ from examples.seismic.acoustic import AcousticWaveSolver
 from examples.seismic import demo_model, setup_geometry
 
 def acoustic_setup(shape=(50, 50, 50), spacing=(15.0, 15.0, 15.0),
-                   tn=500., kernel='OT2', space_order=4, nbl=10,
+                   tn=500., kernel='OT2', space_order=8, nbl=10,
                    preset='layers-isotropic', **kwargs):
     model = demo_model(preset, space_order=space_order, shape=shape, nbl=nbl,
                        dtype=kwargs.pop('dtype', np.float32), spacing=spacing,
@@ -23,7 +23,7 @@ def acoustic_setup(shape=(50, 50, 50), spacing=(15.0, 15.0, 15.0),
 
 
 def run(shape=(50, 50, 50), spacing=(20.0, 20.0, 20.0), tn=100.0,
-        space_order=4, kernel='OT2', nbl=40, full_run=False,
+        space_order=8, kernel='OT2', nbl=40, full_run=False,
         autotune=False, preset='layers-isotropic', checkpointing=False, **kwargs):
 
     solver = acoustic_setup(shape=shape, spacing=spacing, nbl=nbl, tn=tn,
@@ -38,7 +38,8 @@ def run(shape=(50, 50, 50), spacing=(20.0, 20.0, 20.0), tn=100.0,
     # Define receiver geometry (spread across x, just below surface)
     u, summary = solver.forward(save=save, autotune=autotune)
     
-    # print(norm(u))
+    print(norm(u))
+    print(summary)
 
     if preset == 'constant':
         # With  a new m as Constant
@@ -74,7 +75,7 @@ if __name__ == "__main__":
     parser.add_argument('-a', '--autotune', default='off',
                         choices=(configuration._accepted['autotuning']),
                         help="Operator auto-tuning mode")
-    parser.add_argument("-so", "--space_order", default=4,
+    parser.add_argument("-so", "--space_order", default=8,
                         type=int, help="Space order of the simulation")
     parser.add_argument("--nbl", default=0,
                         type=int, help="Number of boundary layers around the domain")
@@ -93,11 +94,11 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # 3D preset parameters
-    shape = tuple(args.ndim * [512])
+    shape = tuple(args.ndim * [1024])
     spacing = tuple(args.ndim * [15.0])
     tn = 58. if args.ndim < 3 else 250.
     preset = 'constant-isotropic' if args.constant else 'layers-isotropic'
-    run(shape=shape, spacing=spacing, nbl=args.nbl, tn=1000,
+    run(shape=shape, spacing=spacing, nbl=args.nbl, tn=200,
         space_order=args.space_order, preset=preset, kernel=args.kernel,
         autotune=args.autotune, dse=args.dse, dle=args.dle, full_run=args.full,
         checkpointing=args.checkpointing)
