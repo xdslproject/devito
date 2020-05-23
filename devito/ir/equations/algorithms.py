@@ -141,18 +141,23 @@ def lower_exprs(expressions, **kwargs):
             indices = [(lower_exprs(a) + o) for a, o in
                        zip(i.indices, f._size_nodomain.left)]
 
+            tmp_mapper = {}
             # Indexify indices of nested functions
             for idx, index in enumerate(indices):
-                if index.is_Function and not index.is_Dimension and not index.is_Indexed:
-                    indices[idx] = index.indexify(lshift=True)
+                try:
+                    if (index.is_Function
+                       and not index.is_Dimension and not index.is_Indexed):
+                        tmp_mapper = {index: index.indexify(lshift=True)}
+                        indices[idx] = index.xreplace(tmp_mapper)
+                        expr = expr.xreplace(tmp_mapper)
+                except AttributeError:
+                    pass
 
             # Apply substitutions, if necessary
             if dimension_map:
                 indices = [j.xreplace(dimension_map) for j in indices]
 
             mapper[i] = f.indexed[indices]
-            # Update expression
-            expr = uxreplace(expr, mapper)
 
         # Add dimensions map to the mapper in case dimensions are used
         # as an expression, i.e. Eq(u, x, subdomain=xleft)
