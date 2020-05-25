@@ -145,8 +145,8 @@ def lower_exprs(expressions, **kwargs):
             # Indexify indices of nested functions
             for index in indices:
                 try:
-                    if index.is_Function:
-                        tmp_mapper = {index: index.indexify(lshift=True)}
+                    for nested_func in retrieve_functions(index):
+                        tmp_mapper = {nested_func: nested_func.indexify(lshift=True)}
                         index = index.xreplace(tmp_mapper)
                         expr = expr.xreplace(tmp_mapper)
                 except AttributeError:
