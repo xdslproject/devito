@@ -141,16 +141,13 @@ def lower_exprs(expressions, **kwargs):
             indices = [(lower_exprs(a) + o) for a, o in
                        zip(i.indices, f._size_nodomain.left)]
 
-            tmp_mapper = {}
             # Indexify indices of nested functions
+            tmp_mapper = {}
             for index in indices:
-                try:
-                    for nested_func in retrieve_functions(index):
-                        tmp_mapper = {nested_func: nested_func.indexify(lshift=True)}
-                        index = index.xreplace(tmp_mapper)
-                        expr = expr.xreplace(tmp_mapper)
-                except AttributeError:
-                    pass
+                for nested_func in retrieve_functions(index):
+                    tmp_mapper = {nested_func: nested_func.indexify(lshift=True)}
+                    index = index.xreplace(tmp_mapper)
+                    expr = expr.xreplace(tmp_mapper)
 
             # Apply substitutions, if necessary
             if dimension_map:
