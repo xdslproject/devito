@@ -143,12 +143,11 @@ def lower_exprs(expressions, **kwargs):
 
             tmp_mapper = {}
             # Indexify indices of nested functions
-            for idx, index in enumerate(indices):
+            for index in indices:
                 try:
-                    if (index.is_Function
-                       and not index.is_Dimension and not index.is_Indexed):
+                    if index.is_Function:
                         tmp_mapper = {index: index.indexify(lshift=True)}
-                        indices[idx] = index.xreplace(tmp_mapper)
+                        index = index.xreplace(tmp_mapper)
                         expr = expr.xreplace(tmp_mapper)
                 except AttributeError:
                     pass
