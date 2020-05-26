@@ -1,6 +1,6 @@
 import numpy as np
 from devito.logger import warning
-from devito import TimeFunction, Function, Dimension
+from devito import TimeFunction, Function, Dimension, Eq, ConditionalDimension
 from devito import Operator
 from examples.seismic import RickerSource, TimeAxis
 from examples.seismic import Model
@@ -44,6 +44,8 @@ src.coordinates.data[1, -1] = 128.  # Depth is 20m
 u = TimeFunction(name="u", grid=model.grid, time_order=2, space_order=2)
 src_term = src.inject(field=u, expr=src)
 op = Operator(src_term)
+# import pdb; pdb.set_trace()
+
 op(time=time_range.num-1)
 
 nzinds = np.nonzero(u.data[0])
@@ -56,7 +58,8 @@ z = Dimension(name='z')
 
 source_mask = Function(name='source_mask', shape=shape, dimensions=(x, y, z),
                        dtype=np.int32)
-source_id = Function(name='source_id', shape=shape, dimensions=(x, y, z), dtype=np.int32)
+source_id = Function(name='source_id', grid=model.grid, dtype=np.int32, time_order=2,
+                     space_order=2)
 
 source_id.data[nzinds[0], nzinds[1], nzinds[2]] = tuple(np.arange(1, len(nzinds[0])+1))
 source_mask.data[nzinds[0], nzinds[1], nzinds[2]] = 1
@@ -72,9 +75,7 @@ assert(source_id.data[nzinds[0][len(nzinds[0])-1], nzinds[1][len(nzinds[0])-1],
 warning("---Source_mask and source_id is built here-------")
 
 nnz_shape = (model.grid.shape[0], model.grid.shape[1])  # Change only 3rd dim
-x = Dimension(name='x')
-y = Dimension(name='y')
-z = Dimension(name='z')
+x, y, z = model.grid.dimensions
 
 nnz_sp_source_mask = Function(name='nnz_sp_source_mask', shape=shape[:2],
                               dimensions=(x, y), dtype=np.int32)
@@ -102,21 +103,31 @@ assert(len(sp_source_mask.dimensions) == 3)
 
 # import pdb; pdb.set_trace()
 
+# time, p_src = src.dimensions
+
+x, y, z = model.grid.dimensions
+time, p_src = src.dimensions
+
 id_dim = Dimension(name='id_dim')
-save_src = Function(name='save_src', shape=(len(nzinds[0]), src.shape[0]),
-                    dimensions=(id_dim, src.dimensions[0]), dtype=np.int32)
 
 
-# excond=CondEq(source_mask[x,y,z],1)
-# ci = ConditionalDimension(name='ci', parent=z, condition=excond)
-# spzi = Function(name = 'spzi', shape=1, dimensions=z, dtype=np.int32)
-# spzi = Constant(name = 'spzi', dtype=np.int32)
-# source_mask.data
-# Eq1 = Eq(sp_source_mask[x,y,spzi], z, implicit_dims=ci)
-# Eq3 = Eq(nnz_sp_source_mask[x,y], nnz_sp_source_mask[x,y]+1, implicit_dims=ci)
-# Eq4 = Eq(spzi , 0, implicit_dims=ci)
-# Eq5 = Eq(spzi[z] , spzi[z]+1, implicit_dims=ci)
+save_src = TimeFunction(name='save_src', grid=model.grid, shape=(src.shape[0], maxz),
+                        dimensions=(u.dimensions[0], u.dimensions[1]))
 
-# op = Operator([Eq1, Eq3, Eq5])
-# print(op.ccode)
-# import pdb; pdb.set_trace()
+u2 = Function(name="u2", grid=model.grid, time_order=2, space_order=2)
+
+
+#save_src = RickerSource(name='save_src', grid=model.grid, f0=f0,
+#                        npoint=maxz, time_range=time_range)
+
+src_term = src.inject(field=save_src[time, source_id[x,y,z]], expr=src)
+# tmp = Constant(name='tmp')
+
+# tmp = source_id
+
+# src_term = src.inject(field=u2, expr=src)
+
+op = Operator([src_term])
+print(op.ccode)
+import pdb; pdb.set_trace()
+op.apply()
