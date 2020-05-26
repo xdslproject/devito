@@ -12,7 +12,7 @@ from devito.exceptions import InvalidOperator
 from devito.finite_differences import Evaluable
 from devito.logger import info, perf, warning, is_log_enabled_for
 from devito.ir.equations import LoweredEq
-from devito.ir.clusters import ClusterGroup, clusterize, ind_low
+from devito.ir.clusters import ClusterGroup, clusterize
 from devito.ir.iet import Callable, MetaCall, derive_parameters, iet_build, iet_lower_dims
 from devito.ir.stree import stree_build
 from devito.ir.equations.algorithms import lower_exprs
