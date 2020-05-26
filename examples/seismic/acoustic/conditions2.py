@@ -112,10 +112,7 @@ id_dim = Dimension(name='id_dim')
 
 
 save_src = TimeFunction(name='save_src', grid=model.grid, shape=(src.shape[0], maxz),
-                        dimensions=(u.dimensions[0], u.dimensions[1]))
-
-u2 = Function(name="u2", grid=model.grid, time_order=2, space_order=2)
-
+                        dimensions=(u.dimensions[0], id_dim))
 
 #save_src = RickerSource(name='save_src', grid=model.grid, f0=f0,
 #                        npoint=maxz, time_range=time_range)
@@ -131,3 +128,5 @@ op = Operator([src_term])
 print(op.ccode)
 import pdb; pdb.set_trace()
 op.apply()
+import pdb; pdb.set_trace()
+
