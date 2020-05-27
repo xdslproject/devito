@@ -273,7 +273,6 @@ class LinearInterpolator(GenericInterpolator):
                 _expr = expr
 
             variables = list(retrieve_function_carriers(_expr)) + [field]
-            import pdb; pdb.set_trace()
 
             # Need to get origin of the field in case it is staggered
             for ind in field.indices:

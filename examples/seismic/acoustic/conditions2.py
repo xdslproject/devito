@@ -6,6 +6,7 @@ from examples.seismic import RickerSource, TimeAxis
 from examples.seismic import Model
 import sys
 np.set_printoptions(threshold=sys.maxsize)  # pdb print full size
+import matplotlib
 
 # Some variable declarations
 nx = 20
@@ -35,6 +36,7 @@ f0 = 0.010  # Source peak frequency is 10Hz (0.010 kHz)
 src = RickerSource(name='src', grid=model.grid, f0=f0,
                    npoint=2, time_range=time_range)
 
+
 # First, position source centrally in all dimensions, then set depth
 src.coordinates.data[0, :] = np.array(model.domain_size) * .48
 src.coordinates.data[0, -1] = 18.  # Depth is 20m
@@ -44,6 +46,8 @@ src.coordinates.data[1, -1] = 128.  # Depth is 20m
 u = TimeFunction(name="u", grid=model.grid, time_order=2, space_order=2)
 src_term = src.inject(field=u, expr=src)
 op = Operator(src_term)
+print(op.ccode)
+
 # import pdb; pdb.set_trace()
 
 op(time=time_range.num-1)
@@ -58,7 +62,7 @@ z = Dimension(name='z')
 
 source_mask = Function(name='source_mask', shape=shape, dimensions=(x, y, z),
                        dtype=np.int32)
-source_id = Function(name='source_id', grid=model.grid, dtype=np.int32, time_order=2,
+source_id = Function(name='source_id', grid=model.grid, dtype=np.int32,
                      space_order=2)
 
 source_id.data[nzinds[0], nzinds[1], nzinds[2]] = tuple(np.arange(1, len(nzinds[0])+1))
@@ -111,13 +115,14 @@ time, p_src = src.dimensions
 id_dim = Dimension(name='id_dim')
 
 
-save_src = TimeFunction(name='save_src', grid=model.grid, shape=(src.shape[0], maxz),
+save_src = TimeFunction(name='save_src', grid=model.grid, shape=(src.shape[0], 24),
                         dimensions=(u.dimensions[0], id_dim))
 
 #save_src = RickerSource(name='save_src', grid=model.grid, f0=f0,
 #                        npoint=maxz, time_range=time_range)
 
-src_term = src.inject(field=save_src[time, source_id[x,y,z]], expr=src)
+src_term = src.inject(field=save_src[time, source_id], expr=src)
+
 # tmp = Constant(name='tmp')
 
 # tmp = source_id
@@ -126,7 +131,10 @@ src_term = src.inject(field=save_src[time, source_id[x,y,z]], expr=src)
 
 op = Operator([src_term])
 print(op.ccode)
-import pdb; pdb.set_trace()
 op.apply()
 import pdb; pdb.set_trace()
 
+
+src.show()
+
+# Unique z positions or unique x,y pairs?
