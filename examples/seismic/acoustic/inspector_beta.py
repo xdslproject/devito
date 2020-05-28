@@ -1,6 +1,6 @@
 import numpy as np
 from devito.logger import warning
-from devito import TimeFunction, Function, Dimension, Eq, Scalar
+from devito import TimeFunction, Function, Dimension, Eq
 from devito import Operator
 from examples.seismic import RickerSource, TimeAxis
 from examples.seismic import Model
@@ -8,6 +8,7 @@ import sys
 np.set_printoptions(threshold=sys.maxsize)  # pdb print full size
 from matplotlib.pyplot import pause
 import matplotlib.pyplot as plt
+from devito.types.basic import Scalar, Symbol
 
 # Some variable declarations
 nx = 20
@@ -110,13 +111,12 @@ op.apply()
 
 import pdb; pdb.set_trace()
 
-
 u2 = TimeFunction(name="u2", grid=model.grid, time_order=2, space_order=2)
 
 zind = Scalar(name='zind')
-eq0 = Eq(zind, nnz_sp_source_mask.data[x, y])
+eq0 = Eq(zind, nnz_sp_source_mask)
 
-eq1 = Eq(u2, source_mask.data[x, y, zind] * save_src.data[source_id.data[x, y, zind], 3])
+eq1 = Eq(u2[u2.dimensions[0], u2.dimensions[1], u2.dimensions[2], zind], source_mask[x, y, zind] * save_src[u2.dimensions[0], source_id[x, y, zind]])
 
 op2 = Operator([eq0, eq1])
 
