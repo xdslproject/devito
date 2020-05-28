@@ -112,13 +112,14 @@ op.apply()
 import pdb; pdb.set_trace()
 
 u2 = TimeFunction(name="u2", grid=model.grid, time_order=2, space_order=2)
+sp_zdim = Dimension(name='sp_zdim')
 
 zind = Scalar(name='zind')
-eq0 = Eq(zind, nnz_sp_source_mask)
+eq0 = Eq(zind, nnz_sp_source_mask, implicit_dims=sp_zdim)
 
 eq1 = Eq(u2[u2.dimensions[0], u2.dimensions[1], u2.dimensions[2], zind], source_mask[x, y, zind] * save_src[u2.dimensions[0], source_id[x, y, zind]])
 
-op2 = Operator([eq0, eq1])
+op2 = Operator([eq0, eq1],subs(z_M=nnz_sp_source_mask))
 
 # Unique z positions or unique x,y pairs?
 
