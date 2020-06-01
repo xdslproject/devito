@@ -1,6 +1,6 @@
 import numpy as np
 from devito.logger import warning
-from devito import TimeFunction, Function, Dimension, Eq
+from devito import TimeFunction, Function, Dimension, Eq, Inc
 from devito import Operator
 from examples.seismic import RickerSource, TimeAxis
 from examples.seismic import Model
@@ -109,18 +109,27 @@ src_term = src.inject(field=save_src[src.dimensions[0], source_id], expr=src)
 op = Operator([src_term])
 op.apply()
 
-import pdb; pdb.set_trace()
 
 u2 = TimeFunction(name="u2", grid=model.grid, time_order=2, space_order=2)
 sp_zdim = Dimension(name='sp_zdim')
 
-zind = Scalar(name='zind')
-eq0 = Eq(zind, nnz_sp_source_mask, implicit_dims=sp_zdim)
+# zind = TimeFunction(name='zind', shape=(2, 1, 1, 1), dimensions=u.dimensions, dtype=np.int32)
+zind = Function(name="usc", shape=(1,), dimensions=(y,), dtype=np.int32)
 
-eq1 = Eq(u2[u2.dimensions[0], u2.dimensions[1], u2.dimensions[2], zind], source_mask[x, y, zind] * save_src[u2.dimensions[0], source_id[x, y, zind]])
+eq0 = Eq(u2.forward, u2)
 
-op2 = Operator([eq0, eq1],subs(z_M=nnz_sp_source_mask))
+time = model.grid.time_dim
+eq1 = Eq(zind[0], sp_source_mask[x ,y, 1], implicit_dims=(time, x, y, z))
+eq2 = Inc(u2.forward, zind[0])
+#eq0 = Eq(zind, nnz_sp_source_mask, implicit_dims=sp_zdim)
 
+#eq1 = Eq(u2[u2.dimensions[0], u2.dimensions[1], u2.dimensions[2], zind], source_mask[x, y, zind] * save_src[u2.dimensions[0], source_id[x, y, zind]])
+
+
+
+op2 = Operator([eq0, eq1, eq2])
+print(op2.ccode)
+import pdb; pdb.set_trace()
 # Unique z positions or unique x,y pairs?
 
 # c- land should have
