@@ -42,40 +42,6 @@ def test_scheduling_after_rewrite():
     assert all(trees[1].root.dim is tree.root.dim for tree in trees[1:])
 
 
-@pytest.mark.parametrize("nx,ny", [(5, 6), (4, 16), (20, 20), (100, 100)])
-def test_skew_vs_advanced(nx, ny):
-    """Trivial testing for DSE skewing"""
-    timesteps = 4
-    grid = Grid(shape=(nx, ny))
-    u_skew = TimeFunction(name='u_skew', grid=grid)
-    u = TimeFunction(name='u', grid=grid)
-
-    eq_skew = Eq(u_skew.forward, 1 + u_skew.dx + u_skew.dy)
-    eq = Eq(u.forward, 1 + u.dx + u.dy)
-    op_skew = Operator(eq_skew, dse='skewing', dle='advanced')
-    op = Operator(eq, dse=None, dle='advanced')
-    op_skew.apply(time=timesteps)
-    op.apply(time=timesteps)
-    assert np.all(u_skew.data[0] == u.data[0])
-
-@pytest.mark.parametrize("nx, nt, ny, nz", [(5, 20, 6, 10), (4, 30, 16, 10),
-                                            (20, 20, 20, 10), (100, 100, 100, 10)])
-def test_complex_skew_cases_I(nx, nt, ny, nz):
-    """Trivial testing for DSE skewing"""
-    grid = Grid(shape=(nx, ny, nz))
-    t = grid.stepping_dim
-
-    f_skew = TimeFunction(name='f', dimensions=(x, t, y, z), shape=(nx, nt, ny, nz))
-    f = TimeFunction(name='f', dimensions=(x, t, y, z), shape=(nx, nt, ny, nz))
-
-    op_skew = Operator(Eq(f_skew[x, t+1, y, z], f_skew[x, t, y, z] + 1), dse='skewing')
-    op = Operator(Eq(f[x, t+1, y, z], f[x, t, y, z] + 1))
-
-    op_skew.apply(time=nt)
-    op.apply(time=nt)
-    assert np.all(f_skew.data[0] == f.data[0])
-
-
 @pytest.mark.parametrize('exprs,expected', [
     # Simple cases
     (['Eq(tu, 2/(t0 + t1))', 'Eq(ti0, t0 + t1)', 'Eq(ti1, t0 + t1)'],
@@ -251,9 +217,8 @@ def test_makeit_ssa(exprs, exp_u, exp_v):
     assert np.all(v.data == exp_v)
 
 
-@pytest.mark.parametrize('dse', ['noop', 'basic', 'advanced', 'aggressive'])
-@pytest.mark.parametrize('dle', ['noop', 'advanced', 'speculative'])
-def test_time_dependent_split(dse, dle):
+@pytest.mark.parametrize('opt', ['noop', 'advanced'])
+def test_time_dependent_split(opt):
     grid = Grid(shape=(10, 10))
     u = TimeFunction(name='u', grid=grid, time_order=2, space_order=2, save=3)
     v = TimeFunction(name='v', grid=grid, time_order=2, space_order=0, save=3)
@@ -1069,131 +1034,29 @@ class TestAliases(object):
         e = TimeFunction(name="e", grid=grid, space_order=4)
         f = TimeFunction(name="f", grid=grid, space_order=4)
 
-    f = Function(name='f', grid=grid)
-    f.data_with_halo[:] = 1.
-    u = TimeFunction(name='u', grid=grid, space_order=3)
-    u.data_with_halo[:] = 0.
-
-    # Leads to 3D aliases
-    eqn = Eq(u.forward, ((u[t, x, y, z] + u[t, x+1, y+1, z+1])*3*f +
-                         (u[t, x+2, y+2, z+2] + u[t, x+3, y+3, z+3])*3*f + 1))
-    op0 = Operator(eqn, dse='noop', dle=('advanced', {'openmp': True}))
-    op1 = Operator(eqn, dse='aggressive', dle=('advanced', {'openmp': True}))
-
-    x0_blk_size = op1.parameters[6]
-    y0_blk_size = op1.parameters[10]
-    z_size = op1.parameters[-1]
-
-    # Check Array shape
-    arrays = [i for i in FindSymbols().visit(op1._func_table['bf0'].root) if i.is_Array]
-    assert len(arrays) == 1
-    a = arrays[0]
-    assert len(a.dimensions) == 3
-    assert a.halo == ((1, 1), (1, 1), (1, 1))
-    assert Add(*a.symbolic_shape[0].args) == x0_blk_size + 2
-    assert Add(*a.symbolic_shape[1].args) == y0_blk_size + 2
-    assert Add(*a.symbolic_shape[2].args) == z_size + 2
-    # Check numerical output
-    op0(time_M=1)
-    exp = np.copy(u.data[:])
-    u.data_with_halo[:] = 0.
-    op1(time_M=1)
-    assert np.all(u.data == exp)
-
-
-@patch("devito.dse.rewriters.AdvancedRewriter.MIN_COST_ALIAS", 1)
-def test_contracted_alias_shape_after_blocking():
-    """
-    Like `test_full_alias_shape_after_blocking`, but a different
-    Operator is used, leading to contracted Arrays (2D instead of 3D).
-    """
-    grid = Grid(shape=(3, 3, 3))
-    x, y, z = grid.dimensions  # noqa
-    t = grid.stepping_dim
+        subexpr0 = sqrt(1. + 1./a)
+        subexpr1 = 1/(8.*subexpr0 - 8./b)
+        eqns = [Eq(e.forward, e + 1),
+                Eq(f.forward, f*subexpr0 - f*subexpr1 + e.forward.dx)]
 
         op = Operator(eqns, opt=('advanced', {'cire-repeats-inv': 2,
                                               'cire-mincost-inv': 28}))
 
-    f = Function(name='f', grid=grid)
-    f.data_with_halo[:] = 1.
-    u = TimeFunction(name='u', grid=grid, space_order=3)
-    u.data_with_halo[:] = 0.
+        trees = retrieve_iteration_tree(op)
+        assert len(trees) == 3
+        arrays = [i for i in FindSymbols().visit(trees[0].root) if i.is_Array]
+        assert len(arrays) == 2
+        assert all(i._mem_heap and not i._mem_external for i in arrays)
 
-    # Leads to 2D aliases
-    eqn = Eq(u.forward, ((u[t, x, y, z] + u[t, x, y+1, z+1])*3*f +
-                         (u[t, x, y+2, z+2] + u[t, x, y+3, z+3])*3*f + 1))
-    op0 = Operator(eqn, dse='skewing', dle=('advanced', {'openmp': True}))
-    op1 = Operator(eqn, dse='aggressive', dle=('advanced', {'openmp': True}))
+    def test_drop_redundants_after_fusion(self):
+        """
+        Test for detection of redundant aliases that get exposed after
+        Cluster fusion.
+        """
+        grid = Grid(shape=(10, 10))
 
-    y0_blk_size = op1.parameters[9]
-    z_size = op1.parameters[-1]
-
-    arrays = [i for i in FindSymbols().visit(op1._func_table['bf0'].root) if i.is_Array]
-    assert len(arrays) == 1
-    a = arrays[0]
-    assert len(a.dimensions) == 2
-    assert a.halo == ((1, 1), (1, 1))
-    assert Add(*a.symbolic_shape[0].args) == y0_blk_size + 2
-    assert Add(*a.symbolic_shape[1].args) == z_size + 2
-    # Check numerical output
-    op0(time_M=1)
-    exp = np.copy(u.data[:])
-    u.data_with_halo[:] = 0.
-    op1(time_M=1)
-    assert np.all(u.data == exp)
-
-
-@patch("devito.dse.rewriters.AdvancedRewriter.MIN_COST_ALIAS", 1)
-def test_full_alias_shape_with_subdims():
-    """
-    Like `test_full_alias_shape_after_blocking`, but SubDomains (and therefore
-    SubDimensions) are used. Nevertheless, the temporary shape should still be
-    dictated by the root Dimensions.
-    """
-    grid = Grid(shape=(3, 3, 3))
-    x, y, z = grid.dimensions  # noqa
-    t = grid.stepping_dim
-
-    f = Function(name='f', grid=grid)
-    f.data_with_halo[:] = 1.
-    u = TimeFunction(name='u', grid=grid, space_order=3)
-    u.data_with_halo[:] = 0.
-
-    # Leads to 3D aliases
-    eqn = Eq(u.forward, ((u[t, x, y, z] + u[t, x+1, y+1, z+1])*3*f +
-                         (u[t, x+2, y+2, z+2] + u[t, x+3, y+3, z+3])*3*f + 1),
-             subdomain=grid.interior)
-    op0 = Operator(eqn, dse='noop', dle=('advanced', {'openmp': True}))
-    op1 = Operator(eqn, dse='aggressive', dle=('advanced', {'openmp': True}))
-
-    xi0_blk_size = op1.parameters[9]
-    yi0_blk_size = op1.parameters[15]
-    z_size = op1.parameters[20]
-
-    # Check Array shape
-    arrays = [i for i in FindSymbols().visit(op1._func_table['bf0'].root) if i.is_Array]
-    assert len(arrays) == 1
-    a = arrays[0]
-    assert len(a.dimensions) == 3
-    assert a.halo == ((1, 1), (1, 1), (1, 1))
-    assert Add(*a.symbolic_shape[0].args) == xi0_blk_size + 2
-    assert Add(*a.symbolic_shape[1].args) == yi0_blk_size + 2
-    assert Add(*a.symbolic_shape[2].args) == z_size + 2
-    # Check numerical output
-    op0(time_M=1)
-    exp = np.copy(u.data[:])
-    u.data_with_halo[:] = 0.
-    op1(time_M=1)
-    assert np.all(u.data == exp)
-
-
-def test_alias_composite():
-    """
-    Check that composite alias are optimized away through "smaller" aliases.
-    
-    Examples
-    --------
-    Instead of the following:
+        t = cos(Function(name="t", grid=grid))
+        p = sin(Function(name="p", grid=grid))
 
         a = TimeFunction(name="a", grid=grid)
         b = TimeFunction(name="b", grid=grid)
@@ -1446,17 +1309,6 @@ class TestIsoAcoustic(object):
         assert np.allclose(rec0.data, rec1.data, atol=10e-5)
 
 
-
-def test_acoustic_rewrite_skewing():
-    ret1 = run_acoustic_forward(dse=None)
-    ret2 = run_acoustic_forward(dse='skewing')
-
-    assert np.allclose(ret1[0].data, ret2[0].data, atol=10e-5)
-    assert np.allclose(ret1[1].data, ret2[1].data, atol=10e-5)
-
-
-# TTI
-
 class TestTTI(object):
 
     @cached_property
@@ -1610,181 +1462,3 @@ class TestTTIv2(object):
         assert len(sections) == 2
         assert sections[0].sops == 4
         assert sections[1].sops == expected
-
-def tti_operator(dse=False, dle='advanced', space_order=4):
-    nrec = 101
-    t0 = 0.0
-    tn = 250.
-    nbpml = 10
-    shape = (50, 50, 50)
-    spacing = (20., 20., 20.)
-
-    # Two layer model for true velocity
-    model = demo_model('layers-tti', ratio=3, nbpml=nbpml, space_order=space_order,
-                       shape=shape, spacing=spacing)
-
-    # Source and receiver geometries
-    src_coordinates = np.empty((1, len(spacing)))
-    src_coordinates[0, :] = np.array(model.domain_size) * .5
-    src_coordinates[0, -1] = model.origin[-1] + 2 * spacing[-1]
-
-    rec_coordinates = np.empty((nrec, len(spacing)))
-    rec_coordinates[:, 0] = np.linspace(0., model.domain_size[0], num=nrec)
-    rec_coordinates[:, 1:] = src_coordinates[0, 1:]
-
-    geometry = AcquisitionGeometry(model, rec_coordinates, src_coordinates,
-                                   t0=t0, tn=tn, src_type='Gabor', f0=0.010)
-
-    return AnisotropicWaveSolver(model, geometry, space_order=space_order, dse=dse)
-
-@pytest.mark.parametrize('dse', [(False), ('skewing')])
-def tti_operator(dse='dse', dle='advanced', space_order=4):
-
-    nrec = 101
-    t0 = 0.0
-    tn = 250.
-    nbpml = 10
-    shape = (50, 50, 50)
-    spacing = (20., 20., 20.)
-
-    # Two layer model for true velocity
-    model = demo_model('layers-tti', ratio=3, nbpml=nbpml, space_order=space_order,
-                       shape=shape, spacing=spacing)
-
-    # Source and receiver geometries
-    src_coordinates = np.empty((1, len(spacing)))
-    src_coordinates[0, :] = np.array(model.domain_size) * .5
-    src_coordinates[0, -1] = model.origin[-1] + 2 * spacing[-1]
-
-    rec_coordinates = np.empty((nrec, len(spacing)))
-    rec_coordinates[:, 0] = np.linspace(0., model.domain_size[0], num=nrec)
-    rec_coordinates[:, 1:] = src_coordinates[0, 1:]
-
-    geometry = AcquisitionGeometry(model, rec_coordinates, src_coordinates,
-                                   t0=t0, tn=tn, src_type='Gabor', f0=0.010)
-
-    return AnisotropicWaveSolver(model, geometry, space_order=space_order, dse=dse)
-
-
-@pytest.fixture(scope="session")
-def tti_nodse():
-    operator = tti_operator(dse=None)
-    rec, u, v, _ = operator.forward()
-    return v, rec
-
-
-def test_tti_rewrite_basic(tti_nodse):
-    operator = tti_operator(dse='basic')
-    rec, u, v, _ = operator.forward()
-
-    assert np.allclose(tti_nodse[0].data, v.data, atol=10e-3)
-    assert np.allclose(tti_nodse[1].data, rec.data, atol=10e-3)
-
-
-def test_tti_rewrite_advanced(tti_nodse):
-    operator = tti_operator(dse='advanced')
-    rec, u, v, _ = operator.forward()
-
-    assert np.allclose(tti_nodse[0].data, v.data, atol=10e-1)
-    assert np.allclose(tti_nodse[1].data, rec.data, atol=10e-1)
-
-
-def test_tti_rewrite_aggressive(tti_nodse):
-    operator = tti_operator(dse='aggressive')
-    rec, u, v, _ = operator.forward(kernel='centered', save=False)
-
-    assert np.allclose(tti_nodse[0].data, v.data, atol=10e-1)
-    assert np.allclose(tti_nodse[1].data, rec.data, atol=10e-1)
-
-    # Also check that DLE's loop blocking with DSE=aggressive does the right thing
-    # There should be exactly two BlockDimensions; bugs in the past were generating
-    # either code with no blocking (zero BlockDimensions) or code with four
-    # BlockDimensions (i.e., Iteration folding was somewhat broken)
-    op = operator.op_fwd(kernel='centered', save=False)
-    block_dims = [i for i in op.dimensions if isinstance(i, BlockDimension)]
-    assert len(block_dims) == 2
-
-    # Also, in this operator, we expect six temporary Arrays:
-    # * four Arrays are allocated on the heap
-    # * two Arrays are allocated on the stack and only appear within an efunc
-    arrays = [i for i in FindSymbols().visit(op) if i.is_Array]
-    assert len(arrays) == 4
-    assert all(i._mem_heap and not i._mem_external for i in arrays)
-    arrays = [i for i in FindSymbols().visit(op._func_table['bf0'].root) if i.is_Array]
-    assert len(arrays) == 6
-    assert all(not i._mem_external for i in arrays)
-    assert len([i for i in arrays if i._mem_heap]) == 4
-    assert len([i for i in arrays if i._mem_stack]) == 2
-
-
-@skipif(['nompi'])
-@pytest.mark.parallel(mode=[(1, 'full')])
-def test_tti_rewrite_aggressive_wmpi():
-    tti_nodse = tti_operator(dse=None)
-    rec0, u0, v0, _ = tti_nodse.forward(kernel='centered', save=False)
-    tti_agg = tti_operator(dse='aggressive')
-    rec1, u1, v1, _ = tti_agg.forward(kernel='centered', save=False)
-
-    assert np.allclose(v0.data, v1.data, atol=10e-1)
-    assert np.allclose(rec0.data, rec1.data, atol=10e-1)
-
-
-@switchconfig(profiling='advanced')
-@pytest.mark.parametrize('space_order,expected', [
-    (8, 152), (16, 268)
-])
-def test_tti_rewrite_aggressive_opcounts(space_order, expected):
-    operator = tti_operator(dse='aggressive', space_order=space_order)
-    _, _, _, summary = operator.forward(kernel='centered', save=False)
-    assert summary[('section1', None)].ops == expected
-
-
-@switchconfig(profiling='advanced')
-@pytest.mark.parametrize('space_order,expected', [
-    (4, 185), (12, 377)
-])
-def test_tti_v2_rewrite_aggressive_opcounts(space_order, expected):
-    grid = Grid(shape=(3, 3, 3))
-
-    s = 0.00067
-    u = TimeFunction(name='u', grid=grid, space_order=space_order)
-    v = TimeFunction(name='v', grid=grid, space_order=space_order)
-    f = Function(name='f', grid=grid)
-    g = Function(name='g', grid=grid)
-    m = Function(name='m', grid=grid)
-    e = Function(name='e', grid=grid)
-    d = Function(name='d', grid=grid)
-
-    ang0 = cos(f)
-    ang1 = sin(f)
-    ang2 = cos(g)
-    ang3 = sin(g)
-
-    H1u = (ang1*ang1*ang2*ang2*u.dx2 +
-           ang1*ang1*ang3*ang3*u.dy2 +
-           ang0*ang0*u.dz2 +
-           2*ang1*ang1*ang3*ang2*u.dxdy +
-           2*ang0*ang1*ang3*u.dydz +
-           2*ang0*ang1*ang2*u.dxdz)
-    H2u = -H1u + u.laplace
-
-    H1v = (ang1*ang1*ang2*ang2*v.dx2 +
-           ang1*ang1*ang3*ang3*v.dy2 +
-           ang0*ang0*v.dz2 +
-           2*ang1*ang1*ang3*ang2*v.dxdy +
-           2*ang0*ang1*ang3*v.dydz +
-           2*ang0*ang1*ang2*v.dxdz)
-    H2v = -H1v + v.laplace
-
-    eqns = [Eq(u.forward, (2*u - u.backward) + s**2/m * (e * H2u + H1v)),
-            Eq(v.forward, (2*v - v.backward) + s**2/m * (d * H2v + H1v))]
-    op = Operator(eqns, dse='aggressive')
-
-    sections = list(op._profiler._sections.values())
-    assert len(sections) == 2
-    assert sections[0].sops == 4
-    assert sections[1].sops == expected
-
-
-if __name__ == "__main__":
-    test_tti_rewrite_aggressive_opcounts(16, 270)
