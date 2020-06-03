@@ -1,7 +1,7 @@
 import numpy as np
 from devito.logger import warning
 from devito import TimeFunction, Function, Dimension, Eq, Inc
-from devito import Operator
+from devito import Operator, norm
 from examples.seismic import RickerSource, TimeAxis
 from examples.seismic import Model
 import sys
@@ -25,7 +25,7 @@ v[:, :, :51] = 2
 v[:, :, 51:] = 2
 
 # Construct model
-model = Model(vp=v, origin=origin, shape=shape, spacing=spacing, space_order=2, nbl=10)
+model = Model(vp=v, origin=origin, shape=shape, spacing=spacing, space_order=1, nbl=10)
 
 t0 = 0  # Simulation starts a t=0
 tn = 1000  # Simulation last 1 second (1000 ms)
@@ -35,7 +35,7 @@ time_range = TimeAxis(start=t0, stop=tn, step=dt)
 
 f0 = 0.010  # Source peak frequency is 10Hz (0.010 kHz)
 src = RickerSource(name='src', grid=model.grid, f0=f0,
-                   npoint=2, time_range=time_range)
+                   npoint=3, time_range=time_range)
 
 
 # First, position source centrally in all dimensions, then set depth
@@ -43,6 +43,8 @@ src.coordinates.data[0, :] = np.array(model.domain_size) * .45
 src.coordinates.data[0, -1] = 15.  # Depth is 20m
 src.coordinates.data[1, :] = np.array(model.domain_size) * .45
 src.coordinates.data[1, -1] = 125.  # Depth is 20m
+src.coordinates.data[2, :] = np.array(model.domain_size) * .45
+src.coordinates.data[2, -1] = 105.  # Depth is 20m
 
 u = TimeFunction(name="u", grid=model.grid, time_order=2, space_order=2)
 src_term = src.inject(field=u, expr=src)
@@ -55,11 +57,12 @@ nzinds = np.nonzero(u.data[0])
 
 shape = model.grid.shape
 x, y, z = model.grid.dimensions
+time = model.grid.time_dim
 
 source_mask = Function(name='source_mask', shape=shape, dimensions=(x, y, z),
                        dtype=np.int32)
 source_id = Function(name='source_id', grid=model.grid, dtype=np.int32,
-                     space_order=2)
+                     space_order=1)
 
 source_id.data[nzinds[0], nzinds[1], nzinds[2]] = tuple(np.arange(1, len(nzinds[0])+1))
 source_mask.data[nzinds[0], nzinds[1], nzinds[2]] = 1
@@ -76,25 +79,24 @@ warning("---Source_mask and source_id is built here-------")
 
 nnz_shape = (model.grid.shape[0], model.grid.shape[1])  # Change only 3rd dim
 
-nnz_sp_source_mask = Function(name='nnz_sp_source_mask', shape=shape[:2],
-                              dimensions=(x, y), dtype=np.int32)
-nnz_sp_source_mask.data[:, :] = source_mask.data.sum(2)
+nnz_sp_source_mask = TimeFunction(name='nnz_sp_source_mask', shape=([1] + list(shape[:2])), dimensions=(time, x, y), time_order=0, dtype=np.int32)
+nnz_sp_source_mask.data[0, :, :] = source_mask.data.sum(2)
 inds = np.where(source_mask.data == 1)
 
 #  = nnz_sp_source_mask.data[:,:].max()
 maxz = len(np.unique(inds[2]))
 sparse_shape = (model.grid.shape[0], model.grid.shape[1], maxz)  # Change only 3rd dim
 
-assert(len(nnz_sp_source_mask.dimensions) == 2)
+assert(len(nnz_sp_source_mask.dimensions) == 3)
 
-sp_source_mask = Function(name='sp_source_mask', shape=sparse_shape,
-                          dimensions=(x, y, z), dtype=np.int32)
+sp_source_mask = TimeFunction(name='sp_source_mask', shape=([1] + list(sparse_shape)),
+                          dimensions=(time, x, y, z), time_order=0, dtype=np.int32)
 
 # Now holds IDs
-sp_source_mask.data[inds[0], inds[1], :] = tuple(inds[2][:len(np.unique(inds[2]))])
+sp_source_mask.data[0, inds[0], inds[1], :] = tuple(inds[2][:len(np.unique(inds[2]))])
 
 assert(np.count_nonzero(sp_source_mask.data) == len(nzinds[0]))
-assert(len(sp_source_mask.dimensions) == 3)
+assert(len(sp_source_mask.dimensions) == 4)
 
 # Note:sparse_source_id is not needed as long as sparse info is kept in mask
 # sp_source_id.data[inds[0],inds[1],:] = inds[2][:maxz]
@@ -106,30 +108,38 @@ save_src = TimeFunction(name='save_src', grid=model.grid, shape=(src.shape[0],
 
 src_term = src.inject(field=save_src[src.dimensions[0], source_id], expr=src)
 
-op = Operator([src_term])
-op.apply()
+op1 = Operator([src_term])
+op1.apply()
 
 
-u2 = TimeFunction(name="u2", grid=model.grid, time_order=2, space_order=2)
+u2 = TimeFunction(name="u2", grid=model.grid, time_order=2)
 sp_zdim = Dimension(name='sp_zdim')
 
 # zind = TimeFunction(name='zind', shape=(2, 1, 1, 1), dimensions=u.dimensions, dtype=np.int32)
-zind = Function(name="usc", shape=(1,), dimensions=(y,), dtype=np.int32)
+zind = TimeFunction(name="zind", shape=(time_range.num, 40), dimensions=(time, z), time_order=0, dtype=np.int32)
+
+
+source_mask_f = TimeFunction(name='source_mask_f', grid=model.grid, time_order=0, dtype=np.int32)
+
+source_mask_f.data[0, :, :, :] = source_mask.data[:, :, :] 
+
+
 
 eq0 = Eq(u2.forward, u2)
-
-time = model.grid.time_dim
-eq1 = Eq(zind[0], sp_source_mask[x ,y, 1], implicit_dims=(time, x, y, z))
-eq2 = Inc(u2.forward, zind[0])
+# eq1 = Eq(zind[0, 0], nnz_sp_source_mask[0, x, y], implicit_dims=(time, x, y, z))
+eq1 = Eq(zind, source_id, implicit_dims=(time, x, y, z))
+eq2 = Inc(u2.forward, source_mask * save_src[time, zind] )
 #eq0 = Eq(zind, nnz_sp_source_mask, implicit_dims=sp_zdim)
 
-#eq1 = Eq(u2[u2.dimensions[0], u2.dimensions[1], u2.dimensions[2], zind], source_mask[x, y, zind] * save_src[u2.dimensions[0], source_id[x, y, zind]])
 
-
-
-op2 = Operator([eq0, eq1, eq2])
+op2 = Operator([eq1, eq2])
+op2.apply()
 print(op2.ccode)
-import pdb; pdb.set_trace()
+assert( norm(u) == norm(u2))
+
+print(norm(u))
+print(norm(u2))
+assert(norm(u)==norm(u2))
 # Unique z positions or unique x,y pairs?
 
 # c- land should have
