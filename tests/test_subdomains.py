@@ -200,6 +200,7 @@ class TestSubdomains(object):
         for j in range(0, n_domains):
             expected[j, bounds_ym[j]:n_domains-bounds_yM[j]] = 10
 
+        import pdb; pdb.set_trace()
         assert((np.array(result) == expected).all())
 
     def test_multi_eq(self):

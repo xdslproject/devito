@@ -113,7 +113,7 @@ assert(len(sp_source_mask.dimensions) == 4)
 
 id_dim = Dimension(name='id_dim')
 
-save_src = TimeFunction(name='save_src', grid=model.grid, shape=(src.shape[0],
+save_src = TimeFunction(name='save_src', time_order=0, shape=(src.shape[0],
                         nzinds[1].shape[0]), dimensions=(src.dimensions[0], id_dim))
 
 src_term = src.inject(field=save_src[src.dimensions[0], source_id], expr=src)
@@ -123,26 +123,29 @@ op1.apply()
 
 
 u2 = TimeFunction(name="u2", grid=model.grid, time_order=2)
-sp_zdim = Dimension(name='sp_zdim')
+sp_z = Dimension(name='sp_z')
 
-zind = TimeFunction(name="zind", shape=(time_range.num, u2.shape[2]), dimensions=(time, z), time_order=0, dtype=np.int32)
-
-
-source_mask_f = TimeFunction(name='source_mask_f', grid=model.grid, time_order=0, dtype=np.int32)
-
-source_mask_f.data[0, :, :, :] = source_mask.data[:, :, :] 
-
-eq1 = Eq(zind, source_id, implicit_dims=(time, x, y, z))
-eq2 = Inc(u2.forward, source_mask * save_src[time, zind] )
+zind = TimeFunction(name="zind", shape=(1, 1), dimensions=(time, sp_z), time_order=0, dtype=np.int32)
 
 
-op2 = Operator([eq1, eq2])
-op2.apply()
+#source_mask_f = TimeFunction(name='source_mask_f', grid=model.grid, time_order=0, dtype=np.int32)
+
+# source_mask_f.data[0, :, :, :] = source_mask.data[:, :, :] 
+
+eq0 = Eq(sp_z.symbolic_max, nnz_sp_source_mask)
+eq1 = Eq(zind[0, 0], sp_source_mask[0, x, y, sp_z], implicit_dims=(time, x, y))
+# eqt = Eq(z.symbolic_max, nnz_sp_source_mask[0, x, y], implicit_dims=(time, x, y, z))
+#eq2 = Inc(u2.forward[time, x ,y, zind[0,0]], source_mask[x, y, zind[0,0]] * save_src[time, source_id[x, y, zind[0,0]]] , implicit_dims=(time, x, y, sp_z))
+#eq2 = Inc(u2, zind[0,0], implicit_dims=(time, x, y, sp_z))
+
+op2 = Operator([eq0, eq1])
+#op2 = Operator([eq0, eq1, eq2])
 print(op2.ccode)
+import pdb; pdb.set_trace()
+op2.apply()
 
 print(norm(u))
 print(norm(u2))
-
 assert np.isclose(norm(u), norm(u2), atol=1e-06)
 
 
