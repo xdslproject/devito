@@ -10,8 +10,6 @@ from devito.logger import debug, warning
 from devito.tools import Pickable, dtype_to_cstr, is_integer, memoized_meth
 from devito.types.args import ArgProvider
 from devito.types.basic import Symbol, DataSymbol, Scalar
-# from devito.ir.clusters import (ind_low)
-# from devito.ir.clusters import indexification_lowering
 
 
 __all__ = ['Dimension', 'SpaceDimension', 'TimeDimension', 'DefaultDimension',
@@ -754,9 +752,6 @@ class ConditionalDimension(DerivedDimension):
                           indirect=False):
         super().__init_finalize__(name, parent)
         self._factor = factor
-        # import pdb; pdb.set_trace()
-        # processed = []
-        # processed = indexification_lowering(condition)
         self._condition = condition
         self._indirect = indirect
 
