@@ -1,15 +1,18 @@
 import numpy as np
-from devito.logger import warning, info
+
+from matplotlib.pyplot import pause # noqa
+import matplotlib.pyplot as plt
+
+from devito.logger import info
 from devito import TimeFunction, Function, Dimension, Eq, Inc
 from devito import Operator, norm
 from examples.seismic import RickerSource, TimeAxis
 from examples.seismic import Model
 import sys
 np.set_printoptions(threshold=sys.maxsize)  # pdb print full size
-from matplotlib.pyplot import pause
-import matplotlib.pyplot as plt
-from devito.types.basic import Scalar, Symbol
-from mpl_toolkits.mplot3d import Axes3D
+
+from devito.types.basic import Scalar, Symbol # noqa
+from mpl_toolkits.mplot3d import Axes3D # noqa
 
 def plot3d(data, model):
        fig = plt.figure()
@@ -60,7 +63,7 @@ src.coordinates.data[2, -1] = 119.  # Depth is 20m
 
 u = TimeFunction(name="u", grid=model.grid, time_order=2, space_order=so)
 src_term = src.inject(field=u, expr=src)
-op = Operator(src_term) #Perform source injection on an empty grid
+op = Operator(src_term)  # Perform source injection on an empty grid
 
 op(time=time_range.num-1)
 
@@ -72,7 +75,8 @@ shape = model.grid.shape
 x, y, z = model.grid.dimensions
 time = model.grid.time_dim
 
-source_mask = Function(name='source_mask', shape=shape, dimensions=(x, y, z), dtype=np.int32)
+source_mask = Function(name='source_mask', shape=shape, dimensions=(x, y, z),
+                       dtype=np.int32)
 source_id = Function(name='source_id', grid=model.grid, dtype=np.int32)
 
 source_id.data[nzinds[0], nzinds[1], nzinds[2]] = tuple(np.arange(1, len(nzinds[0])+1))
@@ -90,7 +94,9 @@ info("---Source_mask and source_id is built here-------")
 
 nnz_shape = (model.grid.shape[0], model.grid.shape[1])  # Change only 3rd dim
 
-nnz_sp_source_mask = TimeFunction(name='nnz_sp_source_mask', shape=([1] + list(shape[:2])), dimensions=(time, x, y), time_order=0, dtype=np.int32)
+nnz_sp_source_mask = TimeFunction(name='nnz_sp_source_mask',
+                                  shape=([1] + list(shape[:2])),
+                                  dimensions=(time, x, y), time_order=0, dtype=np.int32)
 nnz_sp_source_mask.data[0, :, :] = source_mask.data.sum(2)
 inds = np.where(source_mask.data == 1)
 
@@ -98,15 +104,6 @@ maxz = len(np.unique(inds[2]))
 sparse_shape = (model.grid.shape[0], model.grid.shape[1], maxz)  # Change only 3rd dim
 
 assert(len(nnz_sp_source_mask.dimensions) == 3)
-
-sp_source_mask = TimeFunction(name='sp_source_mask', shape=([1] + list(sparse_shape)),
-                          dimensions=(time, x, y, z), time_order=0, dtype=np.int32)
-
-# Now holds IDs
-sp_source_mask.data[0, inds[0], inds[1], :] = tuple(inds[2][:len(np.unique(inds[2]))])
-
-assert(np.count_nonzero(sp_source_mask.data) == len(nzinds[0]))
-assert(len(sp_source_mask.dimensions) == 4)
 
 # Note:sparse_source_id is not needed as long as sparse info is kept in mask
 # sp_source_id.data[inds[0],inds[1],:] = inds[2][:maxz]
@@ -125,22 +122,44 @@ op1.apply()
 u2 = TimeFunction(name="u2", grid=model.grid, time_order=2)
 sp_zi = Dimension(name='sp_zi')
 
-zind = TimeFunction(name="zind", shape=(1, u2.shape[2]), dimensions=(time, z), time_order=0, dtype=np.int32)
+zind = TimeFunction(name="zind", shape=(1, u2.shape[2]), dimensions=(time, z),
+                    time_order=0, dtype=np.int32)
 
 
-source_mask_f = TimeFunction(name='source_mask_f', grid=model.grid, time_order=0, dtype=np.int32)
+source_mask_f = TimeFunction(name='source_mask_f', grid=model.grid, time_order=0,
+                             dtype=np.int32)
 
-source_mask_f.data[0, :, :, :] = source_mask.data[:, :, :] 
+source_mask_f.data[0, :, :, :] = source_mask.data[:, :, :]
 
+sp_source_mask = TimeFunction(name='sp_source_mask', shape=([1] + list(sparse_shape)),
+                              dimensions=(time, x, y, sp_zi), time_order=0,
+                              dtype=np.int32)
+
+# Now holds IDs
+sp_source_mask.data[0, inds[0], inds[1], :] = tuple(inds[2][:len(np.unique(inds[2]))])
+
+assert(np.count_nonzero(sp_source_mask.data) == len(nzinds[0]))
+assert(len(sp_source_mask.dimensions) == 4)
+
+t = model.grid.stepping_dim
 import pdb;pdb.set_trace()
-eq0 = Eq(z.symbolic_max, nnz_sp_source_mask[time, x, y], implicit_dims=(time, x, y))
-eq1 = Eq(zind[0, z], sp_source_mask[0, x, y, z], implicit_dims=(time, x, y, z))
-
-eq2 = Inc(u2.forward, zind)
 
 
-op2 = Operator([eq0, eq1])
+
+eq0 = Eq(sp_zi.symbolic_max, nnz_sp_source_mask[0, x, y], implicit_dims=(time, x, y))
+eq1 = Eq(zind[0, 0], sp_source_mask[0, x, y, sp_zi], implicit_dims=(time, x, y, sp_zi))
+# eqb = Eq(u2.forward, u2 + 1, implicit_dims=(time, x, y, z))
+myexpr = source_mask[x, y, zind[0, 0]] * save_src[time, source_id[x, y, zind[0, 0]]]
+# * save_src[time, source_id[x, y, zind[0, 0]]]
+
+eq2 = Inc(u2.forward[t+1, x, y, zind[0, 0]], myexpr, implicit_dims=(time, x, y, sp_zi))
+
+
+op2 = Operator([eq0, eq1, eq2])
 print(op2.ccode)
+
+# import pdb;pdb.set_trace()
+
 op2.apply()
 
 print(norm(u))
