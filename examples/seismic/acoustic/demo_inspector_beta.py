@@ -58,7 +58,7 @@ src.coordinates.data[1, -1] = 125.  # Depth is 20m
 src.coordinates.data[2, :] = np.array(model.domain_size) * .45
 src.coordinates.data[2, -1] = 119.  # Depth is 20m
 
-u = TimeFunction(name="u", grid=model.grid, time_order=2, space_order=so)
+u = TimeFunction(name="u", grid=model.grid, space_order=so)
 src_term = src.inject(field=u, expr=src)
 op = Operator(src_term)  # Perform source injection on an empty grid
 
@@ -125,7 +125,7 @@ op1 = Operator([src_term])
 op1.apply()
 
 
-u2 = TimeFunction(name="u2", grid=model.grid, time_order=2)
+u2 = TimeFunction(name="u2", grid=model.grid)
 sp_zdim = Dimension(name='sp_zdim')
 
 zind = TimeFunction(name="zind", shape=(u2.shape[2],),

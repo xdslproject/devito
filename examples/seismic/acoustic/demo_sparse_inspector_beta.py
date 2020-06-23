@@ -59,9 +59,9 @@ src.coordinates.data[0, -1] = 15.  # Depth is 20m
 src.coordinates.data[1, :] = np.array(model.domain_size) * .45
 src.coordinates.data[1, -1] = 125.  # Depth is 20m
 src.coordinates.data[2, :] = np.array(model.domain_size) * .45
-src.coordinates.data[2, -1] = 119.  # Depth is 20m
+src.coordinates.data[2, -1] = 40.  # Depth is 20m
 
-u = TimeFunction(name="u", grid=model.grid, time_order=2, space_order=so)
+u = TimeFunction(name="u", grid=model.grid, space_order=so)
 src_term = src.inject(field=u, expr=src)
 op = Operator(src_term)  # Perform source injection on an empty grid
 
@@ -119,7 +119,7 @@ op1 = Operator([src_term])
 op1.apply()
 
 
-u2 = TimeFunction(name="u2", grid=model.grid, time_order=2)
+u2 = TimeFunction(name="u2", grid=model.grid)
 sp_zi = Dimension(name='sp_zi')
 
 zind = TimeFunction(name="zind", shape=(sparse_shape[2],),
@@ -142,18 +142,15 @@ assert(len(sp_source_mask.dimensions) == 3)
 t = model.grid.stepping_dim
 
 eq0 = Eq(sp_zi.symbolic_max, nnz_sp_source_mask[x, y], implicit_dims=(time, x, y))
-eq1 = Eq(zind, sp_source_mask[x, y, sp_zi], implicit_dims=(time, x, y, sp_zi))
-# eqb = Eq(u2.forward, u2 + 1, implicit_dims=(time, x, y, z))
-myexpr = source_mask[x, y, zind]*save_src[time, source_id[x, y, zind]]
+eq1 = Eq(zind[sp_zi+1], sp_source_mask[x, y, sp_zi],
+         implicit_dims=(time, x, y, sp_zi))
+
+myexpr = source_mask[x, y, zind] * save_src[time, source_id[x, y, zind]]
 
 eq2 = Inc(u2.forward[t+1, x, y, zind], myexpr, implicit_dims=(time, x, y, sp_zi))
 
-
-
 # eq0 = Eq(zind, source_id, implicit_dims=(time, x, y, z))
 # eq1 = Inc(u2.forward, source_mask * save_src[time, zind])
-
-
 
 op2 = Operator([eq0, eq1, eq2])
 print(op2.ccode)
@@ -166,8 +163,6 @@ print(norm(u))
 print(norm(u2))
 
 assert np.isclose(norm(u), norm(u2), atol=1e-06)
-
-
 
 # save_src.data[0, source_id.data[14, 14, 11]]
 # save_src.data[0 ,source_id.data[14, 14, sp_source_mask.data[14, 14, 0]]]
