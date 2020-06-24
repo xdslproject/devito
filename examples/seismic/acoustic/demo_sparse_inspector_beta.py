@@ -28,7 +28,6 @@ def plot3d(data, model):
 
 # Some variable declarations
 nx, ny, nz = 10, 10, 10
-# import pdb; pdb.set_trace()
 # Define a physical size
 shape = (nx, ny, nz)  # Number of grid point (nx, nz)
 spacing = (10., 10., 10)  # Grid spacing in m. The domain size is now 1km by 1km
@@ -62,8 +61,17 @@ src.coordinates.data[2, :] = np.array(model.domain_size) * .45
 src.coordinates.data[2, -1] = 40.  # Depth is 20m
 
 u = TimeFunction(name="u", grid=model.grid, space_order=so)
+uref = TimeFunction(name="uref", grid=model.grid, space_order=so)
 src_term = src.inject(field=u, expr=src)
-op = Operator(src_term)  # Perform source injection on an empty grid
+src_term_ref = src.inject(field=uref, expr=src)
+
+op = Operator([src_term])  # Perform source injection on an empty grid
+
+eqlapl = Eq(uref.forward, uref.laplace + 0.1)
+optest = Operator([eqlapl, src_term_ref])
+optest.apply()
+print(norm(uref))
+
 
 op(time=time_range.num-1)
 
@@ -119,7 +127,7 @@ op1 = Operator([src_term])
 op1.apply()
 
 
-u2 = TimeFunction(name="u2", grid=model.grid)
+u2 = TimeFunction(name="u2", grid=model.grid, space_order=so)
 sp_zi = Dimension(name='sp_zi')
 
 zind = TimeFunction(name="zind", shape=(sparse_shape[2],),
@@ -147,22 +155,20 @@ eq1 = Eq(zind[sp_zi+1], sp_source_mask[x, y, sp_zi],
 
 myexpr = source_mask[x, y, zind] * save_src[time, source_id[x, y, zind]]
 
-eq2 = Inc(u2.forward[t+1, x, y, zind], myexpr, implicit_dims=(time, x, y, sp_zi))
+eq2 = Inc(u2.forward[t+1, x, y, zind], myexpr)
 
-# eq0 = Eq(zind, source_id, implicit_dims=(time, x, y, z))
-# eq1 = Inc(u2.forward, source_mask * save_src[time, zind])
-
-op2 = Operator([eq0, eq1, eq2])
+eqlapl = Eq(u2.forward, u2.laplace + 0.1)
+op2 = Operator([eq0, eqlapl, eq1, eq2])
 print(op2.ccode)
-
-import pdb;pdb.set_trace()
 
 op2.apply()
 
-print(norm(u))
-print(norm(u2))
+print("Norm(u):", norm(u))
 
-assert np.isclose(norm(u), norm(u2), atol=1e-06)
+print("Norm(u2):", norm(u2))
 
+print("Norm(uref):", norm(uref))
+
+assert np.isclose(norm(uref), norm(u2), atol=1e-06)
 # save_src.data[0, source_id.data[14, 14, 11]]
 # save_src.data[0 ,source_id.data[14, 14, sp_source_mask.data[14, 14, 0]]]
