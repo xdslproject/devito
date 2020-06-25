@@ -27,12 +27,12 @@ def plot3d(data, model):
 
 
 # Some variable declarations
-nx, ny, nz = 10, 10, 10
+nx, ny, nz = 300, 300, 300
 # Define a physical size
 shape = (nx, ny, nz)  # Number of grid point (nx, nz)
 spacing = (10., 10., 10)  # Grid spacing in m. The domain size is now 1km by 1km
 origin = (0., 0., 0.)
-so = 2
+so = 16
 # Initialize v field
 v = np.empty(shape, dtype=np.float32)
 v[:, :, :51] = 2
@@ -68,12 +68,9 @@ src_term_ref = src.inject(field=uref, expr=src)
 op = Operator([src_term])  # Perform source injection on an empty grid
 
 eqlapl = Eq(uref.forward, uref.laplace + 0.1)
-optest = Operator([eqlapl, src_term_ref])
-optest.apply()
-print(norm(uref))
+optest = Operator([eqlapl, src_term_ref], opt=('advanced', {'openmp': True}))
 
-
-op(time=time_range.num-1)
+op(time=time_range.num-1, )
 
 # Get the nonzero indices
 nzinds = np.nonzero(u.data[0])
@@ -158,10 +155,17 @@ myexpr = source_mask[x, y, zind] * save_src[time, source_id[x, y, zind]]
 eq2 = Inc(u2.forward[t+1, x, y, zind], myexpr, implicit_dims=(time, x, y, sp_zi))
 
 eqlapl = Eq(u2.forward, u2.laplace + 0.1)
-op2 = Operator([eq0, eqlapl, eq1, eq2])
+op2 = Operator([eqlapl, eq0, eq1, eq2], opt=('advanced'))
 print(op2.ccode)
 
+print("-----")
+optest.apply()
+print(norm(uref))
+print("-----")
 op2.apply()
+print("Norm(u2):", norm(u2))
+print("-----")
+
 
 print("Norm(u):", norm(u))
 
@@ -171,7 +175,7 @@ print("Norm(uref):", norm(uref))
 
 print(norm(uref))
 
-import pdb; pdb.set_trace()
+# import pdb; pdb.set_trace()
 
 assert np.isclose(norm(uref), norm(u2), atol=1e-06)
 # save_src.data[0, source_id.data[14, 14, 11]]
