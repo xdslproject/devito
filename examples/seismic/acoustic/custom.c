@@ -4,6 +4,8 @@
 #include "sys/time.h"
 #include "xmmintrin.h"
 #include "pmmintrin.h"
+#define min(a, b) (((a) < (b)) ? (a) : (b))
+#define max(a, b) (((a) > (b)) ? (a) : (b))
 
 struct dataobj
 {

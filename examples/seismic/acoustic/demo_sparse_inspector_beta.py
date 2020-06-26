@@ -27,12 +27,12 @@ def plot3d(data, model):
 
 
 # Some variable declarations
-nx, ny, nz = 300, 300, 300
+nx, ny, nz = 512, 512, 512
 # Define a physical size
 shape = (nx, ny, nz)  # Number of grid point (nx, nz)
 spacing = (10., 10., 10)  # Grid spacing in m. The domain size is now 1km by 1km
 origin = (0., 0., 0.)
-so = 16
+so = 2
 # Initialize v field
 v = np.empty(shape, dtype=np.float32)
 v[:, :, :51] = 2
@@ -42,7 +42,7 @@ v[:, :, 51:] = 2
 model = Model(vp=v, origin=origin, shape=shape, spacing=spacing, space_order=so, nbl=10)
 
 t0 = 0  # Simulation starts a t=0
-tn = 1000  # Simulation last 1 second (1000 ms)
+tn = 2200  # Simulation last 1 second (1000 ms)
 dt = model.critical_dt  # Time step from model grid spacing
 
 time_range = TimeAxis(start=t0, stop=tn, step=dt)
@@ -156,7 +156,7 @@ eq2 = Inc(u2.forward[t+1, x, y, zind], myexpr, implicit_dims=(time, x, y, sp_zi)
 
 eqlapl = Eq(u2.forward, u2.laplace + 0.1)
 op2 = Operator([eqlapl, eq0, eq1, eq2], opt=('advanced'))
-print(op2.ccode)
+# print(op2.ccode)
 
 print("-----")
 optest.apply()
