@@ -27,12 +27,12 @@ def plot3d(data, model):
 
 
 # Some variable declarations
-nx, ny, nz = 512, 512, 512
+nx, ny, nz = 600, 600, 600
 # Define a physical size
 shape = (nx, ny, nz)  # Number of grid point (nx, nz)
 spacing = (10., 10., 10)  # Grid spacing in m. The domain size is now 1km by 1km
 origin = (0., 0., 0.)
-so = 2
+so = 8
 # Initialize v field
 v = np.empty(shape, dtype=np.float32)
 v[:, :, :51] = 2
@@ -42,7 +42,7 @@ v[:, :, 51:] = 2
 model = Model(vp=v, origin=origin, shape=shape, spacing=spacing, space_order=so, nbl=10)
 
 t0 = 0  # Simulation starts a t=0
-tn = 2200  # Simulation last 1 second (1000 ms)
+tn = 1000  # Simulation last 1 second (1000 ms)
 dt = model.critical_dt  # Time step from model grid spacing
 
 time_range = TimeAxis(start=t0, stop=tn, step=dt)
@@ -178,5 +178,11 @@ print(norm(uref))
 # import pdb; pdb.set_trace()
 
 assert np.isclose(norm(uref), norm(u2), atol=1e-06)
+
+# import pdb; pdb.set_trace()
+
+
+
+
 # save_src.data[0, source_id.data[14, 14, 11]]
 # save_src.data[0 ,source_id.data[14, 14, sp_source_mask.data[14, 14, 0]]]
