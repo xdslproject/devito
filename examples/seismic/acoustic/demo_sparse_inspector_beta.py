@@ -27,7 +27,7 @@ def plot3d(data, model):
 
 
 # Some variable declarations
-nx, ny, nz = 600, 600, 600
+nx, ny, nz = 32, 32, 32
 # Define a physical size
 shape = (nx, ny, nz)  # Number of grid point (nx, nz)
 spacing = (10., 10., 10)  # Grid spacing in m. The domain size is now 1km by 1km
@@ -35,19 +35,19 @@ origin = (0., 0., 0.)
 so = 8
 # Initialize v field
 v = np.empty(shape, dtype=np.float32)
-v[:, :, :51] = 2
-v[:, :, 51:] = 2
+v[:, :, :51] = 10
+v[:, :, 51:] = 10
 
 # Construct model
 model = Model(vp=v, origin=origin, shape=shape, spacing=spacing, space_order=so, nbl=10)
 
 t0 = 0  # Simulation starts a t=0
-tn = 1000  # Simulation last 1 second (1000 ms)
+tn = 20  # Simulation last 1 second (1000 ms)
 dt = model.critical_dt  # Time step from model grid spacing
 
 time_range = TimeAxis(start=t0, stop=tn, step=dt)
 
-f0 = 0.010  # Source peak frequency is 10Hz (0.010 kHz)
+f0 = 0.0010  # Source peak frequency is 10Hz (0.010 kHz)
 src = RickerSource(name='src', grid=model.grid, f0=f0,
                    npoint=3, time_range=time_range)
 
@@ -154,6 +154,9 @@ myexpr = source_mask[x, y, zind] * save_src[time, source_id[x, y, zind]]
 
 eq2 = Inc(u2.forward[t+1, x, y, zind], myexpr, implicit_dims=(time, x, y, sp_zi))
 
+u2.data[:] = 2
+uref.data[:] = 1
+
 eqlapl = Eq(u2.forward, u2.laplace + 0.1)
 op2 = Operator([eqlapl, eq0, eq1, eq2], opt=('advanced'))
 # print(op2.ccode)
@@ -175,11 +178,11 @@ print("Norm(uref):", norm(uref))
 
 print(norm(uref))
 
-# import pdb; pdb.set_trace()
+import pdb; pdb.set_trace()
 
 assert np.isclose(norm(uref), norm(u2), atol=1e-06)
 
-# import pdb; pdb.set_trace()
+import pdb; pdb.set_trace()
 
 
 
