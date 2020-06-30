@@ -44,7 +44,7 @@ int Kernel(const float h_x, const float h_y, const float h_z, struct dataobj *re
 
   int sf = 8;
   //int t_blk_size = time_M - time_m ;
-  int t_blk_size = 20000 * (time_M - time_m);
+  int t_blk_size = 2 * sf * (time_M - time_m);
 
   struct timeval start_section0, end_section0;
   gettimeofday(&start_section0, NULL);
@@ -59,7 +59,7 @@ int Kernel(const float h_x, const float h_y, const float h_z, struct dataobj *re
         //printf(" Change of yblock %d \n", yb);
         for (int time = t_blk, t0 = (time) % (2), t1 = (time + 1) % (2); time <= min(t_blk + t_blk_size - 1, sf* (time_M - time_m)); time += sf, t0 = (((time / sf) % (time_M - time_m + 1))) % (2), t1 = (((time / sf) % (time_M - time_m + 1)) + 1) % (2))
         {
-          int tw = ((time / sf) % (time_M - time_m + 1));
+          //int tw = ((time / sf) % (time_M - time_m + 1));
           //printf(" Change of time %d \n", tw);
          /* Begin section0 */
 #pragma omp parallel num_threads(6)
@@ -81,7 +81,7 @@ int Kernel(const float h_x, const float h_y, const float h_z, struct dataobj *re
                     {
                       //printf(" time: %d , x - time : %d , y-time : %d, z : %d \n", time, x - time, y - time, z);
                       float r8 = -2.84722222F * u2[t0][x - time + 8][y - time + 8][z + 8];
-                      u2[t1][x - time + 8][y - time + 8][z + 8] = 1.0e-1F * u2[t1][x - time + 8][y - time + 8][z + 8] + 1.0e-1F + (r8 - 1.78571429e-3F * (u2[t0][x - time + 8][y - time + 8][z + 4] + u2[t0][x - time + 8][y - time + 8][z + 12]) + 2.53968254e-2F * (u2[t0][x - time + 8][y - time + 8][z + 5] + u2[t0][x - time + 8][y - time + 8][z + 11]) - 2.0e-1F * (u2[t0][x - time + 8][y - time + 8][z + 6] + u2[t0][x - time + 8][y - time + 8][z + 10]) + 1.6F * (u2[t0][x - time + 8][y - time + 8][z + 7] + u2[t0][x - time + 8][y - time + 8][z + 9])) / ((h_z * h_z)) + (r8 - 1.78571429e-3F * (u2[t0][x - time + 8][y - time + 4][z + 8] + u2[t0][x - time + 8][y - time + 12][z + 8]) + 2.53968254e-2F * (u2[t0][x - time + 8][y - time + 5][z + 8] + u2[t0][x - time + 8][y - time + 11][z + 8]) - 2.0e-1F * (u2[t0][x - time + 8][y - time + 6][z + 8] + u2[t0][x - time + 8][y - time + 10][z + 8]) + 1.6F * (u2[t0][x - time + 8][y - time + 7][z + 8] + u2[t0][x - time + 8][y - time + 9][z + 8])) / ((h_y * h_y)) + (r8 - 1.78571429e-3F * (u2[t0][x - time + 4][y - time + 8][z + 8] + u2[t0][x - time + 12][y - time + 8][z + 8]) + 2.53968254e-2F * (u2[t0][x - time + 5][y - time + 8][z + 8] + u2[t0][x - time + 11][y - time + 8][z + 8]) - 2.0e-1F * (u2[t0][x - time + 6][y - time + 8][z + 8] + u2[t0][x - time + 10][y - time + 8][z + 8]) + 1.6F * (u2[t0][x - time + 7][y - time + 8][z + 8] + u2[t0][x - time + 9][y - time + 8][z + 8])) / ((h_x * h_x));
+                      u2[t1][x - time + 8][y - time + 8][z + 8] = 1.0e-1F + (r8 - 1.78571429e-3F * (u2[t0][x - time + 8][y - time + 8][z + 4] + u2[t0][x - time + 8][y - time + 8][z + 12]) + 2.53968254e-2F * (u2[t0][x - time + 8][y - time + 8][z + 5] + u2[t0][x - time + 8][y - time + 8][z + 11]) - 2.0e-1F * (u2[t0][x - time + 8][y - time + 8][z + 6] + u2[t0][x - time + 8][y - time + 8][z + 10]) + 1.6F * (u2[t0][x - time + 8][y - time + 8][z + 7] + u2[t0][x - time + 8][y - time + 8][z + 9])) / ((h_z * h_z)) + (r8 - 1.78571429e-3F * (u2[t0][x - time + 8][y - time + 4][z + 8] + u2[t0][x - time + 8][y - time + 12][z + 8]) + 2.53968254e-2F * (u2[t0][x - time + 8][y - time + 5][z + 8] + u2[t0][x - time + 8][y - time + 11][z + 8]) - 2.0e-1F * (u2[t0][x - time + 8][y - time + 6][z + 8] + u2[t0][x - time + 8][y - time + 10][z + 8]) + 1.6F * (u2[t0][x - time + 8][y - time + 7][z + 8] + u2[t0][x - time + 8][y - time + 9][z + 8])) / ((h_y * h_y)) + (r8 - 1.78571429e-3F * (u2[t0][x - time + 4][y - time + 8][z + 8] + u2[t0][x - time + 12][y - time + 8][z + 8]) + 2.53968254e-2F * (u2[t0][x - time + 5][y - time + 8][z + 8] + u2[t0][x - time + 11][y - time + 8][z + 8]) - 2.0e-1F * (u2[t0][x - time + 6][y - time + 8][z + 8] + u2[t0][x - time + 10][y - time + 8][z + 8]) + 1.6F * (u2[t0][x - time + 7][y - time + 8][z + 8] + u2[t0][x - time + 9][y - time + 8][z + 8])) / ((h_x * h_x));
                       //if (source_mask[x - time + 2][y - time + 2][z + 2])
                       //{
                       //  printf(" x-time+2: %d , y-time+2: %d, z: %d \n", x - time + 2, y - time + 2, z + 2);
@@ -92,7 +92,6 @@ int Kernel(const float h_x, const float h_y, const float h_z, struct dataobj *re
 //  printf(" x-time+2: %d , y-time+2: %d , sp_zi_M: %d \n", x - time + 2, y - time + 2, nnz_sp_source_mask[x - time + 2][y - time + 2]);
 //}
 //int sp_zi_M = nnz_sp_source_mask[x - time + 2][y - time + 2];
-
 #pragma omp simd aligned(u2 : 32)
                     for (int sp_zi = sp_zi_m; sp_zi < sp_zi_m + nnz_sp_source_mask[x - time + 2][y - time + 2]; sp_zi += 1)
                     {
@@ -100,7 +99,7 @@ int Kernel(const float h_x, const float h_y, const float h_z, struct dataobj *re
                       //int zind = sp_source_mask[x - time + 8][y - time + 8][sp_zi] + 1;
                       //printf(" source_mask = %d \n", source_mask[x - time + 2][y - time + 2][zind]);
                       //printf(" source_id = %d \n", source_id[x - time + 2][y - time + 2][zind]);
-                      float r0 = save_src[tw][source_id[x - time + 8][y - time + 8][sp_source_mask[x - time + 8][y - time + 8][sp_zi] + 1] + 1] * source_mask[x - time + 8][y - time + 8][sp_source_mask[x - time + 8][y - time + 8][sp_zi] + 1];
+                      float r0 = save_src[((time / sf) % (time_M - time_m + 1))][source_id[x - time + 8][y - time + 8][sp_source_mask[x - time + 8][y - time + 8][sp_zi] + 1] + 1] * source_mask[x - time + 8][y - time + 8][sp_source_mask[x - time + 8][y - time + 8][sp_zi] + 1];
                       //printf(" Input %f \n", r0);
                       //printf(" time is : %d \n", tw);
                       u2[t1][x - time + 8][y - time + 8][sp_source_mask[x - time + 8][y - time + 8][sp_zi] + 1 + 8] += r0;
