@@ -4,7 +4,7 @@ from matplotlib.pyplot import pause # noqa
 import matplotlib.pyplot as plt
 
 from devito.logger import info
-from devito import TimeFunction, Function, Dimension, Eq, Inc
+from devito import TimeFunction, Function, Dimension, Eq, Inc, configuration
 from devito import Operator, norm
 from examples.seismic import RickerSource, TimeAxis
 from examples.seismic import Model
@@ -27,7 +27,7 @@ def plot3d(data, model):
 
 
 # Some variable declarations
-nx, ny, nz = 32, 32, 32
+nx, ny, nz = 600, 600, 600
 # Define a physical size
 shape = (nx, ny, nz)  # Number of grid point (nx, nz)
 spacing = (10., 10., 10)  # Grid spacing in m. The domain size is now 1km by 1km
@@ -35,14 +35,14 @@ origin = (0., 0., 0.)
 so = 8
 # Initialize v field
 v = np.empty(shape, dtype=np.float32)
-v[:, :, :51] = 10
-v[:, :, 51:] = 10
+v[:, :, :51] = 1
+v[:, :, 51:] = 1
 
 # Construct model
 model = Model(vp=v, origin=origin, shape=shape, spacing=spacing, space_order=so, nbl=10)
 
 t0 = 0  # Simulation starts a t=0
-tn = 20  # Simulation last 1 second (1000 ms)
+tn = 500  # Simulation last 1 second (1000 ms)
 dt = model.critical_dt  # Time step from model grid spacing
 
 time_range = TimeAxis(start=t0, stop=tn, step=dt)
@@ -143,8 +143,7 @@ assert(len(sp_source_mask.dimensions) == 3)
 
 t = model.grid.stepping_dim
 
-#zind = TimeFunction(name="zind", shape=(sparse_shape[2],),
-#                    dimensions=(sp_zi,), time_order=0, dtype=np.int32)
+
 zind = Scalar(name='zind', dtype=np.int32)
 
 eq0 = Eq(sp_zi.symbolic_max, nnz_sp_source_mask[x, y], implicit_dims=(time, x, y))
@@ -154,15 +153,16 @@ myexpr = source_mask[x, y, zind] * save_src[time, source_id[x, y, zind]]
 
 eq2 = Inc(u2.forward[t+1, x, y, zind], myexpr, implicit_dims=(time, x, y, sp_zi))
 
-u2.data[:] = 2
-uref.data[:] = 1
-
 eqlapl = Eq(u2.forward, u2.laplace + 0.1)
+
+
 op2 = Operator([eqlapl, eq0, eq1, eq2], opt=('advanced'))
 # print(op2.ccode)
 
 print("-----")
 optest.apply()
+
+
 print(norm(uref))
 print("-----")
 op2.apply()
@@ -178,11 +178,11 @@ print("Norm(uref):", norm(uref))
 
 print(norm(uref))
 
-import pdb; pdb.set_trace()
+# import pdb; pdb.set_trace()
 
 assert np.isclose(norm(uref), norm(u2), atol=1e-06)
 
-import pdb; pdb.set_trace()
+# import pdb; pdb.set_trace()
 
 
 
