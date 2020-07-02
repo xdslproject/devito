@@ -38,11 +38,11 @@ int Kernel(struct dataobj *restrict damp_vec, const float dt, const float h_x, c
   /* Flush denormal numbers to zero in hardware */
   _MM_SET_DENORMALS_ZERO_MODE(_MM_DENORMALS_ZERO_ON);
   _MM_SET_FLUSH_ZERO_MODE(_MM_FLUSH_ZERO_ON);
-  int xb_size = 128;
-  int yb_size = 128; // to fix as 8/16 etc
+  int xb_size = 32;
+  int yb_size = 32; // to fix as 8/16 etc
 
-  int x0_blk0_size = 32;
-  int y0_blk0_size = 32;
+  int x0_blk0_size = 16;
+  int y0_blk0_size = 16;
 
   int sf = 8;
   //int t_blk_size = time_M - time_m ;
@@ -64,7 +64,7 @@ int Kernel(struct dataobj *restrict damp_vec, const float dt, const float h_x, c
           int tw = ((time / sf) % (time_M - time_m + 1));
           //printf(" Change of time %d t0: %d t1: %d t2: %d \n", tw, t0, t1, t2);
           /* Begin section0 */
-#pragma omp parallel num_threads(1)
+#pragma omp parallel num_threads(6)
           {
 #pragma omp for collapse(2) schedule(dynamic, 1)
             for (int x0_blk0 = max((x_m + time), xb); x0_blk0 <= min((x_M + time), (xb + xb_size)); x0_blk0 += x0_blk0_size)
@@ -77,42 +77,33 @@ int Kernel(struct dataobj *restrict damp_vec, const float dt, const float h_x, c
                   //printf(" time: %d , x: %d \n", time, x - time);
                   for (int y = y0_blk0; y <= min(min((y_M + time), (yb + yb_size)), (y0_blk0 + y0_blk0_size - 1)); y++)
                   {
-                    //printf(" time: %d , x : %d , y : %d \n", tw, x - time , y - time );
-//#pragma omp simd aligned(damp, u2, vp : 32)
+#pragma omp simd aligned(damp, u2, vp : 32)
                     for (int z = z_m; z <= z_M; z += 1)
                     {
                       float r14 = -2.84722222F * u2[t1][x - time + 8][y - time + 8][z + 8];
                       float r13 = 1.0 / dt;
                       float r12 = 1.0 / (dt * dt);
                       float r11 = 1.0 / (vp[x - time + 8][y - time + 8][z + 8] * vp[x - time + 8][y - time + 8][z + 8]);
-                      u2[t0][x - time + 8][y - time + 8][z + 8] += 0.0F; //  (r11 * (-r12 * (-2.0F * u2[t1][x - time + 8][y - time + 8][z + 8] + u2[t2][x - time + 8][y - time + 8][z + 8])) + r13 * (damp[x - time + 1][y - time + 1][z + 1] * u2[t1][x - time + 8][y - time + 8][z + 8]) + (r14 - 1.78571429e-3F * (u2[t1][x - time + 8][y - time + 8][z + 4] + u2[t1][x - time + 8][y - time + 8][z + 12]) + 2.53968254e-2F * (u2[t1][x - time + 8][y - time + 8][z + 5] + u2[t1][x - time + 8][y - time + 8][z + 11]) - 2.0e-1F * (u2[t1][x - time + 8][y - time + 8][z + 6] + u2[t1][x - time + 8][y - time + 8][z + 10]) + 1.6F * (u2[t1][x - time + 8][y - time + 8][z + 7] + u2[t1][x - time + 8][y - time + 8][z + 9])) / ((h_z * h_z)) + (r14 - 1.78571429e-3F * (u2[t1][x - time + 8][y - time + 4][z + 8] + u2[t1][x - time + 8][y - time + 12][z + 8]) + 2.53968254e-2F * (u2[t1][x - time + 8][y - time + 5][z + 8] + u2[t1][x - time + 8][y - time + 11][z + 8]) - 2.0e-1F * (u2[t1][x - time + 8][y - time + 6][z + 8] + u2[t1][x - time + 8][y - time + 10][z + 8]) + 1.6F * (u2[t1][x - time + 8][y - time + 7][z + 8] + u2[t1][x - time + 8][y - time + 9][z + 8])) / ((h_y * h_y)) + (r14 - 1.78571429e-3F * (u2[t1][x - time + 4][y - time + 8][z + 8] + u2[t1][x - time + 12][y - time + 8][z + 8]) + 2.53968254e-2F * (u2[t1][x - time + 5][y - time + 8][z + 8] + u2[t1][x - time + 11][y - time + 8][z + 8]) - 2.0e-1F * (u2[t1][x - time + 6][y - time + 8][z + 8] + u2[t1][x - time + 10][y - time + 8][z + 8]) + 1.6F * (u2[t1][x - time + 7][y - time + 8][z + 8] + u2[t1][x - time + 9][y - time + 8][z + 8])) / ((h_x * h_x))) / (r11 * r12 + r13 * damp[x - time + 1][y - time + 1][z + 1]);
-                      
-                      if (source_mask[x - time + 1][y - time + 1][z + 1])
-                      {
-                      //printf(" x-time+1: %d , y-time+1: %d, z: %d \n", x - time + 1, y - time + 1, z + 1);
-                      }
+                      u2[t0][x - time + 8][y - time + 8][z + 8] = (r11 * (-r12 * (-2.0F * u2[t1][x - time + 8][y - time + 8][z + 8] + u2[t2][x - time + 8][y - time + 8][z + 8])) + r13 * (damp[x - time + 1][y - time + 1][z + 1] * u2[t1][x - time + 8][y - time + 8][z + 8]) + (r14 - 1.78571429e-3F * (u2[t1][x - time + 8][y - time + 8][z + 4] + u2[t1][x - time + 8][y - time + 8][z + 12]) + 2.53968254e-2F * (u2[t1][x - time + 8][y - time + 8][z + 5] + u2[t1][x - time + 8][y - time + 8][z + 11]) - 2.0e-1F * (u2[t1][x - time + 8][y - time + 8][z + 6] + u2[t1][x - time + 8][y - time + 8][z + 10]) + 1.6F * (u2[t1][x - time + 8][y - time + 8][z + 7] + u2[t1][x - time + 8][y - time + 8][z + 9])) / ((h_z * h_z)) + (r14 - 1.78571429e-3F * (u2[t1][x - time + 8][y - time + 4][z + 8] + u2[t1][x - time + 8][y - time + 12][z + 8]) + 2.53968254e-2F * (u2[t1][x - time + 8][y - time + 5][z + 8] + u2[t1][x - time + 8][y - time + 11][z + 8]) - 2.0e-1F * (u2[t1][x - time + 8][y - time + 6][z + 8] + u2[t1][x - time + 8][y - time + 10][z + 8]) + 1.6F * (u2[t1][x - time + 8][y - time + 7][z + 8] + u2[t1][x - time + 8][y - time + 9][z + 8])) / ((h_y * h_y)) + (r14 - 1.78571429e-3F * (u2[t1][x - time + 4][y - time + 8][z + 8] + u2[t1][x - time + 12][y - time + 8][z + 8]) + 2.53968254e-2F * (u2[t1][x - time + 5][y - time + 8][z + 8] + u2[t1][x - time + 11][y - time + 8][z + 8]) - 2.0e-1F * (u2[t1][x - time + 6][y - time + 8][z + 8] + u2[t1][x - time + 10][y - time + 8][z + 8]) + 1.6F * (u2[t1][x - time + 7][y - time + 8][z + 8] + u2[t1][x - time + 9][y - time + 8][z + 8])) / ((h_x * h_x))) / (r11 * r12 + r13 * damp[x - time + 1][y - time + 1][z + 1]);
                     }
-//if (nnz_sp_source_mask[x - time + 2][y - time + 2])
-//{
-//  printf(" x-time+2: %d , y-time+2: %d , sp_zi_M: %d \n", x - time + 2, y - time + 2, nnz_sp_source_mask[x - time + 2][y - time + 2]);
-//}
-//int sp_zi_M = nnz_sp_source_mask[x - time + 2][y - time + 2];
-
-//#pragma omp simd aligned(u2 : 32)
+                    //int sp_zi_M = nnz_sp_source_mask[x + 1][y + 1];
+#pragma omp simd aligned(damp, u2, vp : 32)
 
                     for (int sp_zi = sp_zi_m; sp_zi < sp_zi_m + nnz_sp_source_mask[x - time + 1][y - time + 1]; sp_zi += 1)
                     {
-                      //printf(" time is : %d \n", ((time / sf) % (time_M - time_m + 1)));
-                      //printf(" sp_source_mask = %d \n", sp_source_mask[x - time + 1][y - time + 1][sp_zi] + 1);
-                      int zind = sp_source_mask[x - time + 1][y - time + 1][sp_zi] + 1;
-                      //printf(" source_mask = %d \n", source_mask[x - time + 1][y - time + 1][zind]);
-                      //printf(" source_id = %d \n", source_id[x - time + 2][y - time + 2][zind]);
-                      float r0 = save_src[((time / sf) % (time_M - time_m + 1))][source_id[x - time + 1][y - time + 1][zind + 1] + 1] * source_mask[x - time + 1][y - time + 1][sp_source_mask[x - time + 1][y - time + 1][sp_zi] + 1];
-                      //printf(" Input %f in %d, %d, %d valued %f \n", r0, x - time + 8, y - time + 8,zind + 8, u2[t0][x - time + 8][y - time + 8][zind + 8]);
-                      
-                      u2[t0][x - time + 8][y - time + 8][zind + 8] += r0;
+                      //printf(" sp_zi = %d \n", sp_zi);
+                      //printf(" sp_source_mask = %d \n", sp_source_mask[x + 1][y + 1][sp_zi] + 1);
+                      //int zind = sp_source_mask[x - time + 8][y - time + 8][sp_zi] + 1;
+                      //printf(" source_mask = %d \n", source_mask[x - time + 2][y - time + 2][zind]);
+
+                      int zind = sp_source_mask[x - time + 1][y - time + 1][sp_zi];
+                      //printf(" source_id = %d \n", source_id[x + 1][y + 1][zind + 1]);
+                      //printf(" source_mask = %d \n", source_mask[x + 1][y + 1][zind + 1]);
+                      float r0 = save_src[((time / sf) % (time_M - time_m + 1))][source_id[x - time + 1][y - time + 1][zind + 1]] * source_mask[x - time + 1][y - time + 1][zind + 1];
+                      //printf(" Input %f \n", r0);
+                      //printf(" time is : %d \n", time);
+                      u2[t0][x - time + 8][y - time + 8][zind + 8] += 4.49016082216644F * (vp[x - time + 8][y - time + 8][zind + 8] * vp[x - time + 8][y - time + 8][zind + 8]) * r0;
                     }
-   
                   }
                 }
               }
@@ -125,81 +116,6 @@ int Kernel(struct dataobj *restrict damp_vec, const float dt, const float h_x, c
   /* End section0 */
   gettimeofday(&end_section0, NULL);
   timers->section0 += (double)(end_section0.tv_sec - start_section0.tv_sec) + (double)(end_section0.tv_usec - start_section0.tv_usec) / 1000000;
+
   return 0;
 }
-/* Backdoor edit at Wed Jul  1 18:59:09 2020*/
-/* Backdoor edit at Wed Jul  1 19:03:51 2020*/
-/* Backdoor edit at Wed Jul  1 19:15:48 2020*/
-/* Backdoor edit at Wed Jul  1 19:18:10 2020*/
-/* Backdoor edit at Wed Jul  1 19:20:16 2020*/
-/* Backdoor edit at Wed Jul  1 19:22:01 2020*/
-/* Backdoor edit at Wed Jul  1 19:23:01 2020*/
-/* Backdoor edit at Wed Jul  1 19:25:36 2020*/
-/* Backdoor edit at Wed Jul  1 19:29:06 2020*/
-/* Backdoor edit at Wed Jul  1 19:29:35 2020*/
-/* Backdoor edit at Wed Jul  1 19:32:26 2020*/
-/* Backdoor edit at Wed Jul  1 19:33:16 2020*/
-/* Backdoor edit at Wed Jul  1 19:34:18 2020*/
-/* Backdoor edit at Wed Jul  1 19:37:19 2020*/
-/* Backdoor edit at Wed Jul  1 19:39:37 2020*/
-/* Backdoor edit at Wed Jul  1 19:40:26 2020*/
-/* Backdoor edit at Wed Jul  1 19:41:26 2020*/
-/* Backdoor edit at Wed Jul  1 19:42:19 2020*/
-/* Backdoor edit at Wed Jul  1 19:47:06 2020*/
-/* Backdoor edit at Wed Jul  1 19:47:42 2020*/
-/* Backdoor edit at Wed Jul  1 19:59:45 2020*/
-/* Backdoor edit at Wed Jul  1 20:03:22 2020*/
-/* Backdoor edit at Wed Jul  1 20:10:21 2020*/ 
-/* Backdoor edit at Wed Jul  1 20:12:08 2020*/ 
-/* Backdoor edit at Wed Jul  1 20:12:49 2020*/ 
-/* Backdoor edit at Wed Jul  1 20:18:54 2020*/ 
-/* Backdoor edit at Wed Jul  1 20:23:14 2020*/ 
-/* Backdoor edit at Wed Jul  1 20:27:23 2020*/ 
-/* Backdoor edit at Wed Jul  1 20:28:09 2020*/ 
-/* Backdoor edit at Wed Jul  1 20:35:11 2020*/ 
-/* Backdoor edit at Wed Jul  1 20:36:27 2020*/ 
-/* Backdoor edit at Wed Jul  1 20:38:43 2020*/ 
-/* Backdoor edit at Wed Jul  1 20:40:13 2020*/ 
-/* Backdoor edit at Wed Jul  1 20:41:58 2020*/ 
-/* Backdoor edit at Wed Jul  1 20:43:31 2020*/ 
-/* Backdoor edit at Wed Jul  1 20:44:28 2020*/ 
-/* Backdoor edit at Wed Jul  1 20:45:50 2020*/ 
-/* Backdoor edit at Wed Jul  1 20:47:51 2020*/ 
-/* Backdoor edit at Wed Jul  1 20:49:32 2020*/ 
-/* Backdoor edit at Wed Jul  1 20:50:49 2020*/ 
-/* Backdoor edit at Wed Jul  1 20:56:02 2020*/ 
-/* Backdoor edit at Wed Jul  1 20:57:43 2020*/ 
-/* Backdoor edit at Wed Jul  1 21:05:04 2020*/ 
-/* Backdoor edit at Wed Jul  1 21:06:25 2020*/ 
-/* Backdoor edit at Wed Jul  1 21:10:04 2020*/ 
-/* Backdoor edit at Wed Jul  1 21:11:35 2020*/ 
-/* Backdoor edit at Wed Jul  1 21:12:50 2020*/ 
-/* Backdoor edit at Wed Jul  1 21:13:30 2020*/ 
-/* Backdoor edit at Wed Jul  1 21:14:34 2020*/ 
-/* Backdoor edit at Wed Jul  1 21:17:30 2020*/ 
-/* Backdoor edit at Wed Jul  1 21:18:33 2020*/ 
-/* Backdoor edit at Wed Jul  1 21:22:30 2020*/ 
-/* Backdoor edit at Wed Jul  1 21:25:07 2020*/ 
-/* Backdoor edit at Wed Jul  1 21:28:36 2020*/ 
-/* Backdoor edit at Wed Jul  1 21:29:28 2020*/ 
-/* Backdoor edit at Wed Jul  1 21:32:59 2020*/ 
-/* Backdoor edit at Wed Jul  1 21:33:38 2020*/ 
-/* Backdoor edit at Wed Jul  1 21:34:49 2020*/ 
-/* Backdoor edit at Wed Jul  1 21:37:36 2020*/ 
-/* Backdoor edit at Wed Jul  1 21:38:23 2020*/ 
-/* Backdoor edit at Wed Jul  1 21:39:44 2020*/ 
-/* Backdoor edit at Wed Jul  1 21:40:22 2020*/ 
-/* Backdoor edit at Wed Jul  1 21:41:34 2020*/ 
-/* Backdoor edit at Wed Jul  1 21:43:33 2020*/ 
-/* Backdoor edit at Wed Jul  1 21:44:38 2020*/ 
-/* Backdoor edit at Wed Jul  1 21:47:11 2020*/ 
-/* Backdoor edit at Wed Jul  1 21:47:35 2020*/ 
-/* Backdoor edit at Wed Jul  1 21:49:49 2020*/ 
-/* Backdoor edit at Wed Jul  1 21:55:09 2020*/ 
-/* Backdoor edit at Wed Jul  1 21:55:51 2020*/ 
-/* Backdoor edit at Wed Jul  1 21:58:49 2020*/ 
-/* Backdoor edit at Wed Jul  1 21:59:20 2020*/ 
-/* Backdoor edit at Wed Jul  1 22:00:27 2020*/ 
-/* Backdoor edit at Wed Jul  1 22:00:51 2020*/ 
-/* Backdoor edit at Wed Jul  1 22:02:20 2020*/ 
-/* Backdoor edit at Wed Jul  1 22:05:03 2020*/ 
