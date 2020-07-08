@@ -28,6 +28,8 @@ def plot3d(data, model):
 
 # Some variable declarations
 
+import pdb; pdb.set_trace()
+
 nx, ny, nz = 10, 10, 10
 # Define a physical size
 shape = (nx, ny, nz)  # Number of grid point (nx, nz)
@@ -37,7 +39,7 @@ so = 8
 # Initialize v field
 v = np.empty(shape, dtype=np.float32)
 v[:, :, :int(nz/2)] = 2
-v[:, :, int(nz/2):] = 1
+v[:, :, int(nz/2):] = 2
 
 # Construct model
 model = Model(vp=v, origin=origin, shape=shape, spacing=spacing, space_order=so,
@@ -46,7 +48,7 @@ model = Model(vp=v, origin=origin, shape=shape, spacing=spacing, space_order=so,
 # plt.imshow(model.vp.data[10, :, :]) ; pause(1)
 
 t0 = 0  # Simulation starts a t=0
-tn = 5  # Simulation last 1 second (1000 ms)
+tn = 20  # Simulation last 1 second (1000 ms)
 dt = model.critical_dt  # Time step from model grid spacing
 time_range = TimeAxis(start=t0, stop=tn, step=dt)
 f0 = 0.010  # Source peak frequency is 10Hz (0.010 kHz)
@@ -55,26 +57,36 @@ src = RickerSource(name='src', grid=model.grid, f0=f0,
 
 
 # First, position source centrally in all dimensions, then set depth
-src.coordinates.data[0, :] = np.array(model.domain_size) * .5
+src.coordinates.data[0, :] = np.array(model.domain_size) * .2
 src.coordinates.data[0, -1] = 20  # Depth is 20m
-src.coordinates.data[1, :] = np.array(model.domain_size) * .8
+src.coordinates.data[1, :] = np.array(model.domain_size) * .2
 src.coordinates.data[1, -1] = 20  # Depth is 20m
-src.coordinates.data[2, :] = np.array(model.domain_size) * .9
+src.coordinates.data[2, :] = np.array(model.domain_size) * .2
 src.coordinates.data[2, -1] = 20  # Depth is 20m
 
 # src.show()
 # pause(1)
 
+# f : perform source injection on an ampty grid
 f = TimeFunction(name="f", grid=model.grid, space_order=so, time_order=2)
-src_term = src.inject(field=f.forward, expr=src * dt**2 / model.m)
-op = Operator([src_term])  # Perform source injection on an empty grid
-summary_f = op.apply(time=time_range.num-1)
+src_f = src.inject(field=f.forward, expr=src * dt**2 / model.m)
+# op_f = Operator([src_f], opt=('advanced', {'openmp': True}))
+op_f = Operator([src_f])
+op_f.apply(time=time_range.num-1)
+print("==========")
+print(norm(f))
+print("===========")
 
-
+# uref : reference solution
 uref = TimeFunction(name="uref", grid=model.grid, space_order=so, time_order=2)
 src_term_ref = src.inject(field=uref.forward, expr=src * dt**2 / model.m)
 pde_ref = model.m * uref.dt2 - uref.laplace + model.damp * uref.dt
 stencil_ref = Eq(uref.forward, solve(pde_ref, uref.forward))
+opref = Operator([src_term_ref])
+opref.apply(time=time_range.num-1)
+print("==========")
+print(norm(uref))
+print("===========")
 
 # Get the nonzero indices
 nzinds = np.nonzero(f.data[0])  # nzinds is a tuple
@@ -83,12 +95,9 @@ assert len(nzinds) == len(shape)
 shape = model.grid.shape
 x, y, z = model.grid.dimensions
 time = model.grid.time_dim
-
 source_mask = Function(name='source_mask', shape=shape, dimensions=(x, y, z), space_order=0, dtype=np.float32)
 source_id = Function(name='source_id', shape=shape, dimensions=(x, y, z), space_order=0, dtype=np.int32)
-
 info("source_id data indexes start from 1 not 0 !!!")
-import pdb; pdb.set_trace()
 
 # source_id.data[nzinds[0], nzinds[1], nzinds[2]] = tuple(np.arange(1, len(nzinds[0])+1))
 source_id.data[nzinds[0], nzinds[1], nzinds[2]] = tuple(np.arange(len(nzinds[0])))
@@ -130,12 +139,13 @@ id_dim = Dimension(name='id_dim')
 save_src = TimeFunction(name='save_src', shape=(src.shape[0],
                         nzinds[1].shape[0]), dimensions=(src.dimensions[0], id_dim))
 
-src_term = src.inject(field=save_src[src.dimensions[0], source_id], expr=src * dt**2 / model.m)
+save_src_term = src.inject(field=save_src[src.dimensions[0], source_id], expr=src * dt**2 / model.m)
 
-op1 = Operator([src_term])
+op1 = Operator([save_src_term])
 op1.apply(time=time_range.num-1)
 
-u2 = TimeFunction(name="u2", grid=model.grid, space_order=so, time_order=2)
+
+usol = TimeFunction(name="usol", grid=model.grid, space_order=so, time_order=2)
 
 sp_zi = Dimension(name='sp_zi')
 
@@ -154,35 +164,34 @@ t = model.grid.stepping_dim
 
 zind = Scalar(name='zind', dtype=np.int32)
 
-eq0 = Eq(sp_zi.symbolic_max, nnz_sp_source_mask[x, y], implicit_dims=(time, x, y))
+eq0 = Eq(sp_zi.symbolic_max, nnz_sp_source_mask[x, y] - 1, implicit_dims=(time, x, y))
 eq1 = Eq(zind, sp_source_mask[x, y, sp_zi], implicit_dims=(time, x, y, sp_zi))
 
 myexpr = source_mask[x, y, zind] * save_src[time, source_id[x, y, zind]]
 
-eq2 = Inc(u2.forward[t+1, x, y, zind], myexpr, implicit_dims=(time, x, y, sp_zi))
+eq2 = Inc(usol.forward[t+1, x, y, zind], myexpr, implicit_dims=(time, x, y, sp_zi))
 
 # pde_2 = model.m * u2.dt2 - u2.laplace + model.damp * u2.dt
 # stencil_2 = Eq(u2.forward, solve(pde_2, u2.forward))
 
-print("-----")
-opref = Operator([src_term_ref], opt=('advanced', {'openmp': True}))
-opref.apply(time=time_range.num-1)
-print(norm(uref))
+
 
 
 #import pdb; pdb.set_trace()
 
 print("-----")
 op2 = Operator([eq0, eq1, eq2], opt=('advanced'))
-print(op2.ccode)
+# print(op2.ccode)
 #summary = op2(time=time_range.num-1, dt=model.critical_dt)
 summary = op2(time=time_range.num-1)
-print(norm(u2))
+
+
+print(norm(usol))
 print("-----")
 
 print("Norm(u):", norm(f))
 
-print("Norm(u2):", norm(u2))
+print("Norm(usol):", norm(usol))
 
 print("Norm(uref):", norm(uref))
 
@@ -200,8 +209,8 @@ import pdb; pdb.set_trace()
 # save_src.data[0 ,source_id.data[14, 14, sp_source_mask.data[14, 14, 0]]]
 
 plt.imshow(uref.data[2, int(nx/2) ,:, :]); pause(1)
-plt.imshow(u2.data[2, int(nx/2) ,:, :]); pause(1)
+plt.imshow(usol.data[2, int(nx/2) ,:, :]); pause(1)
 
-assert np.isclose(norm(uref), norm(u2), atol=1e-06)
+assert np.isclose(norm(uref), norm(usol), atol=1e-06)
 
 # plt.imshow(uref.data[2, int(nx/2) ,:, :]); pause(1)

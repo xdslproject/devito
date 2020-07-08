@@ -28,7 +28,7 @@ def plot3d(data, model):
 
 # Some variable declarations
 
-nx, ny, nz = 600, 600, 600
+nx, ny, nz = 60, 60, 60
 # Define a physical size
 shape = (nx, ny, nz)  # Number of grid point (nx, nz)
 spacing = (10., 10., 10)  # Grid spacing in m. The domain size is now 1km by 1km
@@ -107,6 +107,7 @@ nnz_shape = (model.grid.shape[0], model.grid.shape[1])  # Change only 3rd dim
 nnz_sp_source_mask = TimeFunction(name='nnz_sp_source_mask',
                                   shape=(list(shape[:2])),
                                   dimensions=(x, y), dtype=np.int32)
+import pdb; pdb.set_trace()
 nnz_sp_source_mask.data[:, :] = source_mask.data.sum(2)
 inds = np.where(source_mask.data == 1)
 
