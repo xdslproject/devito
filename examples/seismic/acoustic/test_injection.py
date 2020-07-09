@@ -30,7 +30,7 @@ def plot3d(data, model):
 
 #import pdb; pdb.set_trace()
 
-nx, ny, nz = 400, 400, 100
+nx, ny, nz = 20, 20, 20
 # Define a physical size
 shape = (nx, ny, nz)  # Number of grid point (nx, nz)
 spacing = (10., 10., 10)  # Grid spacing in m. The domain size is now 1km by 1km
@@ -48,7 +48,7 @@ model = Model(vp=v, origin=origin, shape=shape, spacing=spacing, space_order=so,
 # plt.imshow(model.vp.data[10, :, :]) ; pause(1)
 
 t0 = 0  # Simulation starts a t=0
-tn = 500  # Simulation last 1 second (1000 ms)
+tn = 19  # Simulation last 1 second (1000 ms)
 dt = model.critical_dt  # Time step from model grid spacing
 time_range = TimeAxis(start=t0, stop=tn, step=dt)
 f0 = 0.010  # Source peak frequency is 10Hz (0.010 kHz)
@@ -82,8 +82,8 @@ uref = TimeFunction(name="uref", grid=model.grid, space_order=so, time_order=2)
 src_term_ref = src.inject(field=uref.forward, expr=src * dt**2 / model.m)
 pde_ref = model.m * uref.dt2 - uref.laplace + model.damp * uref.dt
 stencil_ref = Eq(uref.forward, solve(pde_ref, uref.forward))
-opref = Operator([stencil_ref, src_term_ref])
-opref.apply(time=time_range.num-1, dt=model.critical_dt)
+opref = Operator([stencil_ref, src_term_ref], opt=('advanced', {'openmp': True}))
+opref.apply(time=time_range.num-2, dt=model.critical_dt)
 print("==========")
 print(norm(uref))
 print("===========")
