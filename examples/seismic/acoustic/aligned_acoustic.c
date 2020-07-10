@@ -5,6 +5,7 @@
 #include "xmmintrin.h"
 #include "pmmintrin.h"
 #include <stdio.h>
+#include "omp.h"
 #define min(a, b) (((a) < (b)) ? (a) : (b))
 #define max(a, b) (((a) > (b)) ? (a) : (b))
 
@@ -41,8 +42,8 @@ int Kernel(struct dataobj *restrict damp_vec, const float dt, const float h_x, c
   int xb_size = 32;
   int yb_size = 32; // to fix as 8/16 etc
 
-  int x0_blk0_size = 16;
-  int y0_blk0_size = 16;
+  int x0_blk0_size = 8;
+  int y0_blk0_size = 8;
 
   int sf = 8;
   //int t_blk_size = time_M - time_m ;
@@ -64,7 +65,7 @@ int Kernel(struct dataobj *restrict damp_vec, const float dt, const float h_x, c
           int tw = ((time / sf) % (time_M - time_m + 1));
           //printf(" Change of time %d t0: %d t1: %d t2: %d \n", tw, t0, t1, t2);
           /* Begin section0 */
-#pragma omp parallel num_threads(2)
+#pragma omp parallel num_threads(8)
           {
 #pragma omp for collapse(2) schedule(dynamic, 1)
             for (int x0_blk0 = max((x_m + time), xb); x0_blk0 <= min((x_M + time), (xb + xb_size)); x0_blk0 += x0_blk0_size)

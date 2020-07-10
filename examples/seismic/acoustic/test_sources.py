@@ -31,7 +31,7 @@ def plot3d(data, model):
 
 #import pdb; pdb.set_trace()
 
-nx, ny, nz = 200, 200, 200
+nx, ny, nz = 600, 600, 600
 # Define a physical size
 shape = (nx, ny, nz)  # Number of grid point (nx, nz)
 spacing = (10., 10., 10)  # Grid spacing in m. The domain size is now 1km by 1km
@@ -49,12 +49,12 @@ model = Model(vp=v, origin=origin, shape=shape, spacing=spacing, space_order=so,
 # plt.imshow(model.vp.data[10, :, :]) ; pause(1)
 
 t0 = 0  # Simulation starts a t=0
-tn = 190  # Simulation last 1 second (1000 ms)
+tn = 600  # Simulation last 1 second (1000 ms)
 dt = model.critical_dt  # Time step from model grid spacing
 time_range = TimeAxis(start=t0, stop=tn, step=dt)
 f0 = 0.010  # Source peak frequency is 10Hz (0.010 kHz)
 src = RickerSource(name='src', grid=model.grid, f0=f0,
-                   npoint=961, time_range=time_range)
+                   npoint=9, time_range=time_range)
 
 
 # First, position source centrally in all dimensions, then set depth
@@ -97,13 +97,8 @@ uref = TimeFunction(name="uref", grid=model.grid, space_order=so, time_order=2)
 src_term_ref = src.inject(field=uref.forward, expr=src * dt**2 / model.m)
 pde_ref = model.m * uref.dt2 - uref.laplace + model.damp * uref.dt
 stencil_ref = Eq(uref.forward, solve(pde_ref, uref.forward))
-opref = Operator([stencil_ref, src_term_ref], opt=('advanced', {'openmp': True}))
-opref.apply(time=time_range.num-2, dt=model.critical_dt)
-print("==========")
-print(norm(uref))
-print("===========")
 
-# Get the nonzero indices
+#Get the nonzero indices
 nzinds = np.nonzero(f.data[0])  # nzinds is a tuple
 assert len(nzinds) == len(shape)
 
@@ -191,6 +186,11 @@ stencil_2 = Eq(usol.forward, solve(pde_2, usol.forward))
 # import pdb; pdb.set_trace()
 plot3d(source_mask.data, model)
 
+opref = Operator([stencil_ref, src_term_ref], opt=('advanced', {'openmp': True}))
+opref.apply(time=time_range.num-2, dt=model.critical_dt)
+print("==========")
+print(norm(uref))
+print("===========")
 
 
 print("-----")
@@ -199,22 +199,23 @@ op2 = Operator([stencil_2, eq0, eq1, eq2], opt=('advanced'))
 #summary = op2(time=time_range.num-1, dt=model.critical_dt)
 op2.apply(time=time_range.num-1, dt=model.critical_dt)
 
-
+print("===========")
 print(norm(usol))
-print("-----")
+print("===========")
+
 
 print("Norm(f):", norm(f))
 print("Norm(usol):", norm(usol))
 print("Norm(uref):", norm(uref))
 
 
-import pdb; pdb.set_trace()
+#import pdb; pdb.set_trace()
 
 # save_src.data[0, source_id.data[14, 14, 11]]
 # save_src.data[0 ,source_id.data[14, 14, sp_source_mask.data[14, 14, 0]]]
 
-plt.imshow(uref.data[2, int(nx/2) ,:, :]); pause(1)
-plt.imshow(usol.data[2, int(nx/2) ,:, :]); pause(1)
+#plt.imshow(uref.data[2, int(nx/2) ,:, :]); pause(1)
+#plt.imshow(usol.data[2, int(nx/2) ,:, :]); pause(1)
 
 assert np.isclose(norm(uref), norm(usol), atol=1e-06)
 

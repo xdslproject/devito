@@ -30,7 +30,7 @@ def plot3d(data, model):
 
 #import pdb; pdb.set_trace()
 
-nx, ny, nz = 800, 800, 800
+nx, ny, nz =800, 800, 800
 # Define a physical size
 shape = (nx, ny, nz)  # Number of grid point (nx, nz)
 spacing = (10., 10., 10)  # Grid spacing in m. The domain size is now 1km by 1km
@@ -48,7 +48,7 @@ model = Model(vp=v, origin=origin, shape=shape, spacing=spacing, space_order=so,
 # plt.imshow(model.vp.data[10, :, :]) ; pause(1)
 
 t0 = 0  # Simulation starts a t=0
-tn = 1000  # Simulation last 1 second (1000 ms)
+tn = 400  # Simulation last 1 second (1000 ms)
 dt = model.critical_dt  # Time step from model grid spacing
 time_range = TimeAxis(start=t0, stop=tn, step=dt)
 f0 = 0.010  # Source peak frequency is 10Hz (0.010 kHz)
@@ -57,13 +57,12 @@ src = RickerSource(name='src', grid=model.grid, f0=f0,
 
 
 # First, position source centrally in all dimensions, then set depth
-src.coordinates.data[0, :] = np.array(model.domain_size) * .5
-src.coordinates.data[0, -1] = 20  # Depth is 20m
-src.coordinates.data[1, :] = np.array(model.domain_size) * .5
-src.coordinates.data[1, -1] = 20  # Depth is 20m
-src.coordinates.data[2, :] = np.array(model.domain_size) * .5
-src.coordinates.data[2, -1] = 20  # Depth is 20m
+src.coordinates.data[:, :] = np.array(model.domain_size) * .5
+#src.coordinates.data[1, :] = np.array(model.domain_size) * .5
+#src.coordinates.data[2, :] = np.array(model.domain_size) * .5
 
+
+src.coordinates.data[:, -1] = 20  # Depth is 20m
 # src.show()
 # pause(1)
 
