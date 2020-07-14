@@ -31,12 +31,12 @@ def plot3d(data, model):
 
 #import pdb; pdb.set_trace()
 
-nx, ny, nz = 600, 600, 400
+nx, ny, nz = 10, 10, 10
 # Define a physical size
 shape = (nx, ny, nz)  # Number of grid point (nx, nz)
 spacing = (10., 10., 10)  # Grid spacing in m. The domain size is now 1km by 1km
 origin = (0., 0., 0.)
-so = 12
+so = 4
 # Initialize v field
 v = np.empty(shape, dtype=np.float32)
 v[:, :, :int(nz/2)] = 2
@@ -49,7 +49,7 @@ model = Model(vp=v, origin=origin, shape=shape, spacing=spacing, space_order=so,
 # plt.imshow(model.vp.data[10, :, :]) ; pause(1)
 
 t0 = 0  # Simulation starts a t=0
-tn = 600  # Simulation last 1 second (1000 ms)
+tn = 6  # Simulation last 1 second (1000 ms)
 dt = model.critical_dt  # Time step from model grid spacing
 time_range = TimeAxis(start=t0, stop=tn, step=dt)
 f0 = 0.010  # Source peak frequency is 10Hz (0.010 kHz)
@@ -198,7 +198,7 @@ print("===========")
 print("-----")
 op2 = Operator([stencil_2, eq0, eq1, eq2], opt=('advanced'))
 # print(op2.ccode)
-#summary = op2(time=time_range.num-1, dt=model.critical_dt)
+# summary = op2(time=time_range.num-1, dt=model.critical_dt)
 op2.apply(time=time_range.num-1, dt=model.critical_dt)
 
 normusol = norm(usol)

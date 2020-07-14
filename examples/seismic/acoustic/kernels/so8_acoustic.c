@@ -45,7 +45,7 @@ int Kernel(struct dataobj *restrict damp_vec, const float dt, const float h_x, c
   int x0_blk0_size = 8;
   int y0_blk0_size = 8;
 
-  int sf = 8;
+  int sf = 4;
   //int t_blk_size = time_M - time_m ;
   int t_blk_size = 2 * sf * (time_M - time_m);
 
