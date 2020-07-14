@@ -23,7 +23,7 @@ def plot3d(data, model):
        ax.set_xlim(model.spacing[0], data.shape[0]-model.spacing[0])
        ax.set_ylim(model.spacing[1], data.shape[1]-model.spacing[1])
        ax.set_zlim(model.spacing[2], data.shape[2]-model.spacing[2])
-       ax.invert_zaxis()
+       # ax.invert_zaxis()
        plt.savefig("sources_demo.pdf")
 
 
@@ -31,12 +31,12 @@ def plot3d(data, model):
 
 #import pdb; pdb.set_trace()
 
-nx, ny, nz = 600, 600, 600
+nx, ny, nz = 600, 600, 400
 # Define a physical size
 shape = (nx, ny, nz)  # Number of grid point (nx, nz)
 spacing = (10., 10., 10)  # Grid spacing in m. The domain size is now 1km by 1km
 origin = (0., 0., 0.)
-so = 8
+so = 12
 # Initialize v field
 v = np.empty(shape, dtype=np.float32)
 v[:, :, :int(nz/2)] = 2
@@ -88,8 +88,9 @@ src_f = src.inject(field=f.forward, expr=src * dt**2 / model.m)
 # op_f = Operator([src_f], opt=('advanced', {'openmp': True}))
 op_f = Operator([src_f])
 op_f.apply(time=time_range.num-1)
+normf = norm(f)
 print("==========")
-print(norm(f))
+print(normf)
 print("===========")
 
 # uref : reference solution
@@ -188,8 +189,9 @@ plot3d(source_mask.data, model)
 
 opref = Operator([stencil_ref, src_term_ref], opt=('advanced', {'openmp': True}))
 opref.apply(time=time_range.num-2, dt=model.critical_dt)
+normuref = norm(uref)
 print("==========")
-print(norm(uref))
+print(normuref)
 print("===========")
 
 
@@ -199,17 +201,18 @@ op2 = Operator([stencil_2, eq0, eq1, eq2], opt=('advanced'))
 #summary = op2(time=time_range.num-1, dt=model.critical_dt)
 op2.apply(time=time_range.num-1, dt=model.critical_dt)
 
+normusol = norm(usol)
 print("===========")
-print(norm(usol))
+print(normusol)
 print("===========")
 
 
-print("Norm(f):", norm(f))
-print("Norm(usol):", norm(usol))
-print("Norm(uref):", norm(uref))
+print("Norm(f):", normf)
+print("Norm(usol):", normusol)
+print("Norm(uref):", normuref)
 
 
-#import pdb; pdb.set_trace()
+import pdb; pdb.set_trace()
 
 # save_src.data[0, source_id.data[14, 14, 11]]
 # save_src.data[0 ,source_id.data[14, 14, sp_source_mask.data[14, 14, 0]]]
@@ -217,6 +220,6 @@ print("Norm(uref):", norm(uref))
 #plt.imshow(uref.data[2, int(nx/2) ,:, :]); pause(1)
 #plt.imshow(usol.data[2, int(nx/2) ,:, :]); pause(1)
 
-assert np.isclose(norm(uref), norm(usol), atol=1e-06)
+assert np.isclose(normuref, normusol, atol=1e-06)
 
 # plt.imshow(uref.data[2, int(nx/2) ,:, :]); pause(1)
