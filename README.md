@@ -103,4 +103,7 @@ If you're using Devito, we would like to hear from you. Whether you
 are facing issues or just trying it out, join the
 [conversation](https://join.slack.com/t/devitocodes/shared_invite/zt-gtd2yxj9-Y31YKk_7lr9AwfXeL2iMFg).
 
-Let me know your findings and your performance results.
+Let me know your findings and your performance results. https://opesci-slackin.now.sh/ at #time-tiling
+
+Depending on platform, I would expect speed-ups along the following lines:
+![Perf results](https://github.com/devitocodes/devito/blob/timetiling_on_cd/examples/seismic/acoustic/kernels/temporal_performance.pdf)
