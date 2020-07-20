@@ -70,19 +70,7 @@ class AnisotropicWaveSolver(object):
         return AdjointOperator(self.model, save=None, geometry=self.geometry,
                                space_order=self.space_order, **self._kwargs)
 
-    @memoized_meth
-    def op_jac(self):
-        """Cached operator for born runs"""
-        return JacobianOperator(self.model, save=None, geometry=self.geometry,
-                                space_order=self.space_order, **self._kwargs)
-
-    @memoized_meth
-    def op_jacadj(self, save=True):
-        """Cached operator for gradient runs"""
-        return JacobianAdjOperator(self.model, save=save, geometry=self.geometry,
-                                   space_order=self.space_order, **self._kwargs)
-
-    def forward(self, src=None, rec=None, u=None, v=None, vp=None,
+    def forward(self, src=None, u=None, v=None, vp=None,
                 epsilon=None, delta=None, theta=None, phi=None,
                 save=False, kernel='centered', **kwargs):
         """
@@ -128,9 +116,10 @@ class AnisotropicWaveSolver(object):
         # Source term is read-only, so re-use the default
         src = src or self.geometry.src
         # Create a new receiver object to store the result
-        rec = rec or Receiver(name='rec', grid=self.model.grid,
-                              time_range=self.geometry.time_axis,
-                              coordinates=self.geometry.rec_positions)
+        # rec = rec or Receiver(name='rec', grid=self.model.grid,
+        #                      time_range=self.geometry.time_axis,
+        #                      coordinates=self.geometry.rec_positions)
+
         # Create the forward wavefield if not provided
 
         if u is None:
@@ -164,241 +153,9 @@ class AnisotropicWaveSolver(object):
         # Execute operator and return wavefield and receiver data
 
         op = self.op_fwd(kernel, save)
-        print(kwargs)
         summary = op.apply(src=src, u=u, v=v,
                            dt=kwargs.pop('dt', self.dt), **kwargs)
-
-        regnormu = norm(u)
-        regnormv = norm(v)
-        print("Norm u:", regnormu)
-        print("Norm v:", regnormv)
-
-        if 0:
-            cmap = plt.cm.get_cmap("viridis")
-            values = u.data[0, :, :, :]
-            vistagrid = pv.UniformGrid()
-            vistagrid.dimensions = np.array(values.shape) + 1
-            vistagrid.spacing = (1, 1, 1)
-            vistagrid.origin = (0, 0, 0)  # The bottom left corner of the data set
-            vistagrid.cell_arrays["values"] = values.flatten(order="F")
-            vistaslices = vistagrid.slice_orthogonal()
-            vistagrid.plot(show_edges=True)
-            vistaslices.plot(cmap=cmap)
-
-        print("=========================================") 
-
-        s_u = TimeFunction(name='s_u', grid=self.model.grid, space_order=self.space_order, time_order=1)
-        s_v = TimeFunction(name='s_v', grid=self.model.grid, space_order=self.space_order, time_order=1)
-
-        src_u = src.inject(field=s_u.forward, expr=src* self.model.grid.time_dim.spacing**2 / self.model.m)
-        src_v = src.inject(field=s_v.forward, expr=src * self.model.grid.time_dim.spacing**2 / self.model.m)
-
-        op_f = Operator([src_u, src_v])
-        op_f.apply(src=src, dt=kwargs.pop('dt', self.dt))
-
-        print("Norm s_u", norm(s_u))
-        print("Norm s_v", norm(s_v))
-
-
-        # Get the nonzero indices
-        nzinds = np.nonzero(s_u.data[0])  # nzinds is a tuple
-        assert len(nzinds) == len(self.model.grid.shape)
-        shape = self.model.grid.shape
-        x, y, z = self.model.grid.dimensions
-        time = self.model.grid.time_dim
-        t = self.model.grid.stepping_dim
-
-        source_mask = Function(name='source_mask', shape=self.model.grid.shape, dimensions=(x, y, z), space_order=0, dtype=np.int32)
-        source_id = Function(name='source_id', shape=shape, dimensions=(x, y, z), space_order=0, dtype=np.int32)
-        print("source_id data indexes start from 0 now !!!")
-
-        # source_id.data[nzinds[0], nzinds[1], nzinds[2]] = tuple(np.arange(1, len(nzinds[0])+1))
-        source_id.data[nzinds[0], nzinds[1], nzinds[2]] = tuple(np.arange(len(nzinds[0])))
-
-        source_mask.data[nzinds[0], nzinds[1], nzinds[2]] = 1
-        # plot3d(source_mask.data, model)
-        # import pdb; pdb.set_trace()
-
-        print("Number of unique affected points is: %d", len(nzinds[0]))
-
-        # Assert that first and last index are as expected
-        assert(source_id.data[nzinds[0][0], nzinds[1][0], nzinds[2][0]] == 0)
-        assert(source_id.data[nzinds[0][-1], nzinds[1][-1], nzinds[2][-1]] == len(nzinds[0])-1)
-        assert(source_id.data[nzinds[0][len(nzinds[0])-1], nzinds[1][len(nzinds[0])-1], nzinds[2][len(nzinds[0])-1]] == len(nzinds[0])-1)
-
-        assert(np.all(np.nonzero(source_id.data)) == np.all(np.nonzero(source_mask.data)))
-        assert(np.all(np.nonzero(source_id.data)) == np.all(np.nonzero(s_u.data[0])))
-
-        print("-At this point source_mask and source_id have been popoulated correctly-")
-
-        nnz_shape = (self.model.grid.shape[0], self.model.grid.shape[1])
-
-        nnz_sp_source_mask = Function(name='nnz_sp_source_mask', shape=(list(nnz_shape)), dimensions=(x,y ), space_order=0, dtype=np.int32)
-
-        nnz_sp_source_mask.data[:, :] = source_mask.data[:, :, :].sum(2)
-        inds = np.where(source_mask.data == 1.)
-        print("Grid - source positions:", inds)
-        maxz = len(np.unique(inds[-1]))
-        # Change only 3rd dim
-        sparse_shape = (self.model.grid.shape[0], self.model.grid.shape[1], maxz)
-
-        assert(len(nnz_sp_source_mask.dimensions) == (len(source_mask.dimensions)-1))
-
-        # Note : sparse_source_id is not needed as long as sparse info is kept in mask
-        # sp_source_id.data[inds[0],inds[1],:] = inds[2][:maxz]
-
-        id_dim = Dimension(name='id_dim')
-        b_dim = Dimension(name='b_dim')
-
-        save_src_u = TimeFunction(name='save_src_u', shape=(src.shape[0],
-                                  nzinds[1].shape[0]), dimensions=(src.dimensions[0],
-                                  id_dim))
-        save_src_v = TimeFunction(name='save_src_v', shape=(src.shape[0],
-                                  nzinds[1].shape[0]), dimensions=(src.dimensions[0],
-                                  id_dim))
-
-        save_src_u_term = src.inject(field=save_src_u[src.dimensions[0], source_id],
-                                     expr=src * self.model.grid.time_dim.spacing**2 / self.model.m)
-        save_src_v_term = src.inject(field=save_src_v[src.dimensions[0], source_id],
-                                     expr=src * self.model.grid.time_dim.spacing**2 / self.model.m)
-
-        print("Injecting to empty grids")
-        op1 = Operator([save_src_u_term, save_src_v_term])
-        op1.apply(src=src, dt=kwargs.pop('dt', self.dt))
-        print("Injecting to empty grids finished")
-        sp_zi = Dimension(name='sp_zi')
-
-        sp_source_mask = Function(name='sp_source_mask', shape=(list(sparse_shape)),
-                                  dimensions=(x, y, sp_zi), space_order=0, dtype=np.int32)
-
-        # Now holds IDs
-        sp_source_mask.data[inds[0], inds[1], :] = tuple(inds[-1][:len(np.unique(inds[-1]))])
-
-        assert(np.count_nonzero(sp_source_mask.data) == len(nzinds[0]))
-        assert(len(sp_source_mask.dimensions) == 3)
-
-        # import pdb; pdb.set_trace()         .
-
-        zind = Scalar(name='zind', dtype=np.int32)
-        xb_size = Scalar(name='xb_size', dtype=np.int32)
-        yb_size = Scalar(name='yb_size', dtype=np.int32)
-        x0_blk0_size = Scalar(name='x0_blk0_size', dtype=np.int32)
-        y0_blk0_size = Scalar(name='y0_blk0_size', dtype=np.int32)
-
-        block_sizes = Function(name='block_sizes', shape=(4, ), dimensions=(b_dim,),
-                               space_order=0, dtype=np.int32)
-
-        bsizes = (8, 8, 32, 32)
-        block_sizes.data[:] = bsizes
-
-        # eqxb = Eq(xb_size, block_sizes[0])
-        # eqyb = Eq(yb_size, block_sizes[1])
-        # eqxb2 = Eq(x0_blk0_size, block_sizes[2])
-        # eqyb2 = Eq(y0_blk0_size, block_sizes[3])
-
-        eq0 = Eq(sp_zi.symbolic_max, nnz_sp_source_mask[x, y] - 1,
-                 implicit_dims=(time, x, y))
-        # eq1 = Eq(zind, sp_source_mask[x, sp_zi], implicit_dims=(time, x, sp_zi))
-        eq1 = Eq(zind, sp_source_mask[x, y, sp_zi], implicit_dims=(time, x, y, sp_zi))
-
-        inj_u = source_mask[x, y, zind] * save_src_u[time, source_id[x, y, zind]]
-        inj_v = source_mask[x, y, zind] * save_src_v[time, source_id[x, y, zind]]
-
-        eq_u = Inc(u.forward[t+1, x, y, zind], inj_u, implicit_dims=(time, x, y, sp_zi))
-        eq_v = Inc(v.forward[t+1, x, y, zind], inj_v, implicit_dims=(time, x, y, sp_zi))
-
-        # The additional time-tiling equations
-        # tteqs = (eqxb, eqyb, eqxb2, eqyb2, eq0, eq1, eq_u, eq_v)
-
-        performance_map = np.array([[0, 0, 0, 0, 0]])
-
-        bxstart = 4
-        bxend = 17
-        bystart = 4
-        byend = 17
-        bstep = 16
-
-        txstart = 8
-        txend = 9
-        tystart = 8
-        tyend = 9
-
-        tstep = 16
-        # Temporal autotuning
-        for tx in range(txstart, txend, tstep):
-            # import pdb; pdb.set_trace()
-            for ty in range(tystart, tyend, tstep):
-                for bx in range(bxstart, bxend, bstep):
-                    for by in range(bystart, byend, bstep):
-
-                        block_sizes.data[:] = [tx, ty, bx, by]
-
-                        eqxb = Eq(xb_size, block_sizes[0])
-                        eqyb = Eq(yb_size, block_sizes[1])
-                        eqxb2 = Eq(x0_blk0_size, block_sizes[2])
-                        eqyb2 = Eq(y0_blk0_size, block_sizes[3])
-
-                        u.data[:] = 0
-                        v.data[:] = 0
-                        print("-----")
-                        tteqs = (eqxb, eqyb, eqxb2, eqyb2, eq0, eq1, eq_u, eq_v)
-
-                        op_tt = self.op_fwd(kernel, save, tteqs)
-                        summary_tt = op_tt.apply(u=u, v=v,
-                                                 dt=kwargs.pop('dt', self.dt), **kwargs)
-                        norm_tt_u = norm(u)
-                        norm_tt_v = norm(v)
-                        print("Norm u:", regnormu)
-                        print("Norm v:", regnormv)
-                        print("Norm(tt_u):", norm_tt_u)
-                        print("Norm(tt_v):", norm_tt_v)
-
-                        print("===Temporal blocking======================================")
-
-                        performance_map = np.append(performance_map, [[tx, ty, bx, by, summary_tt.globals['fdlike'].gflopss]], 0)
-
-
-                print(performance_map)
-                # tids = np.unique(performance_map[:, 0])
-
-                #for tid in tids:
-                bids = np.where((performance_map[:, 0] == tx) & (performance_map[:, 1] == ty))
-                bx_data = np.unique(performance_map[bids, 2])
-                by_data = np.unique(performance_map[bids, 3])
-                gptss_data = performance_map[bids, 4]
-                gptss_data = gptss_data.reshape(len(bx_data), len(by_data))
-
-                fig, ax = plt.subplots()
-                im = ax.imshow(gptss_data); pause(2)
-
-                # We want to show all ticks...
-                ax.set_xticks(np.arange(len(bx_data)))
-                ax.set_yticks(np.arange(len(by_data)))
-                # ... and label them with the respective list entries
-                ax.set_xticklabels(bx_data)
-                ax.set_yticklabels(by_data)
-
-                ax.set_title("Gpts/s for fixed tile size. (Sweeping block sizes)")
-                fig.tight_layout()
-
-                fig.colorbar(im, ax=ax)
-                # ax = sns.heatmap(gptss_data, linewidth=0.5)
-                plt.savefig(str(shape[0]) + str(np.int32(tx)) + str(np.int32(ty)) + ".pdf")
-
-
-        if 0:
-            cmap = plt.cm.get_cmap("viridis")
-            values = u.data[0, :, :, :]
-            vistagrid = pv.UniformGrid()
-            vistagrid.dimensions = np.array(values.shape) + 1
-            vistagrid.spacing = (1, 1, 1)
-            vistagrid.origin = (0, 0, 0)  # The bottom left corner of the data set
-            vistagrid.cell_arrays["values"] = values.flatten(order="F")
-            vistaslices = vistagrid.slice_orthogonal()
-            vistagrid.plot(show_edges=True)
-            vistaslices.plot(cmap=cmap)
-
-        return rec, u, v, summary
+        return u, v, summary
 
     def adjoint(self, rec, srca=None, p=None, r=None, vp=None,
                 epsilon=None, delta=None, theta=None, phi=None,

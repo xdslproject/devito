@@ -300,15 +300,12 @@ int Forward(const float dt, const float o_x, const float o_y, const float o_z, s
       if (ii_src_0 >= x_m - 1 && ii_src_1 >= y_m - 1 && ii_src_2 >= z_m - 1 && ii_src_0 <= x_M + 1 && ii_src_1 <= y_M + 1 && ii_src_2 <= z_M + 1)
       {
         float r0 = (dt * dt) * (vp[ii_src_0 + 4][ii_src_1 + 4][ii_src_2 + 4] * vp[ii_src_0 + 4][ii_src_1 + 4][ii_src_2 + 4]) * (-2.96296e-4F * px * py * pz + 4.44445e-3F * px * py + 4.44445e-3F * px * pz - 6.66667e-2F * px + 4.44445e-3F * py * pz - 6.66667e-2F * py - 6.66667e-2F * pz + 1) * src[time][p_src];
-        //u[t1][ii_src_0 + 4][ii_src_1 + 4][ii_src_2 + 4] += r0;
         save_src[(source_id[ii_src_0 + 4][ii_src_1 + 4][ii_src_2 + 4])][time] += r0;
-        //printf("\n src_addition is : [%d, %d, %d] = %f at time %d ", ii_src_0 + 4, ii_src_1 + 4, ii_src_2 + 4, r0, time);
       }
       if (ii_src_0 >= x_m - 1 && ii_src_1 >= y_m - 1 && ii_src_3 >= z_m - 1 && ii_src_0 <= x_M + 1 && ii_src_1 <= y_M + 1 && ii_src_3 <= z_M + 1)
       {
         float r1 = (dt * dt) * (vp[ii_src_0 + 4][ii_src_1 + 4][ii_src_3 + 4] * vp[ii_src_0 + 4][ii_src_1 + 4][ii_src_3 + 4]) * (2.96296e-4F * px * py * pz - 4.44445e-3F * px * pz - 4.44445e-3F * py * pz + 6.66667e-2F * pz) * src[time][p_src];
         save_src[(source_id[ii_src_0 + 4][ii_src_1 + 4][ii_src_3 + 4])][time] += r1;
-        //printf("\n src_addition is : [%d, %d, %d] = %f at time %d ", ii_src_0 + 4, ii_src_1 + 4, ii_src_3 + 4, r1, time);
         //u[t1][ii_src_0 + 4][ii_src_1 + 4][ii_src_3 + 4] += r1;
       }
       if (ii_src_0 >= x_m - 1 && ii_src_2 >= z_m - 1 && ii_src_4 >= y_m - 1 && ii_src_0 <= x_M + 1 && ii_src_2 <= z_M + 1 && ii_src_4 <= y_M + 1)
@@ -345,7 +342,6 @@ int Forward(const float dt, const float o_x, const float o_y, const float o_z, s
       {
         float r7 = 2.96296e-4F * px * py * pz * (dt * dt) * (vp[ii_src_5 + 4][ii_src_4 + 4][ii_src_3 + 4] * vp[ii_src_5 + 4][ii_src_4 + 4][ii_src_3 + 4]) * src[time][p_src];
         save_src[(source_id[ii_src_5 + 4][ii_src_4 + 4][ii_src_3 + 4])][time] += r7;
-        //u[t1][ii_src_5 + 4][ii_src_4 + 4][ii_src_3 + 4] += r7;
       }
     }
   }
@@ -353,11 +349,11 @@ int Forward(const float dt, const float o_x, const float o_y, const float o_z, s
   gettimeofday(&end_section1, NULL);
   timers->section1 += (double)(end_section1.tv_sec - start_section1.tv_sec) + (double)(end_section1.tv_usec - start_section1.tv_usec) / 1000000;
 
-  x0_blk0_size = 512;
-  y0_blk0_size = 512; // to fix as 8/16 etc
+  x0_blk0_size = 32;
+  y0_blk0_size = 32; // to fix as 8/16 etc
   int sf = 4;
   //int t_blk_size = time_M - time_m ;
-  int t_blk_size = 15*(time_M - time_m);
+  int t_blk_size = 20*(time_M - time_m);
   //printf("Global time loop to timesteps = %d \n", time_M - time_m +1 );
   for (int t_blk = time_m; t_blk < sf * (time_M - time_m); t_blk += sf*t_blk_size) // for each t block
   //int t_blk = time_m;
@@ -393,8 +389,8 @@ void bf0(const float dt, struct dataobj *restrict u_vec, struct dataobj *restric
 
   //printf("From x: %d to %d \n", x_m, (x_M + sf * (time_M - time_m)));
   //printf("From y: %d to %d \n", y_m, (y_M + sf * (time_M - time_m)));
-  int sbx = 64;
-  int sby = 64;
+  int sbx = 8;
+  int sby = 8;
   for (int x0_blk0 = x_m; x0_blk0 <= (x_M + sf * (time_M - time_m)); x0_blk0 += x0_blk0_size + 1)
   {
     //printf(" Change of xblock \n");
