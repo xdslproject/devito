@@ -26,7 +26,7 @@ def plot3d(data, model):
     ax.set_zlim(model.spacing[2], data.shape[2]-model.spacing[2])
     plt.savefig("sources_demo.pdf")
 
-parser = argparse.ArgumentParser(description='Process some integers.')
+parser = argparse.ArgumentParser(description='Process arguments.')
 
 parser.add_argument("-d", "--shape", default=(11, 11, 11), type=int, nargs="+",
                     help="Number of grid points along each axis")
@@ -204,7 +204,7 @@ print("===========")
 print("-----")
 op2 = Operator([stencil_2, eq0, eq1, eq2], opt=('advanced'))
 # print(op2.ccode)
-print("===Temporal blocking==")
+print("===Temporal blocking======================================")
 op2.apply(time=time_range.num-1, dt=model.critical_dt)
 print("===========")
 
@@ -227,6 +227,6 @@ print("Norm(uref):", normuref)
 
 assert np.isclose(normuref, normusol, atol=1e-06)
 
-import pdb; pdb.set_trace()
+#import pdb; pdb.set_trace()
 # Uncomment to plot a slice of the field
-plt.imshow(usol.data[2, int(nx/2) ,:, :]); pause(1)
+#plt.imshow(usol.data[2, int(nx/2) ,:, :]); pause(1)
