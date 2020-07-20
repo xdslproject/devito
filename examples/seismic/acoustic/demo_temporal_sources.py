@@ -149,6 +149,7 @@ assert(len(nnz_sp_source_mask.dimensions) == 2)
 # sp_source_id.data[inds[0],inds[1],:] = inds[2][:maxz]
 
 id_dim = Dimension(name='id_dim')
+b_dim = Dimension(name='b_dim')
 
 save_src = TimeFunction(name='save_src', shape=(src.shape[0],
                         nzinds[1].shape[0]), dimensions=(src.dimensions[0], id_dim))
@@ -176,6 +177,10 @@ assert(len(sp_source_mask.dimensions) == 3)
 t = model.grid.stepping_dim
 
 zind = Scalar(name='zind', dtype=np.int32)
+xb_size = Scalar(name='xb_size', dtype=np.int32)
+yb_size = Scalar(name='yb_size', dtype=np.int32)
+x0_blk0_size = Scalar(name='x0_blk0_size', dtype=np.int32)
+y0_blk0_size = Scalar(name='y0_blk0_size', dtype=np.int32)
 
 eq0 = Eq(sp_zi.symbolic_max, nnz_sp_source_mask[x, y] - 1, implicit_dims=(time, x, y))
 eq1 = Eq(zind, sp_source_mask[x, y, sp_zi], implicit_dims=(time, x, y, sp_zi))
@@ -186,6 +191,18 @@ eq2 = Inc(usol.forward[t+1, x, y, zind], myexpr, implicit_dims=(time, x, y, sp_z
 
 pde_2 = model.m * usol.dt2 - usol.laplace + model.damp * usol.dt
 stencil_2 = Eq(usol.forward, solve(pde_2, usol.forward))
+
+
+block_sizes = Function(name='block_sizes', shape=(4, ), dimensions=(b_dim,), space_order=0, dtype=np.int32)
+
+block_sizes.data[:]=[8, 8, 32, 32]
+
+# import pdb; pdb.set_trace()
+
+eqxb = Eq(xb_size, block_sizes[0])
+eqyb = Eq(yb_size, block_sizes[1])
+eqxb2 = Eq(x0_blk0_size, block_sizes[2])
+eqyb2 = Eq(y0_blk0_size, block_sizes[3])
 
 # import pdb; pdb.set_trace()
 # plot3d(source_mask.data, model)
@@ -202,7 +219,7 @@ print("===========")
 
 
 print("-----")
-op2 = Operator([stencil_2, eq0, eq1, eq2], opt=('advanced'))
+op2 = Operator([eqxb, eqyb, eqxb2, eqyb2, stencil_2, eq0, eq1, eq2], eqxb=32, opt=('advanced'))
 # print(op2.ccode)
 print("===Temporal blocking======================================")
 op2.apply(time=time_range.num-1, dt=model.critical_dt)
