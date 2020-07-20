@@ -2,11 +2,12 @@ import numpy as np
 
 from matplotlib.pyplot import pause # noqa
 import matplotlib.pyplot as plt
+import argparse
 
 from devito.logger import info
-from devito import TimeFunction, Function, Dimension, Eq, Inc, configuration, solve
+from devito import TimeFunction, Function, Dimension, Eq, Inc, solve
 from devito import Operator, norm
-from examples.seismic import RickerSource, TimeAxis, plot_velocity
+from examples.seismic import RickerSource, TimeAxis
 from examples.seismic import Model
 import sys
 np.set_printoptions(threshold=sys.maxsize)  # pdb print full size
@@ -14,29 +15,35 @@ np.set_printoptions(threshold=sys.maxsize)  # pdb print full size
 from devito.types.basic import Scalar, Symbol # noqa
 from mpl_toolkits.mplot3d import Axes3D # noqa
 
+
 def plot3d(data, model):
-       fig = plt.figure()
-       ax = fig.add_subplot(111, projection='3d')
-       z, x, y = data.nonzero()
-       ax.scatter(x, y, z, zdir='y', c= 'red', s=20, marker='.')
-       # import pdb; pdb.set_trace()
-       ax.set_xlim(model.spacing[0], data.shape[0]-model.spacing[0])
-       ax.set_ylim(model.spacing[1], data.shape[1]-model.spacing[1])
-       ax.set_zlim(model.spacing[2], data.shape[2]-model.spacing[2])
-       # ax.invert_zaxis()
-       plt.savefig("sources_demo.pdf")
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection='3d')
+    z, x, y = data.nonzero()
+    ax.scatter(x, y, z, zdir='y', c='red', s=20, marker='.')
+    ax.set_xlim(model.spacing[0], data.shape[0]-model.spacing[0])
+    ax.set_ylim(model.spacing[1], data.shape[1]-model.spacing[1])
+    ax.set_zlim(model.spacing[2], data.shape[2]-model.spacing[2])
+    plt.savefig("sources_demo.pdf")
+
+parser = argparse.ArgumentParser(description='Process some integers.')
+
+parser.add_argument("-d", "--shape", default=(11, 11, 11), type=int, nargs="+",
+                    help="Number of grid points along each axis")
+parser.add_argument("-so", "--space_order", default=4,
+                    type=int, help="Space order of the simulation")
+parser.add_argument("-tn", "--tn", default=100,
+                    type=float, help="Simulation time in millisecond")
+
+args = parser.parse_args()
 
 
-# Some variable declarations
-
-#import pdb; pdb.set_trace()
-
-nx, ny, nz = 10, 10, 10
+nx, ny, nz = args.shape
 # Define a physical size
 shape = (nx, ny, nz)  # Number of grid point (nx, nz)
 spacing = (10., 10., 10)  # Grid spacing in m. The domain size is now 1km by 1km
 origin = (0., 0., 0.)
-so = 4
+so = args.space_order
 # Initialize v field
 v = np.empty(shape, dtype=np.float32)
 v[:, :, :int(nz/2)] = 2
@@ -49,7 +56,7 @@ model = Model(vp=v, origin=origin, shape=shape, spacing=spacing, space_order=so,
 # plt.imshow(model.vp.data[10, :, :]) ; pause(1)
 
 t0 = 0  # Simulation starts a t=0
-tn = 6  # Simulation last 1 second (1000 ms)
+tn = args.tn  # Simulation last 1 second (1000 ms)
 dt = model.critical_dt  # Time step from model grid spacing
 time_range = TimeAxis(start=t0, stop=tn, step=dt)
 f0 = 0.010  # Source peak frequency is 10Hz (0.010 kHz)
@@ -61,16 +68,12 @@ src = RickerSource(name='src', grid=model.grid, f0=f0,
 
 stx = 0.1
 ste = 0.9
-stepx = (ste-stx)/ int(np.sqrt(src.npoint))
+stepx = (ste-stx)/int(np.sqrt(src.npoint))
 
-#import pdb; pdb.set_trace()
 
 src.coordinates.data[:, :2] = np.array(np.meshgrid(np.arange(stx, ste, stepx), np.arange(stx, ste, stepx))).T.reshape(-1,2)*np.array(model.domain_size[:1])
 
-# src.coordinates.data[:, :2]  = np.array(np.meshgrid([0.1, 0.2, 0.3], [0.1, 0.2, 0.3])).T.reshape(-1,2)*np.array(model.domain_size[:1])
 src.coordinates.data[:, -1] = 20  # Depth is 20m
-
-
 
 #src.coordinates.data[0, :] = np.array(model.domain_size) * .5
 #src.coordinates.data[0, -1] = 20  # Depth is 20m
@@ -79,10 +82,10 @@ src.coordinates.data[:, -1] = 20  # Depth is 20m
 #src.coordinates.data[2, :] = np.array(model.domain_size) * .5
 #src.coordinates.data[2, -1] = 20  # Depth is 20m
 
-# src.show()
-# pause(1)
+#src.show()
+#pause(1)
 
-# f : perform source injection on an ampty grid
+# f : perform source injection on an empty grid
 f = TimeFunction(name="f", grid=model.grid, space_order=so, time_order=2)
 src_f = src.inject(field=f.forward, expr=src * dt**2 / model.m)
 # op_f = Operator([src_f], opt=('advanced', {'openmp': True}))
@@ -185,10 +188,13 @@ pde_2 = model.m * usol.dt2 - usol.laplace + model.damp * usol.dt
 stencil_2 = Eq(usol.forward, solve(pde_2, usol.forward))
 
 # import pdb; pdb.set_trace()
-plot3d(source_mask.data, model)
+# plot3d(source_mask.data, model)
 
 opref = Operator([stencil_ref, src_term_ref], opt=('advanced', {'openmp': True}))
+print("===Space blocking==")
 opref.apply(time=time_range.num-2, dt=model.critical_dt)
+print("===========")
+
 normuref = norm(uref)
 print("==========")
 print(normuref)
@@ -198,8 +204,9 @@ print("===========")
 print("-----")
 op2 = Operator([stencil_2, eq0, eq1, eq2], opt=('advanced'))
 # print(op2.ccode)
-# summary = op2(time=time_range.num-1, dt=model.critical_dt)
+print("===Temporal blocking==")
 op2.apply(time=time_range.num-1, dt=model.critical_dt)
+print("===========")
 
 normusol = norm(usol)
 print("===========")
@@ -211,15 +218,15 @@ print("Norm(f):", normf)
 print("Norm(usol):", normusol)
 print("Norm(uref):", normuref)
 
-
-import pdb; pdb.set_trace()
-
 # save_src.data[0, source_id.data[14, 14, 11]]
 # save_src.data[0 ,source_id.data[14, 14, sp_source_mask.data[14, 14, 0]]]
 
 #plt.imshow(uref.data[2, int(nx/2) ,:, :]); pause(1)
 #plt.imshow(usol.data[2, int(nx/2) ,:, :]); pause(1)
 
+
 assert np.isclose(normuref, normusol, atol=1e-06)
 
-# plt.imshow(uref.data[2, int(nx/2) ,:, :]); pause(1)
+import pdb; pdb.set_trace()
+# Uncomment to plot a slice of the field
+plt.imshow(usol.data[2, int(nx/2) ,:, :]); pause(1)
