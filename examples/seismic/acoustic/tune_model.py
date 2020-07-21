@@ -270,7 +270,7 @@ for tid in tids:
 # import pdb; pdb.set_trace()
     fig.colorbar(im, ax=ax)
     # ax = sns.heatmap(gptss_data, linewidth=0.5)
-    plt.savefig(str(np.int32(tid)) + ".pdf")
+    plt.savefig(str(shape[0]) + str(np.int32(tid)) + ".pdf")
 
 
 
