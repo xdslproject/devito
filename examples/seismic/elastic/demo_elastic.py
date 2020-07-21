@@ -34,8 +34,7 @@ parser.add_argument("-so", "--space_order", default=4,
                     type=int, help="Space order of the simulation")
 parser.add_argument("-tn", "--tn", default=40,
                     type=float, help="Simulation time in millisecond")
-parser.add_argument("-bs", "--bsizes", default=(8, 8, 32, 32), type=int, nargs="+",
-                    help="Block and tile sizes")
+
 args = parser.parse_args()
 
 
@@ -196,8 +195,7 @@ stencil_2 = Eq(usol.forward, solve(pde_2, usol.forward))
 
 block_sizes = Function(name='block_sizes', shape=(4, ), dimensions=(b_dim,), space_order=0, dtype=np.int32)
 
-# import pdb; pdb.set_trace()
-block_sizes.data[:] = args.bsizes
+block_sizes.data[:]=[8, 8, 32, 32]
 
 # import pdb; pdb.set_trace()
 
