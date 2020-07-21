@@ -191,15 +191,15 @@ block_sizes.data[:] = args.bsizes
 performance_map = np.array([[0, 0, 0, 0, 0]])
 
 
-bxstart = 4
+bxstart = 8
 bxend = 33
-bystart = 4
+bystart = 8
 byend = 33
-bstep = 2
+bstep = 8
 
-txstart = 32
+txstart = 16
 txend = 33
-tystart = 32
+tystart = 16
 tyend = 33
 
 tstep = 16
@@ -237,26 +237,28 @@ for tx in range(txstart, txend, tstep):
                 print("Norm(usol):", normusol)
 
 print(performance_map)
-ids = np.where((performance_map[:, 0]==32) & (performance_map[:, 1]==32))
-bx_data = np.unique(performance_map[ids, 2])
-by_data = np.unique(performance_map[ids, 3])
-gptss_data = performance_map[ids, 4]
-gptss_data = gptss_data.reshape(len(bx_data), len(by_data))
 
+tids = np.unique(performance_map[:, 0])
 
+for tid in tids:
+    bids = np.where((performance_map[:, 0] == tid) & (performance_map[:, 1] == tid))
+    bx_data = np.unique(performance_map[bids, 2])
+    by_data = np.unique(performance_map[bids, 3])
+    gptss_data = performance_map[bids, 4]
+    gptss_data = gptss_data.reshape(len(bx_data), len(by_data))
 
-fig, ax = plt.subplots()
-im = ax.imshow(gptss_data); pause(2)
+    fig, ax = plt.subplots()
+    im = ax.imshow(gptss_data); pause(2)
 
-# We want to show all ticks...
-ax.set_xticks(np.arange(len(bx_data)))
-ax.set_yticks(np.arange(len(by_data)))
-# ... and label them with the respective list entries
-ax.set_xticklabels(bx_data)
-ax.set_yticklabels(by_data)
+    # We want to show all ticks...
+    ax.set_xticks(np.arange(len(bx_data)))
+    ax.set_yticks(np.arange(len(by_data)))
+    # ... and label them with the respective list entries
+    ax.set_xticklabels(bx_data)
+    ax.set_yticklabels(by_data)
 
-ax.set_title("Gpts/s for fixed tile size. (Sweeping block sizes)")
-fig.tight_layout()
+    ax.set_title("Gpts/s for fixed tile size. (Sweeping block sizes)")
+    fig.tight_layout()
 
 
 # Loop over data dimensions and create text annotations.
@@ -266,9 +268,9 @@ fig.tight_layout()
 #                       ha="center", va="center", color="w")
 
 # import pdb; pdb.set_trace()
-fig.colorbar(im, ax=ax)
-# ax = sns.heatmap(gptss_data, linewidth=0.5)
-plt.savefig("map.pdf")
+    fig.colorbar(im, ax=ax)
+    # ax = sns.heatmap(gptss_data, linewidth=0.5)
+    plt.savefig(str(np.int32(tid)) + ".pdf")
 
 
 
@@ -279,6 +281,6 @@ plt.savefig("map.pdf")
 #plt.imshow(usol.data[2, int(nx/2) ,:, :]); pause(1)
 
 
-#import pdb; pdb.set_trace()
+# import pdb; pdb.set_trace()
 # Uncomment to plot a slice of the field
 #plt.imshow(usol.data[2, int(nx/2) ,:, :]); pause(1)
