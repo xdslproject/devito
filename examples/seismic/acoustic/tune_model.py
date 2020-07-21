@@ -188,29 +188,89 @@ block_sizes.data[:] = args.bsizes
 
 # import pdb; pdb.set_trace()
 
-eqxb = Eq(xb_size, block_sizes[0])
-eqyb = Eq(yb_size, block_sizes[1])
-eqxb2 = Eq(x0_blk0_size, block_sizes[2])
-eqyb2 = Eq(y0_blk0_size, block_sizes[3])
+performance_map = np.array([[0, 0, 0, 0, 0]])
+
+
+bxstart = 4
+bxend = 33
+bystart = 4
+byend = 33
+bstep = 2
+
+txstart = 32
+txend = 33
+tystart = 32
+tyend = 33
+
+tstep = 16
+# Temporal autotuning
+for tx in range(txstart, txend, tstep):
+    # import pdb; pdb.set_trace()
+    for ty in range(tystart, tyend, tstep):
+        for bx in range(bxstart, bxend, bstep):
+            for by in range(bystart, byend, bstep):
+
+                block_sizes.data[:] = [tx, ty, bx, by]
+
+                eqxb = Eq(xb_size, block_sizes[0])
+                eqyb = Eq(yb_size, block_sizes[1])
+                eqxb2 = Eq(x0_blk0_size, block_sizes[2])
+                eqyb2 = Eq(y0_blk0_size, block_sizes[3])
+
+                # import pdb; pdb.set_trace()
+                # plot3d(source_mask.data, model)
+                usol.data[:] = 0
+                print("-----")
+                op2 = Operator([eqxb, eqyb, eqxb2, eqyb2, stencil_2, eq0, eq1, eq2], opt=('advanced'))
+                # print(op2.ccode)
+                print("===Temporal blocking======================================")
+                summary = op2.apply(time=time_range.num-1, dt=model.critical_dt)
+                print("===========")
+
+                performance_map = np.append(performance_map, [[tx, ty, bx, by, summary.globals['fdlike'].gpointss]], 0)
+
+                normusol = norm(usol)
+                print("===========")
+                print(normusol)
+                print("===========")
+                # import pdb; pdb.set_trace()
+                print("Norm(usol):", normusol)
+
+print(performance_map)
+ids = np.where((performance_map[:, 0]==32) & (performance_map[:, 1]==32))
+bx_data = np.unique(performance_map[ids, 2])
+by_data = np.unique(performance_map[ids, 3])
+gptss_data = performance_map[ids, 4]
+gptss_data = gptss_data.reshape(len(bx_data), len(by_data))
+
+
+
+fig, ax = plt.subplots()
+im = ax.imshow(gptss_data); pause(2)
+
+# We want to show all ticks...
+ax.set_xticks(np.arange(len(bx_data)))
+ax.set_yticks(np.arange(len(by_data)))
+# ... and label them with the respective list entries
+ax.set_xticklabels(bx_data)
+ax.set_yticklabels(by_data)
+
+ax.set_title("Gpts/s for fixed tile size. (Sweeping block sizes)")
+fig.tight_layout()
+
+
+# Loop over data dimensions and create text annotations.
+#for i in range(len(bx_data)):
+#    for j in range(len(by_data)):
+#        text = ax.text(j, i, "{:.2f}".format(gptss_data[i, j]),
+#                       ha="center", va="center", color="w")
 
 # import pdb; pdb.set_trace()
-# plot3d(source_mask.data, model)
-
-print("-----")
-op2 = Operator([eqxb, eqyb, eqxb2, eqyb2, stencil_2, eq0, eq1, eq2], opt=('advanced'))
-# print(op2.ccode)
-print("===Temporal blocking======================================")
-op2.apply(time=time_range.num-1, dt=model.critical_dt)
-print("===========")
-
-normusol = norm(usol)
-print("===========")
-print(normusol)
-print("===========")
+fig.colorbar(im, ax=ax)
+# ax = sns.heatmap(gptss_data, linewidth=0.5)
+plt.savefig("map.pdf")
 
 
-print("Norm(f):", normf)
-print("Norm(usol):", normusol)
 
 # save_src.data[0, source_id.data[14, 14, 11]]
 # save_src.data[0 ,source_id.data[14, 14, sp_source_mask.data[14, 14, 0]]]

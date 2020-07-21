@@ -34,7 +34,7 @@ parser.add_argument("-so", "--space_order", default=4,
                     type=int, help="Space order of the simulation")
 parser.add_argument("-tn", "--tn", default=40,
                     type=float, help="Simulation time in millisecond")
-parser.add_argument("-bs", "--bsizes", default=(8, 8, 32, 32), type=int, nargs="+",
+parser.add_argument("-bs", "--bsizes", default=(32, 32, 8, 8), type=int, nargs="+",
                     help="Block and tile sizes")
 args = parser.parse_args()
 
