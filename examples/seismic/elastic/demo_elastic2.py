@@ -251,7 +251,9 @@ u_t_sol = Eq(tau_sol.forward, tau_sol + dt * l * diag(div(v_sol.forward)) + dt *
 
 
 eq0 = Eq(sp_zi.symbolic_max, nnz_sp_source_mask[x] - 1, implicit_dims=(time, x))
+# eq1 = Eq(zind, sp_source_mask[x, sp_zi], implicit_dims=(time, x, sp_zi))
 eq1 = Eq(zind, sp_source_mask[x, sp_zi], implicit_dims=(time, x, sp_zi))
+
 
 myexpr_fxx = source_mask[x, zind] * save_src_fxx[time, source_id[x, zind]]
 myexpr_fzz = source_mask[x, zind] * save_src_fzz[time, source_id[x, zind]]
@@ -266,6 +268,10 @@ print("===Temporal blocking======================================")
 op2()
 print("===========")
 
+configuration['jit-backdoor'] = False
+
+# import pdb; pdb.set_trace()
+
 normusol0 = norm(tau_sol[0])
 normusol1 = norm(tau_sol[1])
 normusol2 = norm(tau_sol[2])
@@ -274,10 +280,10 @@ normusol3 = norm(tau_sol[3])
 print("Norm(f):", normf)
 
 print("===========")
-print("Norm(usol0):", normusol0)
-print("Norm(usol1):", normusol1)
-print("Norm(usol2):", normusol2)
-print("Norm(usol3):", normusol3)
+print("Norm(usol0):", norm(tau_sol[0]))
+print("Norm(usol1):", norm(tau_sol[1]))
+print("Norm(usol2):", norm(tau_sol[2]))
+print("Norm(usol3):", norm(tau_sol[3]))
 print("===========")
 
 print("===========")
