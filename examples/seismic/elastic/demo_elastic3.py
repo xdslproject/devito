@@ -20,30 +20,6 @@ np.set_printoptions(threshold=sys.maxsize)  # pdb print full size
 from devito.types.basic import Scalar, Symbol # noqa
 from mpl_toolkits.mplot3d import Axes3D # noqa
 
-class IndexTracker(object):
-    def __init__(self, ax, X):
-        self.ax = ax
-        ax.set_title('use scroll wheel to navigate images')
-
-        self.X = X
-        rows, cols, self.slices = X.shape
-        self.ind = self.slices//2
-
-        self.im = ax.imshow(self.X[:, :, self.ind])
-        self.update()
-
-    def onscroll(self, event):
-        print("%s %s" % (event.button, event.step))
-        if event.button == 'up':
-            self.ind = (self.ind + 1) % self.slices
-        else:
-            self.ind = (self.ind - 1) % self.slices
-        self.update()
-
-    def update(self):
-        self.im.set_data(self.X[:, :, self.ind])
-        ax.set_ylabel('slice %s' % self.ind)
-        self.im.axes.figure.canvas.draw()
 
 def plot3d(data, model):
     fig = plt.figure()
@@ -57,7 +33,7 @@ def plot3d(data, model):
 
 parser = argparse.ArgumentParser(description='Process arguments.')
 
-parser.add_argument("-d", "--shape", default=(11, 11), type=int, nargs="+",
+parser.add_argument("-d", "--shape", default=(11, 11, 11), type=int, nargs="+",
                     help="Number of grid points along each axis")
 parser.add_argument("-so", "--space_order", default=4,
                     type=int, help="Space order of the simulation")
@@ -69,19 +45,20 @@ args = parser.parse_args()
 # --------------------------------------------------------------------------------------
 
 
-nx, nz = args.shape
+nx, ny, nz = args.shape
 # Define a physical size
-shape = (nx, nz)  # Number of grid point (nx, nz)
-spacing = (10., 10)  # Grid spacing in m. The domain size is now 1km by 1km
-origin = (0., 0.)
+shape = (nx, ny, nz)  # Number of grid point (nx, nz)
+spacing = (10., 10., 10.)  # Grid spacing in m. The domain size is now 1km by 1km
+origin = (0., 0., 0.)
 so = args.space_order
 
 # Initial grid: 1km x 1km, with spacing 100m
-extent = (1500., 1500)
+extent = (1500., 1500, 1500)
 
 x = SpaceDimension(name='x', spacing=Constant(name='h_x', value=extent[0]/(shape[0]-1)))
-z = SpaceDimension(name='z', spacing=Constant(name='h_z', value=extent[1]/(shape[1]-1)))
-grid = Grid(extent=extent, shape=shape, dimensions=(x, z))
+y = SpaceDimension(name='y', spacing=Constant(name='h_y', value=extent[1]/(shape[1]-1)))
+z = SpaceDimension(name='z', spacing=Constant(name='h_z', value=extent[2]/(shape[2]-1)))
+grid = Grid(extent=extent, shape=shape, dimensions=(x, y, z))
 
 
 class DGaussSource(WaveletSource):
@@ -97,7 +74,7 @@ dt = (10. / np.sqrt(2.)) / 6.
 time_range = TimeAxis(start=t0, stop=tn, step=dt)
 
 src = RickerSource(name='src', grid=grid, f0=0.01, time_range=time_range)
-src.coordinates.data[:] = [745., 745]
+src.coordinates.data[:] = [745., 745., 745]
 # src.show()
 
 # Now we create the velocity and pressure fields
@@ -116,7 +93,8 @@ density = 1.8
 
 # The source injection term
 src_xx = src.inject(field=tau.forward[0, 0], expr=src)
-src_zz = src.inject(field=tau.forward[1, 1], expr=src)
+src_yy = src.inject(field=tau.forward[1, 1], expr=src)
+src_zz = src.inject(field=tau.forward[2, 2], expr=src)
 
 # Thorbecke's parameter notation
 cp2 = V_p*V_p
@@ -129,7 +107,7 @@ l = (cp2*density - 2*mu)
 # fdelmodc reference implementation
 u_v = Eq(v.forward, v + dt*ro*div(tau))
 u_t = Eq(tau.forward, tau + dt * l * diag(div(v.forward)) + dt * mu * (grad(v.forward) + grad(v.forward).T))
-op = Operator([u_v] + [u_t]  + src_xx + src_zz)
+op = Operator([u_v] + [u_t]  + src_xx + src_yy+ src_zz)
 # op = Operator(src_xx + src_zz)
 op()
 
@@ -166,9 +144,10 @@ print("Let's inspect")
 ftau = TensorTimeFunction(name='ftau', grid=grid, space_order=so, time_order=1)
 
 src_fxx = src.inject(field=ftau.forward[0, 0], expr=src)
-src_fzz = src.inject(field=ftau.forward[1, 1], expr=src)
+src_fyy = src.inject(field=ftau.forward[1, 1], expr=src)
+src_fzz = src.inject(field=ftau.forward[2, 2], expr=src)
 
-op_f = Operator(src_fxx + src_fzz)
+op_f = Operator(src_fxx + src_fyy + src_fzz)
 op_f()
 
 normf = norm(ftau[0])
@@ -185,41 +164,38 @@ print("===========")
 nzinds = np.nonzero(ftau[0].data[0])  # nzinds is a tuple
 assert len(nzinds) == len(shape)
 
-x, z = grid.dimensions
-
-source_mask = Function(name='source_mask', shape=shape, dimensions=(x, z), space_order=0, dtype=np.int32)
-source_id = Function(name='source_id', shape=shape, dimensions=(x, z), space_order=0, dtype=np.int32)
+source_mask = Function(name='source_mask', shape=shape, dimensions=(x, y, z), space_order=0, dtype=np.int32)
+source_id = Function(name='source_id', shape=shape, dimensions=(x, y, z), space_order=0, dtype=np.int32)
 info("source_id data indexes start from 0 now !!!")
 
 # source_id.data[nzinds[0], nzinds[1], nzinds[2]] = tuple(np.arange(1, len(nzinds[0])+1))
-source_id.data[nzinds[0], nzinds[1]] = tuple(np.arange(len(nzinds[0])))
+source_id.data[nzinds[0], nzinds[1], nzinds[2]] = tuple(np.arange(len(nzinds[0])))
 
-source_mask.data[nzinds[0], nzinds[1]] = 1
+source_mask.data[nzinds[0], nzinds[1], nzinds[2]] = 1
 # plot3d(source_mask.data, model)
 
 info("Number of unique affected points is: %d", len(nzinds[0])+1)
 
 # Assert that first and last index are as expected
-assert(source_id.data[nzinds[0][0], nzinds[1][0]] == 0)
-assert(source_id.data[nzinds[0][-1], nzinds[1][-1]] == len(nzinds[0])-1)
-assert(source_id.data[nzinds[0][len(nzinds[0])-1], nzinds[1][len(nzinds[0])-1]] == len(nzinds[0])-1)
+assert(source_id.data[nzinds[0][0], nzinds[1][0], nzinds[2][0]] == 0)
+assert(source_id.data[nzinds[0][-1], nzinds[1][-1], nzinds[2][-1]] == len(nzinds[0])-1)
+assert(source_id.data[nzinds[0][len(nzinds[0])-1], nzinds[1][len(nzinds[0])-1], nzinds[2][len(nzinds[0])-1]] == len(nzinds[0])-1)
 
 assert(np.all(np.nonzero(source_id.data)) == np.all(np.nonzero(source_mask.data)))
 assert(np.all(np.nonzero(source_id.data)) == np.all(np.nonzero(ftau[0].data[0])))
 
 info("-At this point source_mask and source_id have been popoulated correctly-")
 
-nnz_shape = (grid.shape[0], )  # Change only 3rd dim
+nnz_shape = (grid.shape[0], grid.shape[1])  # Change only 3rd dim
 
-nnz_sp_source_mask = Function(name='nnz_sp_source_mask', shape=(list(nnz_shape)), dimensions=(x,), space_order=0, dtype=np.int32)
+nnz_sp_source_mask = Function(name='nnz_sp_source_mask', shape=(list(nnz_shape)), dimensions=(x,y ), space_order=0, dtype=np.int32)
 
 
-nnz_sp_source_mask.data[:,] = source_mask.data[:, :].sum(1)
+nnz_sp_source_mask.data[:, :] = source_mask.data[:, :, :].sum(2)
 inds = np.where(source_mask.data == 1.)
 
 maxz = len(np.unique(inds[-1]))
-sparse_shape = (grid.shape[0], maxz)  # Change only 3rd dim
-
+sparse_shape = (grid.shape[0], grid.shape[1], maxz)  # Change only 3rd dim
 
 assert(len(nnz_sp_source_mask.dimensions) == (len(source_mask.dimensions)-1))
 
@@ -237,28 +213,32 @@ tau_sol = TensorTimeFunction(name='tau_sol', grid=grid, space_order=so, time_ord
 
 save_src_fxx = TimeFunction(name='save_src_fxx', shape=(src.shape[0],
                             nzinds[1].shape[0]), dimensions=(src.dimensions[0], id_dim))
+save_src_fyy = TimeFunction(name='save_src_fyy', shape=(src.shape[0],
+                            nzinds[1].shape[0]), dimensions=(src.dimensions[0], id_dim))
 save_src_fzz = TimeFunction(name='save_src_fzz', shape=(src.shape[0],
                             nzinds[1].shape[0]), dimensions=(src.dimensions[0], id_dim))
 
 src_fxx = src.inject(field=tau_sol.forward[0, 0], expr=src)
-src_fzz = src.inject(field=tau_sol.forward[1, 1], expr=src)
+src_fyy = src.inject(field=tau_sol.forward[1, 1], expr=src)
+src_fzz = src.inject(field=tau_sol.forward[2, 2], expr=src)
 
 
 save_src_fxx_term = src.inject(field=save_src_fxx[src.dimensions[0], source_id], expr=src)
+save_src_fyy_term = src.inject(field=save_src_fyy[src.dimensions[0], source_id], expr=src)
 save_src_fzz_term = src.inject(field=save_src_fzz[src.dimensions[0], source_id], expr=src)
 
-op1 = Operator(save_src_fxx_term + save_src_fzz_term)
+op1 = Operator(save_src_fxx_term + save_src_fyy_term + save_src_fzz_term)
 op1()
 
 sp_zi = Dimension(name='sp_zi')
 
-sp_source_mask = Function(name='sp_source_mask', shape=(list(sparse_shape)), dimensions=(x, sp_zi), space_order=0, dtype=np.int32)
+sp_source_mask = Function(name='sp_source_mask', shape=(list(sparse_shape)), dimensions=(x, y, sp_zi), space_order=0, dtype=np.int32)
 
 # Now holds IDs
-sp_source_mask.data[inds[0], :] = tuple(inds[-1][:len(np.unique(inds[-1]))])
+sp_source_mask.data[inds[0], inds[1], :] = tuple(inds[-1][:len(np.unique(inds[-1]))])
 
 assert(np.count_nonzero(sp_source_mask.data) == len(nzinds[0]))
-assert(len(sp_source_mask.dimensions) == 2)
+assert(len(sp_source_mask.dimensions) == 3)
 
 # import pdb; pdb.set_trace()
 
@@ -274,19 +254,22 @@ u_t_sol = Eq(tau_sol.forward, tau_sol + dt * l * diag(div(v_sol.forward)) + dt *
 # op = Operator([u_v] + [u_t]  + src_xx + src_zz)
 
 
-eq0 = Eq(sp_zi.symbolic_max, nnz_sp_source_mask[x] - 1, implicit_dims=(time, x))
+eq0 = Eq(sp_zi.symbolic_max, nnz_sp_source_mask[x, y] - 1, implicit_dims=(time, x, y))
 # eq1 = Eq(zind, sp_source_mask[x, sp_zi], implicit_dims=(time, x, sp_zi))
-eq1 = Eq(zind, sp_source_mask[x, sp_zi], implicit_dims=(time, x, sp_zi))
+eq1 = Eq(zind, sp_source_mask[x, y, sp_zi], implicit_dims=(time, x, y, sp_zi))
 
 
-myexpr_fxx = source_mask[x, zind] * save_src_fxx[time, source_id[x, zind]]
-myexpr_fzz = source_mask[x, zind] * save_src_fzz[time, source_id[x, zind]]
+myexpr_fxx = source_mask[x, y, zind] * save_src_fxx[time, source_id[x, y, zind]]
+myexpr_fyy = source_mask[x, y, zind] * save_src_fyy[time, source_id[x, y, zind]]
+myexpr_fzz = source_mask[x, y, zind] * save_src_fzz[time, source_id[x, y, zind]]
 
-eq_fxx = Inc(tau_sol[0].forward[t+1, x, zind], myexpr_fxx, implicit_dims=(time, x, sp_zi))
-eq_fzz = Inc(tau_sol[3].forward[t+1, x, zind], myexpr_fzz, implicit_dims=(time, x, sp_zi))
+# import pdb; pdb.set_trace()
+eq_fxx = Inc(tau_sol[0].forward[t+1, x, y, zind], myexpr_fxx, implicit_dims=(time, x, y, sp_zi))
+eq_fyy = Inc(tau_sol[4].forward[t+1, x, y, zind], myexpr_fyy, implicit_dims=(time, x, y, sp_zi))
+eq_fzz = Inc(tau_sol[8].forward[t+1, x, y, zind], myexpr_fzz, implicit_dims=(time, x, y, sp_zi))
 
 print("-----")
-op2 = Operator([eq0, eq1, u_v_sol, u_t_sol, eq_fxx, eq_fzz])
+op2 = Operator([eq0, eq1, u_v_sol, u_t_sol, eq_fxx, eq_fyy, eq_fzz])
 # print(op2.ccode)
 print("===Temporal blocking======================================")
 op2()
@@ -323,34 +306,39 @@ print("===========")
 # import pdb; pdb.set_trace()
 
 
-fig, ax = plt.subplots(1, 1)
-
-X = np.random.rand(20, 20, 40)
-
-tracker = IndexTracker(ax, X)
 
 
-fig.canvas.mpl_connect('scroll_event', tracker.onscroll)
-plt.show()
+import pyvista as pv
+
+cmap = plt.cm.get_cmap("viridis")
+# Copy devito u data
+values = v_sol[1].data[0, :, :, :]
+
+vistagrid = pv.UniformGrid()
+vistagrid.dimensions = np.array(values.shape) + 1
+vistagrid.origin = (0, 0, 0)  # The bottom left corner of the data set
+vistagrid.spacing = (1, 1, 1)  # These are the cell sizes along each axis
+vistagrid.cell_arrays["values"] = values.flatten(order="F")  # Flatten the array!
+# vistagrid.plot(show_edges=True)
+vistaslices = vistagrid.slice_orthogonal()
+vistaslices.plot(cmap=cmap)
 
 
-
-
-# import pdb; pdb.set_trace()
+import pdb; pdb.set_trace()
 # Uncomment to plot a slice of the field
 #plt.imshow(usol.data[2, int(nx/2) ,:, :]); pause(1)
 
-plot_image(v[0].data[0,:], cmap="seismic"); pause(1)
-plot_image(v_sol[0].data[0,:], cmap="seismic"); pause(1)
+plot_image(v[0].data[0,:,int(ny/2),:], cmap="seismic"); pause(1)
+plot_image(v_sol[0].data[0,:,int(ny/2),:], cmap="seismic"); pause(1)
 
-plot_image(v[1].data[0,:], cmap="seismic"); pause(1)
-plot_image(v_sol[1].data[0,:], cmap="seismic"); pause(1)
+plot_image(v[1].data[0,:,:,int(nz/2)], cmap="seismic"); pause(1)
+plot_image(v_sol[1].data[0,:,:,int(nz/2)], cmap="seismic"); pause(1)
 
-plot_image(tau[0].data[0,:], cmap="seismic"); pause(1)
-plot_image(tau_sol[0].data[0,:], cmap="seismic"); pause(1)
+plot_image(tau[0].data[0,:,:,:], cmap="seismic"); pause(1)
+plot_image(tau_sol[0].data[0,:,:,:], cmap="seismic"); pause(1)
 
-plot_image(tau[1].data[0,:], cmap="seismic"); pause(1)
-plot_image(tau_sol[1].data[0,:], cmap="seismic"); pause(1)
+plot_image(tau[1].data[0,:,:,:], cmap="seismic"); pause(1)
+plot_image(tau_sol[1].data[0,:,:,:], cmap="seismic"); pause(1)
 
 
 #plot_image(tau[0].data[0, :, :], cmap="seismic"); pause(1)
