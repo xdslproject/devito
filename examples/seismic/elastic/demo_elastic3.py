@@ -1,8 +1,6 @@
 from devito import *
-from examples.seismic.source import WaveletSource, RickerSource, GaborSource, TimeAxis
+from examples.seismic.source import WaveletSource, RickerSource, TimeAxis
 from examples.seismic import plot_image
-import numpy as np
-
 import numpy as np
 
 from matplotlib.pyplot import pause # noqa
@@ -10,10 +8,8 @@ import matplotlib.pyplot as plt
 import argparse
 
 from devito.logger import info
-from devito import TimeFunction, Function, Dimension, Eq, Inc, solve
+from devito import TimeFunction, Function, Dimension, Eq, Inc
 from devito import Operator, norm
-from examples.seismic import RickerSource, TimeAxis
-from examples.seismic import Model
 import sys
 np.set_printoptions(threshold=sys.maxsize)  # pdb print full size
 
@@ -31,6 +27,7 @@ def plot3d(data, model):
     ax.set_zlim(model.spacing[2], data.shape[2]-model.spacing[2])
     plt.savefig("sources_demo.pdf")
 
+
 parser = argparse.ArgumentParser(description='Process arguments.')
 
 parser.add_argument("-d", "--shape", default=(11, 11, 11), type=int, nargs="+",
@@ -39,22 +36,20 @@ parser.add_argument("-so", "--space_order", default=4,
                     type=int, help="Space order of the simulation")
 parser.add_argument("-tn", "--tn", default=40,
                     type=float, help="Simulation time in millisecond")
+parser.add_argument("-plotting", "--plotting", default=0,
+                    type=bool, help="Turn ON/OFF plotting")
 
 args = parser.parse_args()
 
 # --------------------------------------------------------------------------------------
 
-
+# Define the model parameters
 nx, ny, nz = args.shape
-# Define a physical size
-shape = (nx, ny, nz)  # Number of grid point (nx, nz)
+shape = (nx, ny, nz)  # Number of grid point (nx, ny, nz)
 spacing = (10., 10., 10.)  # Grid spacing in m. The domain size is now 1km by 1km
 origin = (0., 0., 0.)
 so = args.space_order
-
-# Initial grid: 1km x 1km, with spacing 100m
 extent = (1500., 1500, 1500)
-
 x = SpaceDimension(name='x', spacing=Constant(name='h_x', value=extent[0]/(shape[0]-1)))
 y = SpaceDimension(name='y', spacing=Constant(name='h_y', value=extent[1]/(shape[1]-1)))
 z = SpaceDimension(name='z', spacing=Constant(name='h_z', value=extent[2]/(shape[2]-1)))
@@ -106,35 +101,37 @@ l = (cp2*density - 2*mu)
 
 # fdelmodc reference implementation
 u_v = Eq(v.forward, v + dt*ro*div(tau))
-u_t = Eq(tau.forward, tau + dt * l * diag(div(v.forward)) + dt * mu * (grad(v.forward) + grad(v.forward).T))
-op = Operator([u_v] + [u_t]  + src_xx + src_yy+ src_zz)
+u_t = Eq(tau.forward, tau + dt * l * diag(div(v.forward)) +
+         dt * mu * (grad(v.forward) + grad(v.forward).T))
+op = Operator([u_v] + [u_t]  + src_xx + src_yy + src_zz)
 # op = Operator(src_xx + src_zz)
 op()
 
 # plot_image(v[0].data[0,:], cmap="seismic"); pause(1)
 # plot_image(v[1].data[0,:], cmap="seismic"); pause(1)
-
 # plot_image(tau[0].data[0,:], cmap="seismic"); pause(1)
 # plot_image(tau[1].data[0,:], cmap="seismic"); pause(1)
-
-
 # plot_image(tau[0].data[0,int(nx/2),:,:], cmap="seismic"); pause(1)
 # plot_image(tau[0,1].data[0,int(nx/2),:,:], cmap="seismic"); pause(1)
 # plot_image(tau[0,1].data[0,int(nx/2),:,:]); pause(1)
 # plot_image(tau[0].data[0,int(nx/2),:,:]); pause(1)
 
-
+# import pdb; pdb.set_trace()
 norm_v0 = norm(v[0])
 norm_v1 = norm(v[1])
+norm_v2 = norm(v[2])
 
 print(norm_v0)
 print(norm_v1)
+print(norm_v2)
 
-norm_t0 = norm(tau[0])
-norm_t1 = norm(tau[1])
+norm_t00 = norm(tau[0, 0])
+norm_t11 = norm(tau[1, 1])
+norm_t22 = norm(tau[2, 2])
 
-print(norm_t0)
-print(norm_t1)
+print(norm_t00)
+print(norm_t11)
+print(norm_t22)
 
 print("Let's inspect")
 # import pdb; pdb.set_trace()
@@ -157,8 +154,6 @@ print("==========")
 print(norm(ftau[0]))
 print(norm(ftau[1]))
 print("===========")
-
-
 
 #Get the nonzero indices
 nzinds = np.nonzero(ftau[0].data[0])  # nzinds is a tuple
@@ -306,8 +301,6 @@ print("===========")
 # import pdb; pdb.set_trace()
 
 
-
-
 import pyvista as pv
 
 cmap = plt.cm.get_cmap("viridis")
@@ -321,24 +314,31 @@ vistagrid.spacing = (1, 1, 1)  # These are the cell sizes along each axis
 vistagrid.cell_arrays["values"] = values.flatten(order="F")  # Flatten the array!
 # vistagrid.plot(show_edges=True)
 vistaslices = vistagrid.slice_orthogonal()
-vistaslices.plot(cmap=cmap)
+# vistaslices.plot(cmap=cmap)
 
 
-import pdb; pdb.set_trace()
+# import pdb; pdb.set_trace()
 # Uncomment to plot a slice of the field
 #plt.imshow(usol.data[2, int(nx/2) ,:, :]); pause(1)
 
-plot_image(v[0].data[0,:,int(ny/2),:], cmap="seismic"); pause(1)
-plot_image(v_sol[0].data[0,:,int(ny/2),:], cmap="seismic"); pause(1)
+if args.plotting:
+    plot_image(v[0].data[0,:,int(ny/2),:], cmap="seismic"); pause(1);
+    plot_image(v_sol[0].data[0,:,int(ny/2),:], cmap="seismic"); pause(1);
 
-plot_image(v[1].data[0,:,:,int(nz/2)], cmap="seismic"); pause(1)
-plot_image(v_sol[1].data[0,:,:,int(nz/2)], cmap="seismic"); pause(1)
+    plot_image(v[1].data[0,:,:,int(nz/2)], cmap="seismic"); pause(1)
+    plot_image(v_sol[1].data[0,:,:,int(nz/2)], cmap="seismic"); pause(1)
 
-plot_image(tau[0].data[0,:,:,:], cmap="seismic"); pause(1)
-plot_image(tau_sol[0].data[0,:,:,:], cmap="seismic"); pause(1)
+    plot_image(v[2].data[0,:,:,int(nz/2)], cmap="seismic"); pause(1)
+    plot_image(v_sol[2].data[0,:,:,int(nz/2)], cmap="seismic"); pause(1)
 
-plot_image(tau[1].data[0,:,:,:], cmap="seismic"); pause(1)
-plot_image(tau_sol[1].data[0,:,:,:], cmap="seismic"); pause(1)
+    plot_image(tau[0,0].data[0, int(nx/2), :, :], cmap="seismic"); pause(1)
+    plot_image(tau_sol[0,0].data[0, int(nx/2), :, :], cmap="seismic"); pause(1)
+
+    plot_image(tau[1, 1].data[0, :, int(ny/2), :], cmap="seismic"); pause(1)
+    plot_image(tau_sol[1, 1].data[0, :, int(ny/2), :], cmap="seismic"); pause(1)
+
+    plot_image(tau[2, 2].data[0, :, :, int(nz/2)], cmap="seismic"); pause(1)
+    plot_image(tau_sol[2, 2].data[0, :, :, int(nz/2)], cmap="seismic"); pause(1)
 
 
 #plot_image(tau[0].data[0, :, :], cmap="seismic"); pause(1)
