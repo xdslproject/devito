@@ -49,7 +49,7 @@ shape = (nx, ny, nz)  # Number of grid point (nx, ny, nz)
 spacing = (10., 10., 10.)  # Grid spacing in m. The domain size is now 1km by 1km
 origin = (0., 0., 0.)
 so = args.space_order
-extent = (1500., 1500, 1500)
+extent = (6000., 6000, 6000)
 x = SpaceDimension(name='x', spacing=Constant(name='h_x', value=extent[0]/(shape[0]-1)))
 y = SpaceDimension(name='y', spacing=Constant(name='h_y', value=extent[1]/(shape[1]-1)))
 z = SpaceDimension(name='z', spacing=Constant(name='h_z', value=extent[2]/(shape[2]-1)))
@@ -59,7 +59,7 @@ grid = Grid(extent=extent, shape=shape, dimensions=(x, y, z))
 class DGaussSource(WaveletSource):
 
     def wavelet(self, f0, t):
-        a = 0.004
+        a = 0.002
         return -2.*a*(t - 1/f0) * np.exp(-a * (t - 1/f0)**2)
 
 
@@ -69,7 +69,7 @@ dt = (10. / np.sqrt(2.)) / 6.
 time_range = TimeAxis(start=t0, stop=tn, step=dt)
 
 src = RickerSource(name='src', grid=grid, f0=0.01, time_range=time_range)
-src.coordinates.data[:] = [745., 745., 745]
+src.coordinates.data[:] = [int(nx/2), int(ny/2), int(nz/2)]
 # src.show()
 
 # Now we create the velocity and pressure fields
@@ -301,19 +301,19 @@ print("===========")
 # import pdb; pdb.set_trace()
 
 
-import pyvista as pv
+#import pyvista as pv
 
-cmap = plt.cm.get_cmap("viridis")
+#cmap = plt.cm.get_cmap("viridis")
 # Copy devito u data
-values = v_sol[1].data[0, :, :, :]
+#values = v_sol[1].data[0, :, :, :]
 
-vistagrid = pv.UniformGrid()
-vistagrid.dimensions = np.array(values.shape) + 1
-vistagrid.origin = (0, 0, 0)  # The bottom left corner of the data set
-vistagrid.spacing = (1, 1, 1)  # These are the cell sizes along each axis
-vistagrid.cell_arrays["values"] = values.flatten(order="F")  # Flatten the array!
+#vistagrid = pv.UniformGrid()
+#vistagrid.dimensions = np.array(values.shape) + 1
+#vistagrid.origin = (0, 0, 0)  # The bottom left corner of the data set
+#vistagrid.spacing = (1, 1, 1)  # These are the cell sizes along each axis
+#vistagrid.cell_arrays["values"] = values.flatten(order="F")  # Flatten the array!
 # vistagrid.plot(show_edges=True)
-vistaslices = vistagrid.slice_orthogonal()
+#vistaslices = vistagrid.slice_orthogonal()
 # vistaslices.plot(cmap=cmap)
 
 
