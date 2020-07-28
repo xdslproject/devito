@@ -49,7 +49,7 @@ shape = (nx, ny, nz)  # Number of grid point (nx, ny, nz)
 spacing = (10., 10., 10.)  # Grid spacing in m. The domain size is now 1km by 1km
 origin = (0., 0., 0.)
 so = args.space_order
-extent = (6000., 6000, 6000)
+extent = (600., 600, 600)
 x = SpaceDimension(name='x', spacing=Constant(name='h_x', value=extent[0]/(shape[0]-1)))
 y = SpaceDimension(name='y', spacing=Constant(name='h_y', value=extent[1]/(shape[1]-1)))
 z = SpaceDimension(name='z', spacing=Constant(name='h_z', value=extent[2]/(shape[2]-1)))
@@ -69,7 +69,8 @@ dt = (10. / np.sqrt(2.)) / 6.
 time_range = TimeAxis(start=t0, stop=tn, step=dt)
 
 src = RickerSource(name='src', grid=grid, f0=0.01, time_range=time_range)
-src.coordinates.data[:] = [int(nx/2), int(ny/2), int(nz/2)]
+#src.coordinates.data[:] = [int(nx/2), int(ny/2), int(nz/2)]
+src.coordinates.data[:] = [100 , 100 , 100]
 # src.show()
 
 # Now we create the velocity and pressure fields
