@@ -17,17 +17,6 @@ from devito.types.basic import Scalar, Symbol # noqa
 from mpl_toolkits.mplot3d import Axes3D # noqa
 
 
-def plot3d(data, model):
-    fig = plt.figure()
-    ax = fig.add_subplot(111, projection='3d')
-    z, x, y = data.nonzero()
-    ax.scatter(x, y, z, zdir='y', c='red', s=20, marker='.')
-    ax.set_xlim(model.spacing[0], data.shape[0]-model.spacing[0])
-    ax.set_ylim(model.spacing[1], data.shape[1]-model.spacing[1])
-    ax.set_zlim(model.spacing[2], data.shape[2]-model.spacing[2])
-    plt.savefig("sources_demo.pdf")
-
-
 parser = argparse.ArgumentParser(description='Process arguments.')
 
 parser.add_argument("-d", "--shape", default=(11, 11, 11), type=int, nargs="+",
@@ -36,6 +25,8 @@ parser.add_argument("-so", "--space_order", default=4,
                     type=int, help="Space order of the simulation")
 parser.add_argument("-tn", "--tn", default=40,
                     type=float, help="Simulation time in millisecond")
+parser.add_argument("-bs", "--bsizes", default=(8, 8, 32, 32), type=int, nargs="+",
+                    help="Block and tile sizes")
 parser.add_argument("-plotting", "--plotting", default=0,
                     type=bool, help="Turn ON/OFF plotting")
 
@@ -49,7 +40,7 @@ shape = (nx, ny, nz)  # Number of grid point (nx, ny, nz)
 spacing = (10., 10., 10.)  # Grid spacing in m. The domain size is now 1km by 1km
 origin = (0., 0., 0.)
 so = args.space_order
-extent = (600., 600, 600)
+extent = (6000., 6000, 6000)
 x = SpaceDimension(name='x', spacing=Constant(name='h_x', value=extent[0]/(shape[0]-1)))
 y = SpaceDimension(name='y', spacing=Constant(name='h_y', value=extent[1]/(shape[1]-1)))
 z = SpaceDimension(name='z', spacing=Constant(name='h_z', value=extent[2]/(shape[2]-1)))
@@ -243,7 +234,17 @@ xb_size = Scalar(name='xb_size', dtype=np.int32)
 yb_size = Scalar(name='yb_size', dtype=np.int32)
 x0_blk0_size = Scalar(name='x0_blk0_size', dtype=np.int32)
 y0_blk0_size = Scalar(name='y0_blk0_size', dtype=np.int32)
+
+block_sizes = Function(name='block_sizes', shape=(4, ), dimensions=(b_dim,), space_order=0, dtype=np.int32)
+block_sizes.data[:] = args.bsizes
+
+eqxb = Eq(xb_size, block_sizes[0])
+eqyb = Eq(yb_size, block_sizes[1])
+eqxb2 = Eq(x0_blk0_size, block_sizes[2])
+eqyb2 = Eq(y0_blk0_size, block_sizes[3])
+
 # ============================================================================
+
 # fdelmodc reference implementation
 u_v_sol = Eq(v_sol.forward, v_sol + dt*ro*div(tau_sol))
 u_t_sol = Eq(tau_sol.forward, tau_sol + dt * l * diag(div(v_sol.forward)) + dt * mu * (grad(v_sol.forward) + grad(v_sol.forward).T))
@@ -265,7 +266,8 @@ eq_fyy = Inc(tau_sol[4].forward[t+1, x, y, zind], myexpr_fyy, implicit_dims=(tim
 eq_fzz = Inc(tau_sol[8].forward[t+1, x, y, zind], myexpr_fzz, implicit_dims=(time, x, y, sp_zi))
 
 print("-----")
-op2 = Operator([eq0, eq1, u_v_sol, u_t_sol, eq_fxx, eq_fyy, eq_fzz])
+op2 = Operator([eqxb, eqyb, eqxb2, eqyb2, eq0, eq1, u_v_sol, u_t_sol, eq_fxx, eq_fyy, eq_fzz])
+# op2 = Operator([eqxb, eqyb, eqxb2, eqyb2, eq0, eq1, u_v_sol, u_t_sol, eq_fxx, eq_fyy, eq_fzz])
 # print(op2.ccode)
 print("===Temporal blocking======================================")
 op2()

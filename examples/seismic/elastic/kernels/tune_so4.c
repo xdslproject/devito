@@ -171,3 +171,4 @@ int Kernel(struct dataobj *restrict block_sizes_vec, const float h_x, const floa
   timers->section0 += (double)(end_section0.tv_sec - start_section0.tv_sec) + (double)(end_section0.tv_usec - start_section0.tv_usec) / 1000000;
   return 0;
 }
+/* Backdoor edit at Fri Jul 31 14:05:12 2020*/ 

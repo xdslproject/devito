@@ -25,6 +25,8 @@ parser.add_argument("-so", "--space_order", default=4,
                     type=int, help="Space order of the simulation")
 parser.add_argument("-tn", "--tn", default=40,
                     type=float, help="Simulation time in millisecond")
+parser.add_argument("-bs", "--bsizes", default=(8, 8, 32, 32), type=int, nargs="+",
+                    help="Block and tile sizes")
 parser.add_argument("-plotting", "--plotting", default=0,
                     type=bool, help="Turn ON/OFF plotting")
 
@@ -228,18 +230,17 @@ eq_fxx = Inc(tau_sol[0].forward[t+1, x, y, zind], myexpr_fxx, implicit_dims=(tim
 eq_fyy = Inc(tau_sol[4].forward[t+1, x, y, zind], myexpr_fyy, implicit_dims=(time, x, y, sp_zi))
 eq_fzz = Inc(tau_sol[8].forward[t+1, x, y, zind], myexpr_fzz, implicit_dims=(time, x, y, sp_zi))
 
+
 print("-----")
-op2 = Operator([eq0, eq1, u_v_sol, u_t_sol, eq_fxx, eq_fyy, eq_fzz])
+# op2 = Operator([eq0, eq1, u_v_sol, u_t_sol, eq_fxx, eq_fyy, eq_fzz])
 # print(op2.ccode)
 print("===Temporal blocking======================================")
-op2()
+# op2()
 print("===========")
 
-configuration['jit-backdoor'] = False
+# configuration['jit-backdoor'] = False
 
 # import pdb; pdb.set_trace()
-
-print("Norm(f):", normf)
 
 print("===========")
 print("Norm(tau_sol0):", norm(tau_sol[0]))
@@ -248,36 +249,8 @@ print("Norm(tau_sol2):", norm(tau_sol[2]))
 print("Norm(tau_sol3):", norm(tau_sol[3]))
 print("===========")
 
-# save_src.data[0, source_id.data[14, 14, 11]]
-# save_src.data[0 ,source_id.data[14, 14, sp_source_mask.data[14, 14, 0]]]
-
-#plt.imshow(uref.data[2, int(nx/2) ,:, :]); pause(1)
-#plt.imshow(usol.data[2, int(nx/2) ,:, :]); pause(1)
-
-
-# assert np.isclose(normuref, normusol, atol=1e-06)
-# import pdb; pdb.set_trace()
-
-
-#import pyvista as pv
-
-#cmap = plt.cm.get_cmap("viridis")
-# Copy devito u data
-#values = v_sol[1].data[0, :, :, :]
-
-#vistagrid = pv.UniformGrid()
-#vistagrid.dimensions = np.array(values.shape) + 1
-#vistagrid.origin = (0, 0, 0)  # The bottom left corner of the data set
-#vistagrid.spacing = (1, 1, 1)  # These are the cell sizes along each axis
-#vistagrid.cell_arrays["values"] = values.flatten(order="F")  # Flatten the array!
-# vistagrid.plot(show_edges=True)
-#vistaslices = vistagrid.slice_orthogonal()
-# vistaslices.plot(cmap=cmap)
-
-
-# import pdb; pdb.set_trace()
-# Uncomment to plot a slice of the field
-#plt.imshow(usol.data[2, int(nx/2) ,:, :]); pause(1)
+block_sizes = Function(name='block_sizes', shape=(4, ), dimensions=(b_dim,), space_order=0, dtype=np.int32)
+block_sizes.data[:] = args.bsizes
 
 if args.plotting:
     plot_image(v[0].data[0,:,int(ny/2),:], cmap="seismic"); pause(1);
@@ -299,11 +272,100 @@ if args.plotting:
     plot_image(tau_sol[2, 2].data[0, :, :, int(nz/2)], cmap="seismic"); pause(1)
 
 
-#plot_image(tau[0].data[0, :, :], cmap="seismic"); pause(1)
-#plot_image(tau[0,1].data[0, :, :], cmap="seismic"); pause(1)
-#plot_image(tau[0,1].data[0, :, :]); pause(1)
-#plot_image(tau[0].data[0, :, :]); pause(1)
+# plot_image(tau[0].data[0, :, :], cmap="seismic"); pause(1)
+# plot_image(tau[0,1].data[0, :, :], cmap="seismic"); pause(1)
+# plot_image(tau[0,1].data[0, :, :]); pause(1)
+# plot_image(tau[0].data[0, :, :]); pause(1)
 
 
-assert np.isclose(norm(tau[0]), norm(tau_sol[0]), atol=1e-06)
-assert np.isclose(norm(tau[3]), norm(tau_sol[3]), atol=1e-06)
+performance_map = np.array([[0, 0, 0, 0, 0]])
+
+
+bxstart = 8
+bxend = 35
+bystart = 8
+byend = 35
+bstep = 8
+
+txstart = 48
+txend = 49
+tystart = 48
+tyend = 49
+
+tstep = 16
+# Temporal autotuning
+for tx in range(txstart, txend, tstep):
+    # import pdb; pdb.set_trace()
+    for ty in range(tystart, tyend, tstep):
+        for bx in range(bxstart, bxend, bstep):
+            for by in range(bystart, byend, bstep):
+
+                block_sizes.data[:] = [tx, ty, bx, by]
+
+                eqxb = Eq(xb_size, block_sizes[0])
+                eqyb = Eq(yb_size, block_sizes[1])
+                eqxb2 = Eq(x0_blk0_size, block_sizes[2])
+                eqyb2 = Eq(y0_blk0_size, block_sizes[3])
+
+                # import pdb; pdb.set_trace()
+                # plot3d(source_mask.data, model)
+                v_sol[0].data[:] = 0
+                v_sol[1].data[:] = 0
+                v_sol[2].data[:] = 0
+                tau_sol[0, 0].data[:] = 0
+                tau_sol[0, 1].data[:] = 0
+                tau_sol[0, 2].data[:] = 0
+                tau_sol[1, 0].data[:] = 0
+                tau_sol[1, 1].data[:] = 0
+                tau_sol[1, 2].data[:] = 0
+                tau_sol[2, 0].data[:] = 0
+                tau_sol[2, 1].data[:] = 0
+                tau_sol[2, 2].data[:] = 0
+
+
+                print("-----")
+
+                op2 = Operator([eqxb, eqyb, eqxb2, eqyb2, eq0, eq1, u_v_sol, u_t_sol, eq_fxx, eq_fyy, eq_fzz])
+                print("===Temporal blocking======================================")
+                summary = op2()
+                print("===========")
+
+                print("===Temporal blocking======================================")
+                print("===========")
+                print("Norm(tau_sol0):", norm(tau_sol[0]))
+                print("Norm(tau_sol1):", norm(tau_sol[1]))
+                print("Norm(tau_sol2):", norm(tau_sol[2]))
+                print("Norm(tau_sol3):", norm(tau_sol[3]))
+                print("===========")
+                print("===========")
+
+                performance_map = np.append(performance_map, [[tx, ty, bx, by, summary.globals['fdlike'].gpointss]], 0)
+
+
+print(performance_map)
+
+tids = np.unique(performance_map[:, 0])
+
+for tid in tids:
+    bids = np.where((performance_map[:, 0] == tid) & (performance_map[:, 1] == tid))
+    bx_data = np.unique(performance_map[bids, 2])
+    by_data = np.unique(performance_map[bids, 3])
+    gptss_data = performance_map[bids, 4]
+    gptss_data = gptss_data.reshape(len(bx_data), len(by_data))
+
+    fig, ax = plt.subplots()
+    im = ax.imshow(gptss_data); pause(2)
+
+    # We want to show all ticks...
+    ax.set_xticks(np.arange(len(bx_data)))
+    ax.set_yticks(np.arange(len(by_data)))
+    # ... and label them with the respective list entries
+    ax.set_xticklabels(bx_data)
+    ax.set_yticklabels(by_data)
+
+    ax.set_title("Gpts/s for fixed tile size. (Sweeping block sizes)")
+    fig.tight_layout()
+
+    fig.colorbar(im, ax=ax)
+    # ax = sns.heatmap(gptss_data, linewidth=0.5)
+    plt.savefig(str(shape[0]) + str(np.int32(tx)) + str(np.int32(ty)) + ".pdf")
