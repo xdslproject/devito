@@ -281,18 +281,18 @@ if args.plotting:
 performance_map = np.array([[0, 0, 0, 0, 0]])
 
 
-bxstart = 8
+bxstart = 4
 bxend = 35
-bystart = 8
+bystart = 4
 byend = 35
-bstep = 8
+bstep = 4
 
-txstart = 48
-txend = 49
-tystart = 48
-tyend = 49
+txstart = 16
+txend = 129
+tystart = 16
+tyend = 129
 
-tstep = 16
+tstep = 8
 # Temporal autotuning
 for tx in range(txstart, txend, tstep):
     # import pdb; pdb.set_trace()
@@ -338,8 +338,7 @@ for tx in range(txstart, txend, tstep):
                 print("Norm(tau_sol3):", norm(tau_sol[3]))
                 print("===========")
                 print("===========")
-
-                performance_map = np.append(performance_map, [[tx, ty, bx, by, summary.globals['fdlike'].gpointss]], 0)
+                performance_map = np.append(performance_map, [[tx, ty, bx, by, summary.globals['fdlike'].gflopss]], 0)
 
 
 print(performance_map)
