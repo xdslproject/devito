@@ -287,10 +287,10 @@ bystart = 4
 byend = 35
 bstep = 4
 
-txstart = 16
-txend = 129
-tystart = 16
-tyend = 129
+txstart = 32
+txend = 65
+tystart = 32
+tyend = 65
 
 tstep = 8
 # Temporal autotuning
@@ -341,30 +341,30 @@ for tx in range(txstart, txend, tstep):
                 performance_map = np.append(performance_map, [[tx, ty, bx, by, summary.globals['fdlike'].gflopss]], 0)
 
 
-print(performance_map)
+        print(performance_map)
+        import pdb; pdb.set_trace()
+        # tids = np.unique(performance_map[:, 0])
 
-tids = np.unique(performance_map[:, 0])
+        #for tid in tids:
+        bids = np.where((performance_map[:, 0] == tx) & (performance_map[:, 1] == ty))
+        bx_data = np.unique(performance_map[bids, 2])
+        by_data = np.unique(performance_map[bids, 3])
+        gptss_data = performance_map[bids, 4]
+        gptss_data = gptss_data.reshape(len(bx_data), len(by_data))
 
-for tid in tids:
-    bids = np.where((performance_map[:, 0] == tid) & (performance_map[:, 1] == tid))
-    bx_data = np.unique(performance_map[bids, 2])
-    by_data = np.unique(performance_map[bids, 3])
-    gptss_data = performance_map[bids, 4]
-    gptss_data = gptss_data.reshape(len(bx_data), len(by_data))
+        fig, ax = plt.subplots()
+        im = ax.imshow(gptss_data); pause(2)
 
-    fig, ax = plt.subplots()
-    im = ax.imshow(gptss_data); pause(2)
+        # We want to show all ticks...
+        ax.set_xticks(np.arange(len(bx_data)))
+        ax.set_yticks(np.arange(len(by_data)))
+        # ... and label them with the respective list entries
+        ax.set_xticklabels(bx_data)
+        ax.set_yticklabels(by_data)
 
-    # We want to show all ticks...
-    ax.set_xticks(np.arange(len(bx_data)))
-    ax.set_yticks(np.arange(len(by_data)))
-    # ... and label them with the respective list entries
-    ax.set_xticklabels(bx_data)
-    ax.set_yticklabels(by_data)
+        ax.set_title("Gpts/s for fixed tile size. (Sweeping block sizes)")
+        fig.tight_layout()
 
-    ax.set_title("Gpts/s for fixed tile size. (Sweeping block sizes)")
-    fig.tight_layout()
-
-    fig.colorbar(im, ax=ax)
-    # ax = sns.heatmap(gptss_data, linewidth=0.5)
-    plt.savefig(str(shape[0]) + str(np.int32(tx)) + str(np.int32(ty)) + ".pdf")
+        fig.colorbar(im, ax=ax)
+        # ax = sns.heatmap(gptss_data, linewidth=0.5)
+        plt.savefig(str(shape[0]) + str(np.int32(tx)) + str(np.int32(ty)) + ".pdf")
