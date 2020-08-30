@@ -44,6 +44,7 @@ int Kernel(struct dataobj *restrict block_sizes_vec, struct dataobj *restrict da
   int y0_blk0_size = block_sizes[3];
   int x0_blk0_size = block_sizes[2];
   int yb_size = block_sizes[1];
+  printf(" Tiles: %d, %d ::: Blocks %d, %d \n", x0_blk0_size, y0_blk0_size, xb_size, yb_size);
 
   int sf = 4; // half the space order
   int t_blk_size = 2 * sf * (time_M - time_m);
@@ -60,7 +61,7 @@ int Kernel(struct dataobj *restrict block_sizes_vec, struct dataobj *restrict da
         {
           int tw = ((time / sf) % (time_M - time_m + 1));
           /* Begin section0 */
-#pragma omp parallel num_threads(num_threads)
+#pragma omp parallel num_threads(nthreads)
           {
 #pragma omp for collapse(2) schedule(dynamic, 1)
             for (int x0_blk0 = max((x_m + time), xb); x0_blk0 <= min((x_M + time), (xb + xb_size)); x0_blk0 += x0_blk0_size)

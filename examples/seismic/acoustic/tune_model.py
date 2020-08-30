@@ -26,6 +26,7 @@ def plot3d(data, model):
     ax.set_zlim(model.spacing[2], data.shape[2]-model.spacing[2])
     plt.savefig("sources_demo.pdf")
 
+
 parser = argparse.ArgumentParser(description='Process arguments.')
 
 parser.add_argument("-d", "--shape", default=(11, 11, 11), type=int, nargs="+",
@@ -34,7 +35,7 @@ parser.add_argument("-so", "--space_order", default=4,
                     type=int, help="Space order of the simulation")
 parser.add_argument("-tn", "--tn", default=40,
                     type=float, help="Simulation time in millisecond")
-parser.add_argument("-bs", "--bsizes", default=(32, 32, 8, 8), type=int, nargs="+",
+parser.add_argument("-bs", "--bsizes", default=(8, 8, 32, 32), type=int, nargs="+",
                     help="Block and tile sizes")
 args = parser.parse_args()
 
@@ -71,20 +72,9 @@ stx = 0.1
 ste = 0.9
 stepx = (ste-stx)/int(np.sqrt(src.npoint))
 
-
 src.coordinates.data[:, :2] = np.array(np.meshgrid(np.arange(stx, ste, stepx), np.arange(stx, ste, stepx))).T.reshape(-1,2)*np.array(model.domain_size[:1])
 
 src.coordinates.data[:, -1] = 20  # Depth is 20m
-
-#src.coordinates.data[0, :] = np.array(model.domain_size) * .5
-#src.coordinates.data[0, -1] = 20  # Depth is 20m
-#src.coordinates.data[1, :] = np.array(model.domain_size) * .5
-#src.coordinates.data[1, -1] = 20  # Depth is 20m
-#src.coordinates.data[2, :] = np.array(model.domain_size) * .5
-#src.coordinates.data[2, -1] = 20  # Depth is 20m
-
-#src.show()
-#pause(1)
 
 # f : perform source injection on an empty grid
 f = TimeFunction(name="f", grid=model.grid, space_order=so, time_order=2)
@@ -98,10 +88,10 @@ print(normf)
 print("===========")
 
 # uref : reference solution
-uref = TimeFunction(name="uref", grid=model.grid, space_order=so, time_order=2)
-src_term_ref = src.inject(field=uref.forward, expr=src * dt**2 / model.m)
-pde_ref = model.m * uref.dt2 - uref.laplace + model.damp * uref.dt
-stencil_ref = Eq(uref.forward, solve(pde_ref, uref.forward))
+# uref = TimeFunction(name="uref", grid=model.grid, space_order=so, time_order=2)
+# src_term_ref = src.inject(field=uref.forward, expr=src * dt**2 / model.m)
+# pde_ref = model.m * uref.dt2 - uref.laplace + model.damp * uref.dt
+# stencil_ref = Eq(uref.forward, solve(pde_ref, uref.forward))
 
 #Get the nonzero indices
 nzinds = np.nonzero(f.data[0])  # nzinds is a tuple
@@ -137,7 +127,6 @@ nnz_shape = (model.grid.shape[0], model.grid.shape[1])  # Change only 3rd dim
 
 nnz_sp_source_mask = Function(name='nnz_sp_source_mask', shape=(list(nnz_shape)), dimensions=(x, y), space_order=0, dtype=np.int32)
 
-
 nnz_sp_source_mask.data[:, :] = source_mask.data[:, :, :].sum(2)
 inds = np.where(source_mask.data == 1.)
 
@@ -162,7 +151,6 @@ op1.apply(time=time_range.num-1)
 
 
 usol = TimeFunction(name="usol", grid=model.grid, space_order=so, time_order=2)
-
 sp_zi = Dimension(name='sp_zi')
 
 # import pdb; pdb.set_trace()
@@ -193,7 +181,6 @@ eq2 = Inc(usol.forward[t+1, x, y, zind], myexpr, implicit_dims=(time, x, y, sp_z
 pde_2 = model.m * usol.dt2 - usol.laplace + model.damp * usol.dt
 stencil_2 = Eq(usol.forward, solve(pde_2, usol.forward))
 
-
 block_sizes = Function(name='block_sizes', shape=(4, ), dimensions=(b_dim,), space_order=0, dtype=np.int32)
 
 # import pdb; pdb.set_trace()
@@ -201,41 +188,91 @@ block_sizes.data[:] = args.bsizes
 
 # import pdb; pdb.set_trace()
 
-eqxb = Eq(xb_size, block_sizes[0])
-eqyb = Eq(yb_size, block_sizes[1])
-eqxb2 = Eq(x0_blk0_size, block_sizes[2])
-eqyb2 = Eq(y0_blk0_size, block_sizes[3])
+performance_map = np.array([[0, 0, 0, 0, 0]])
+
+
+bxstart = 8
+bxend = 33
+bystart = 8
+byend = 33
+bstep = 8
+
+txstart = 16
+txend = 33
+tystart = 16
+tyend = 33
+
+tstep = 16
+# Temporal autotuning
+for tx in range(txstart, txend, tstep):
+    # import pdb; pdb.set_trace()
+    for ty in range(tystart, tyend, tstep):
+        for bx in range(bxstart, bxend, bstep):
+            for by in range(bystart, byend, bstep):
+
+                block_sizes.data[:] = [tx, ty, bx, by]
+
+                eqxb = Eq(xb_size, block_sizes[0])
+                eqyb = Eq(yb_size, block_sizes[1])
+                eqxb2 = Eq(x0_blk0_size, block_sizes[2])
+                eqyb2 = Eq(y0_blk0_size, block_sizes[3])
+
+                # import pdb; pdb.set_trace()
+                # plot3d(source_mask.data, model)
+                usol.data[:] = 0
+                print("-----")
+                op2 = Operator([eqxb, eqyb, eqxb2, eqyb2, stencil_2, eq0, eq1, eq2], opt=('advanced'))
+                # print(op2.ccode)
+                print("===Temporal blocking======================================")
+                summary = op2.apply(time=time_range.num-1, dt=model.critical_dt)
+                print("===========")
+
+                performance_map = np.append(performance_map, [[tx, ty, bx, by, summary.globals['fdlike'].gpointss]], 0)
+
+                normusol = norm(usol)
+                print("===========")
+                print(normusol)
+                print("===========")
+                # import pdb; pdb.set_trace()
+                print("Norm(usol):", normusol)
+
+print(performance_map)
+
+tids = np.unique(performance_map[:, 0])
+
+for tid in tids:
+    bids = np.where((performance_map[:, 0] == tid) & (performance_map[:, 1] == tid))
+    bx_data = np.unique(performance_map[bids, 2])
+    by_data = np.unique(performance_map[bids, 3])
+    gptss_data = performance_map[bids, 4]
+    gptss_data = gptss_data.reshape(len(bx_data), len(by_data))
+
+    fig, ax = plt.subplots()
+    im = ax.imshow(gptss_data); pause(2)
+
+    # We want to show all ticks...
+    ax.set_xticks(np.arange(len(bx_data)))
+    ax.set_yticks(np.arange(len(by_data)))
+    # ... and label them with the respective list entries
+    ax.set_xticklabels(bx_data)
+    ax.set_yticklabels(by_data)
+
+    ax.set_title("Gpts/s for fixed tile size. (Sweeping block sizes)")
+    fig.tight_layout()
+
+
+# Loop over data dimensions and create text annotations.
+#for i in range(len(bx_data)):
+#    for j in range(len(by_data)):
+#        text = ax.text(j, i, "{:.2f}".format(gptss_data[i, j]),
+#                       ha="center", va="center", color="w")
 
 # import pdb; pdb.set_trace()
-# plot3d(source_mask.data, model)
-
-opref = Operator([stencil_ref, src_term_ref], opt=('advanced', {'openmp': True}))
-print("===Space blocking==")
-opref.apply(time=time_range.num-2, dt=model.critical_dt)
-print("===========")
-
-normuref = norm(uref)
-print("==========")
-print(normuref)
-print("===========")
+    fig.colorbar(im, ax=ax)
+    # ax = sns.heatmap(gptss_data, linewidth=0.5)
+    plt.savefig(str(shape[0]) + str(np.int32(tx)) + str(np.int32(ty) + ".pdf")
 
 
-print("-----")
-op2 = Operator([eqxb, eqyb, eqxb2, eqyb2, stencil_2, eq0, eq1, eq2], eqxb=32, opt=('advanced'))
-# print(op2.ccode)
-print("===Temporal blocking======================================")
-op2.apply(time=time_range.num-1, dt=model.critical_dt)
-print("===========")
-
-normusol = norm(usol)
-print("===========")
-print(normusol)
-print("===========")
-
-
-print("Norm(f):", normf)
-print("Norm(usol):", normusol)
-print("Norm(uref):", normuref)
 
 # save_src.data[0, source_id.data[14, 14, 11]]
 # save_src.data[0 ,source_id.data[14, 14, sp_source_mask.data[14, 14, 0]]]
@@ -244,8 +281,6 @@ print("Norm(uref):", normuref)
 #plt.imshow(usol.data[2, int(nx/2) ,:, :]); pause(1)
 
 
-assert np.isclose(normuref, normusol, atol=1e-06)
-
-#import pdb; pdb.set_trace()
+# import pdb; pdb.set_trace()
 # Uncomment to plot a slice of the field
 #plt.imshow(usol.data[2, int(nx/2) ,:, :]); pause(1)
