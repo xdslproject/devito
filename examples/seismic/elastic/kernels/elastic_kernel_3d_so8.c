@@ -25,8 +25,9 @@ struct profiler
   double section0;
 };
 
-int Kernel(const float h_x, const float h_y, const float h_z, struct dataobj *restrict nnz_sp_source_mask_vec, struct dataobj *restrict save_src_fxx_vec, struct dataobj *restrict save_src_fyy_vec, struct dataobj *restrict save_src_fzz_vec, struct dataobj *restrict source_id_vec, struct dataobj *restrict source_mask_vec, struct dataobj *restrict sp_source_mask_vec, struct dataobj *restrict tau_sol_xx_vec, struct dataobj *restrict tau_sol_xy_vec, struct dataobj *restrict tau_sol_xz_vec, struct dataobj *restrict tau_sol_yy_vec, struct dataobj *restrict tau_sol_yz_vec, struct dataobj *restrict tau_sol_zz_vec, struct dataobj *restrict v_sol_x_vec, struct dataobj *restrict v_sol_y_vec, struct dataobj *restrict v_sol_z_vec, const int sp_zi_m, const int time_M, const int time_m, struct profiler *timers, int x0_blk0_size, const int x_M, const int x_m, int y0_blk0_size, const int y_M, const int y_m, const int z_M, const int z_m, const int nthreads, const int nthreads_nonaffine)
+int Kernel(struct dataobj *restrict block_sizes_vec, const float h_x, const float h_y, const float h_z, struct dataobj *restrict nnz_sp_source_mask_vec, struct dataobj *restrict save_src_fxx_vec, struct dataobj *restrict save_src_fyy_vec, struct dataobj *restrict save_src_fzz_vec, struct dataobj *restrict source_id_vec, struct dataobj *restrict source_mask_vec, struct dataobj *restrict sp_source_mask_vec, struct dataobj *restrict tau_sol_xx_vec, struct dataobj *restrict tau_sol_xy_vec, struct dataobj *restrict tau_sol_xz_vec, struct dataobj *restrict tau_sol_yy_vec, struct dataobj *restrict tau_sol_yz_vec, struct dataobj *restrict tau_sol_zz_vec, struct dataobj *restrict v_sol_x_vec, struct dataobj *restrict v_sol_y_vec, struct dataobj *restrict v_sol_z_vec, const int sp_zi_m, const int time_M, const int time_m, struct profiler *timers, const int x_M, const int x_m, const int y_M, const int y_m, const int z_M, const int z_m, const int nthreads, const int nthreads_nonaffine)
 {
+  int(*restrict block_sizes) __attribute__((aligned(64))) = (int(*))block_sizes_vec->data;
   int(*restrict nnz_sp_source_mask)[nnz_sp_source_mask_vec->size[1]] __attribute__((aligned(64))) = (int(*)[nnz_sp_source_mask_vec->size[1]])nnz_sp_source_mask_vec->data;
   float(*restrict save_src_fxx)[save_src_fxx_vec->size[1]] __attribute__((aligned(64))) = (float(*)[save_src_fxx_vec->size[1]])save_src_fxx_vec->data;
   float(*restrict save_src_fyy)[save_src_fyy_vec->size[1]] __attribute__((aligned(64))) = (float(*)[save_src_fyy_vec->size[1]])save_src_fyy_vec->data;
@@ -48,15 +49,20 @@ int Kernel(const float h_x, const float h_y, const float h_z, struct dataobj *re
   _MM_SET_DENORMALS_ZERO_MODE(_MM_DENORMALS_ZERO_ON);
   _MM_SET_FLUSH_ZERO_MODE(_MM_FLUSH_ZERO_ON);
 
+  int xb_size = block_sizes[0];
+  int y0_blk0_size = block_sizes[3];
+  int x0_blk0_size = block_sizes[2];
+  int yb_size = block_sizes[1];
+ 
   int sf = 8;
   int t_blk_size = 2 * sf * (time_M - time_m);
-  int xb_size = 64;
-  int yb_size = 64;
+  //int xb_size = 64;
+  //int yb_size = 64;
 
-  x0_blk0_size = 8;
-  y0_blk0_size = 8;
+  //x0_blk0_size = 8;
+  //y0_blk0_size = 8;
 
-  //printf(" Tiles: %d, ::: Blocks %d \n", x0_blk0_size, xb_size);
+  printf(" Tiles: %d, %d ::: Blocks %d, %d \n", xb_size , yb_size , x0_blk0_size, y0_blk0_size);
   struct timeval start_section0, end_section0;
   gettimeofday(&start_section0, NULL);
   for (int t_blk = time_m; t_blk < sf * (time_M - time_m); t_blk += sf * t_blk_size) // for each t block
