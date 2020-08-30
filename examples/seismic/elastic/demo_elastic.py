@@ -1,3 +1,8 @@
+from devito import *
+from examples.seismic.source import WaveletSource, RickerSource, GaborSource, TimeAxis
+from examples.seismic import plot_image
+import numpy as np
+
 import numpy as np
 
 from matplotlib.pyplot import pause # noqa
@@ -30,13 +35,14 @@ parser = argparse.ArgumentParser(description='Process arguments.')
 
 parser.add_argument("-d", "--shape", default=(11, 11, 11), type=int, nargs="+",
                     help="Number of grid points along each axis")
-parser.add_argument("-so", "--space_order", default=4,
+parser.add_argument("-so", "--space_order", default=2,
                     type=int, help="Space order of the simulation")
 parser.add_argument("-tn", "--tn", default=40,
                     type=float, help="Simulation time in millisecond")
-parser.add_argument("-bs", "--bsizes", default=(32, 32, 8, 8), type=int, nargs="+",
-                    help="Block and tile sizes")
+
 args = parser.parse_args()
+
+# --------------------------------------------------------------------------------------
 
 
 nx, ny, nz = args.shape
@@ -45,71 +51,127 @@ shape = (nx, ny, nz)  # Number of grid point (nx, nz)
 spacing = (10., 10., 10)  # Grid spacing in m. The domain size is now 1km by 1km
 origin = (0., 0., 0.)
 so = args.space_order
-# Initialize v field
-v = np.empty(shape, dtype=np.float32)
-v[:, :, :int(nz/2)] = 2
-v[:, :, int(nz/2):] = 1
 
-# Construct model
-model = Model(vp=v, origin=origin, shape=shape, spacing=spacing, space_order=so,
-              nbl=10, bcs="damp")
+# Initial grid: 1km x 1km, with spacing 100m
+extent = (1500., 1500., 1500)
 
-# plt.imshow(model.vp.data[10, :, :]) ; pause(1)
+x = SpaceDimension(name='x', spacing=Constant(name='h_x', value=extent[0]/(shape[0]-1)))
+y = SpaceDimension(name='y', spacing=Constant(name='h_y', value=extent[1]/(shape[1]-1)))
+z = SpaceDimension(name='z', spacing=Constant(name='h_z', value=extent[2]/(shape[2]-1)))
+grid = Grid(extent=extent, shape=shape, dimensions=(x, y, z))
 
-t0 = 0  # Simulation starts a t=0
-tn = args.tn  # Simulation last 1 second (1000 ms)
-dt = model.critical_dt  # Time step from model grid spacing
+
+class DGaussSource(WaveletSource):
+
+    def wavelet(self, f0, t):
+        a = 0.004
+        return -2.*a*(t - 1/f0) * np.exp(-a * (t - 1/f0)**2)
+
+
+# Timestep size from Eq. 7 with V_p=6000. and dx=100
+t0, tn = 0., 300.
+dt = (10. / np.sqrt(2.)) / 6.
 time_range = TimeAxis(start=t0, stop=tn, step=dt)
-f0 = 0.010  # Source peak frequency is 10Hz (0.010 kHz)
-src = RickerSource(name='src', grid=model.grid, f0=f0,
-                   npoint=9, time_range=time_range)
+
+src = RickerSource(name='src', grid=grid, f0=0.01, time_range=time_range)
+src.coordinates.data[:] = [750., 750., 750]
+# src.show()
+
+# Now we create the velocity and pressure fields
+
+v = VectorTimeFunction(name='v', grid=grid, space_order=so, time_order=1)
+tau = TensorTimeFunction(name='t', grid=grid, space_order=so, time_order=1)
+
+# Now let's try and create the staggered updates
+t = grid.stepping_dim
+time = grid.time_dim
+
+# We need some initial conditions
+V_p = 2.0
+V_s = 1.0
+density = 1.8
+
+# The source injection term
+src_xx = src.inject(field=tau.forward[0, 0], expr=src)
+src_yy = src.inject(field=tau.forward[1, 1], expr=src)
+src_zz = src.inject(field=tau.forward[2, 2], expr=src)
+
+# Thorbecke's parameter notation
+cp2 = V_p*V_p
+cs2 = V_s*V_s
+ro = 1/density
+
+mu = cs2*density
+l = (cp2*density - 2*mu)
+
+# fdelmodc reference implementation
+u_v = Eq(v.forward, v + dt*ro*div(tau))
+u_t = Eq(tau.forward, tau + dt * l * diag(div(v.forward)) + dt * mu * (grad(v.forward) + grad(v.forward).T))
+op = Operator([u_v] + [u_t]  + src_xx + src_yy + src_zz)
+# op = Operator(src_xx + src_yy + src_zz)
+op()
+
+# plot_image(v[0].data[0,int(nx/2),:,:], cmap="seismic"); pause(1)
+# plot_image(v[1].data[0,int(nx/2),:,:], cmap="seismic"); pause(1)
+# plot_image(v[2].data[0,int(nx/2),:,:]); pause(1)
+
+# plot_image(tau[0].data[0,int(nx/2),:,:], cmap="seismic"); pause(1)
+# plot_image(tau[0,1].data[0,int(nx/2),:,:], cmap="seismic"); pause(1)
+# plot_image(tau[0,1].data[0,int(nx/2),:,:]); pause(1)
+# plot_image(tau[0].data[0,int(nx/2),:,:]); pause(1)
 
 
-# First, position source centrally in all dimensions, then set depth
+norm_v0 = norm(v[0])
+norm_v1 = norm(v[1])
+norm_v2 = norm(v[2])
 
-stx = 0.1
-ste = 0.9
-stepx = (ste-stx)/int(np.sqrt(src.npoint))
+print(norm_v0)
+print(norm_v1)
+print(norm_v2)
+
+norm_t0 = norm(tau[0])
+norm_t1 = norm(tau[1])
+norm_t2 = norm(tau[2])
+
+print(norm_t0)
+print(norm_t1)
+print(norm_t2)
 
 
-src.coordinates.data[:, :2] = np.array(np.meshgrid(np.arange(stx, ste, stepx), np.arange(stx, ste, stepx))).T.reshape(-1,2)*np.array(model.domain_size[:1])
-
-src.coordinates.data[:, -1] = 20  # Depth is 20m
-
-#src.coordinates.data[0, :] = np.array(model.domain_size) * .5
-#src.coordinates.data[0, -1] = 20  # Depth is 20m
-#src.coordinates.data[1, :] = np.array(model.domain_size) * .5
-#src.coordinates.data[1, -1] = 20  # Depth is 20m
-#src.coordinates.data[2, :] = np.array(model.domain_size) * .5
-#src.coordinates.data[2, -1] = 20  # Depth is 20m
-
-#src.show()
-#pause(1)
+print("Let's inspect")
+# import pdb; pdb.set_trace()
 
 # f : perform source injection on an empty grid
-f = TimeFunction(name="f", grid=model.grid, space_order=so, time_order=2)
-src_f = src.inject(field=f.forward, expr=src * dt**2 / model.m)
+# Inspection The source injection term
+ftau = TensorTimeFunction(name='ftau', grid=grid, space_order=so, time_order=1)
+
+src_fxx = src.inject(field=ftau.forward[0, 0], expr=src)
+src_fyy = src.inject(field=ftau.forward[1, 1], expr=src)
+src_fzz = src.inject(field=ftau.forward[2, 2], expr=src)
+
 # op_f = Operator([src_f], opt=('advanced', {'openmp': True}))
-op_f = Operator([src_f])
-op_f.apply(time=time_range.num-1)
-normf = norm(f)
+op_f = Operator(src_fxx + src_fyy + src_fzz)
+op_f()
+
+normf = norm(ftau[0])
+normf = norm(ftau[1])
+normf = norm(ftau[2])
+
 print("==========")
-print(normf)
+print(norm(ftau[0]))
+print(norm(ftau[1]))
+print(norm(ftau[2]))
 print("===========")
 
-# uref : reference solution
-uref = TimeFunction(name="uref", grid=model.grid, space_order=so, time_order=2)
-src_term_ref = src.inject(field=uref.forward, expr=src * dt**2 / model.m)
-pde_ref = model.m * uref.dt2 - uref.laplace + model.damp * uref.dt
-stencil_ref = Eq(uref.forward, solve(pde_ref, uref.forward))
+
+import pdb; pdb.set_trace()
 
 #Get the nonzero indices
 nzinds = np.nonzero(f.data[0])  # nzinds is a tuple
 assert len(nzinds) == len(shape)
 
-shape = model.grid.shape
-x, y, z = model.grid.dimensions
-time = model.grid.time_dim
+x, y, z = grid.dimensions
+time = grid.time_dim
 source_mask = Function(name='source_mask', shape=shape, dimensions=(x, y, z), space_order=0, dtype=np.float32)
 source_id = Function(name='source_id', shape=shape, dimensions=(x, y, z), space_order=0, dtype=np.int32)
 info("source_id data indexes start from 1 not 0 !!!")
@@ -174,78 +236,3 @@ sp_source_mask.data[inds[0], inds[1], :] = tuple(inds[2][:len(np.unique(inds[2])
 
 assert(np.count_nonzero(sp_source_mask.data) == len(nzinds[0]))
 assert(len(sp_source_mask.dimensions) == 3)
-
-t = model.grid.stepping_dim
-
-zind = Scalar(name='zind', dtype=np.int32)
-xb_size = Scalar(name='xb_size', dtype=np.int32)
-yb_size = Scalar(name='yb_size', dtype=np.int32)
-x0_blk0_size = Scalar(name='x0_blk0_size', dtype=np.int32)
-y0_blk0_size = Scalar(name='y0_blk0_size', dtype=np.int32)
-
-eq0 = Eq(sp_zi.symbolic_max, nnz_sp_source_mask[x, y] - 1, implicit_dims=(time, x, y))
-eq1 = Eq(zind, sp_source_mask[x, y, sp_zi], implicit_dims=(time, x, y, sp_zi))
-
-myexpr = source_mask[x, y, zind] * save_src[time, source_id[x, y, zind]]
-
-eq2 = Inc(usol.forward[t+1, x, y, zind], myexpr, implicit_dims=(time, x, y, sp_zi))
-
-pde_2 = model.m * usol.dt2 - usol.laplace + model.damp * usol.dt
-stencil_2 = Eq(usol.forward, solve(pde_2, usol.forward))
-
-
-block_sizes = Function(name='block_sizes', shape=(4, ), dimensions=(b_dim,), space_order=0, dtype=np.int32)
-
-# import pdb; pdb.set_trace()
-block_sizes.data[:] = args.bsizes
-
-# import pdb; pdb.set_trace()
-
-eqxb = Eq(xb_size, block_sizes[0])
-eqyb = Eq(yb_size, block_sizes[1])
-eqxb2 = Eq(x0_blk0_size, block_sizes[2])
-eqyb2 = Eq(y0_blk0_size, block_sizes[3])
-
-# import pdb; pdb.set_trace()
-# plot3d(source_mask.data, model)
-
-opref = Operator([stencil_ref, src_term_ref], opt=('advanced', {'openmp': True}))
-print("===Space blocking==")
-opref.apply(time=time_range.num-2, dt=model.critical_dt)
-print("===========")
-
-normuref = norm(uref)
-print("==========")
-print(normuref)
-print("===========")
-
-
-print("-----")
-op2 = Operator([eqxb, eqyb, eqxb2, eqyb2, stencil_2, eq0, eq1, eq2], eqxb=32, opt=('advanced'))
-# print(op2.ccode)
-print("===Temporal blocking======================================")
-op2.apply(time=time_range.num-1, dt=model.critical_dt)
-print("===========")
-
-normusol = norm(usol)
-print("===========")
-print(normusol)
-print("===========")
-
-
-print("Norm(f):", normf)
-print("Norm(usol):", normusol)
-print("Norm(uref):", normuref)
-
-# save_src.data[0, source_id.data[14, 14, 11]]
-# save_src.data[0 ,source_id.data[14, 14, sp_source_mask.data[14, 14, 0]]]
-
-#plt.imshow(uref.data[2, int(nx/2) ,:, :]); pause(1)
-#plt.imshow(usol.data[2, int(nx/2) ,:, :]); pause(1)
-
-
-assert np.isclose(normuref, normusol, atol=1e-06)
-
-#import pdb; pdb.set_trace()
-# Uncomment to plot a slice of the field
-#plt.imshow(usol.data[2, int(nx/2) ,:, :]); pause(1)
