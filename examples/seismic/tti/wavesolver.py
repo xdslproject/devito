@@ -95,6 +95,7 @@ class AnisotropicWaveSolver(object):
         -------
         Receiver, wavefield and performance summary.
         """
+        import pdb; pdb.set_trace()
         if kernel == 'staggered':
             time_order = 1
             dims = self.model.space_dimensions
