@@ -60,7 +60,7 @@ class AnisotropicWaveSolver(object):
         return AdjointOperator(self.model, save=None, geometry=self.geometry,
                                space_order=self.space_order, **self._kwargs)
 
-    def forward(self, src=None, u=None, v=None, vp=None,
+    def forward(self, src=None, rec=None, u=None, v=None, vp=None,
                 epsilon=None, delta=None, theta=None, phi=None,
                 save=False, kernel='centered', **kwargs):
         """
@@ -106,9 +106,9 @@ class AnisotropicWaveSolver(object):
         # Source term is read-only, so re-use the default
         src = src or self.geometry.src
         # Create a new receiver object to store the result
-        # rec = rec or Receiver(name='rec', grid=self.model.grid,
-        #                      time_range=self.geometry.time_axis,
-        #                      coordinates=self.geometry.rec_positions)
+        rec = rec or Receiver(name='rec', grid=self.model.grid,
+                              time_range=self.geometry.time_axis,
+                              coordinates=self.geometry.rec_positions)
 
         # Create the forward wavefield if not provided
         if u is None:
@@ -138,9 +138,9 @@ class AnisotropicWaveSolver(object):
             kwargs.pop('phi', None)
         # Execute operator and return wavefield and receiver data
         op = self.op_fwd(kernel, save)
-        summary = op.apply(src=src, u=u, v=v,
+        summary = op.apply(src=src, rec=rec, u=u, v=v,
                            dt=kwargs.pop('dt', self.dt), **kwargs)
-        return u, v, summary
+        return rec, u, v, summary
 
     def adjoint(self, rec, srca=None, p=None, r=None, vp=None,
                 epsilon=None, delta=None, theta=None, phi=None,
