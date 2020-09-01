@@ -466,12 +466,17 @@ def ForwardOperator(model, geometry, space_order=4,
                      time_order=time_order, space_order=space_order)
     src = PointSource(name='src', grid=model.grid, time_range=geometry.time_axis,
                       npoint=geometry.nsrc)
+<<<<<<< HEAD
     # rec = Receiver(name='rec', grid=model.grid, time_range=geometry.time_axis,
 <<<<<<< HEAD
     #               npoint=geometry.nrec)
 =======
     #                npoint=geometry.nrec)
 >>>>>>> 617d106b8... IVB i7-4930K
+=======
+    rec = Receiver(name='rec', grid=model.grid, time_range=geometry.time_axis,
+                   npoint=geometry.nrec)
+>>>>>>> 34cdcae81... Cleanup Elastic/TTI
 
     # FD kernels of the PDE
     FD_kernel = kernels[(kernel, len(model.shape))]
@@ -487,10 +492,14 @@ def ForwardOperator(model, geometry, space_order=4,
     stencils += src.inject(field=u.forward, expr=src * dt**2 / m)
     stencils += src.inject(field=v.forward, expr=src * dt**2 / m)
 <<<<<<< HEAD
+<<<<<<< HEAD
 
 =======
 >>>>>>> 617d106b8... IVB i7-4930K
     # stencils += rec.interpolate(expr=u + v)
+=======
+    stencils += rec.interpolate(expr=u + v)
+>>>>>>> 34cdcae81... Cleanup Elastic/TTI
 
     # Substitute spacing terms to reduce flops
     return Operator(stencils, subs=model.spacing_map, name='ForwardTTI', **kwargs)
@@ -523,16 +532,16 @@ def AdjointOperator(model, geometry, space_order=4,
                      space_order=space_order)
     srca = PointSource(name='srca', grid=model.grid, time_range=geometry.time_axis,
                        npoint=geometry.nsrc)
-    # rec = Receiver(name='rec', grid=model.grid, time_range=geometry.time_axis,
-    #               npoint=geometry.nrec)
+    rec = Receiver(name='rec', grid=model.grid, time_range=geometry.time_axis,
+                   npoint=geometry.nrec)
 
     # FD kernels of the PDE
     FD_kernel = kernels[('centered', len(model.shape))]
     stencils = FD_kernel(model, p, r, space_order, forward=False)
 
     # Construct expression to inject receiver values
-    # stencils += rec.inject(field=p.backward, expr=rec * dt**2 / m)
-    # stencils += rec.inject(field=r.backward, expr=rec * dt**2 / m)
+    stencils += rec.inject(field=p.backward, expr=rec * dt**2 / m)
+    stencils += rec.inject(field=r.backward, expr=rec * dt**2 / m)
 
     # Create interpolation expression for the adjoint-source
     stencils += srca.interpolate(expr=p + r)
