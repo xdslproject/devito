@@ -457,11 +457,14 @@ def ForwardOperator(model, geometry, space_order=4,
     # FD kernels of the PDE
     FD_kernel = kernels[(kernel, len(model.shape))]
     stencils = FD_kernel(model, u, v, space_order)
-
+    import pdb; pdb.set_trace()
     # Source and receivers
     stencils += src.inject(field=u.forward, expr=src * dt**2 / m)
     stencils += src.inject(field=v.forward, expr=src * dt**2 / m)
-    stencils += rec.interpolate(expr=u + v)
+    # stencils += rec.interpolate(expr=u + v)
+
+    tt_stencils = []
+    stencils += tt_stencils
 
     # Substitute spacing terms to reduce flops
     return Operator(stencils, subs=model.spacing_map, name='ForwardTTI', **kwargs)

@@ -198,7 +198,6 @@ def demo_model(preset, **kwargs):
         # velocities split across the height dimension:
         # By default, the top part of the domain has 1.5 km/s,
         # and the bottom part of the domain has 2.5 km/s.\
-        import pdb; pdb.set_trace()
         vp_top = kwargs.pop('vp_top', 1.5)
         vp_bottom = kwargs.pop('vp_bottom', 3.5)
 

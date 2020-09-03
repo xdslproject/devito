@@ -317,7 +317,7 @@ print("===========")
 #vistagrid.spacing = (1, 1, 1)  # These are the cell sizes along each axis
 #vistagrid.cell_arrays["values"] = values.flatten(order="F")  # Flatten the array!
 # vistagrid.plot(show_edges=True)
-#vistaslices = vistagrid.slice_orthogonal()
+# vistaslices = vistagrid.slice_orthogonal()
 # vistaslices.plot(cmap=cmap)
 
 
