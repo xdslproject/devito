@@ -53,11 +53,11 @@ class AnisotropicWaveSolver(object):
         return self.model.critical_dt
 
     @memoized_meth
-    def op_fwd(self, kernel='centered', save=False):
+    def op_fwd(self, kernel='centered', save=False, tteqs=(), **kwargs):
         """Cached operator for forward runs with buffered wavefield"""
         return ForwardOperator(self.model, save=save, geometry=self.geometry,
                                space_order=self.space_order,
-                               kernel=kernel, **self._kwargs)
+                               kernel=kernel, tteqs=tteqs, **self._kwargs)
 
     @memoized_meth
     def op_adj(self):
@@ -143,22 +143,33 @@ class AnisotropicWaveSolver(object):
             kwargs.pop('phi', None)
         # Execute operator and return wavefield and receiver data
 
-        # =======================================================
+        op = self.op_fwd(kernel, save)
 
+        summary = op.apply(src=src, u=u, v=v,
+                           dt=kwargs.pop('dt', self.dt), **kwargs)
 
-        sgrid = TimeFunction(name='sgrid', grid=self.model.grid, space_order=self.space_order, time_order=1)
+        print("Norm u", norm(u))
+        print("Norm v", norm(v))
 
-        src_fxx = src.inject(field=sgrid.forward, expr=src)
+        print("=========================================") 
+        import pdb; pdb.set_trace()
 
-        op_f = Operator(src_fxx)
+        s_u = TimeFunction(name='s_u', grid=self.model.grid, space_order=self.space_order, time_order=1)
+        s_v = TimeFunction(name='s_v', grid=self.model.grid, space_order=self.space_order, time_order=1)
+
+        src_u = src.inject(field=s_u.forward, expr=src * self.dt**2 / self.model.m)
+        src_v = src.inject(field=s_v.forward, expr=src * self.dt**2 / self.model.m)
+        import pdb; pdb.set_trace()
+
+        op_f = Operator([src_u, src_v])
         op_f()
 
-        print(norm(sgrid))
-
+        print("Norm s_u", norm(s_u))
+        print("Norm s_v", norm(s_v))
 
 
         #Get the nonzero indices
-        nzinds = np.nonzero(sgrid.data[0])  # nzinds is a tuple
+        nzinds = np.nonzero(s_u.data[0])  # nzinds is a tuple
         assert len(nzinds) == len(self.model.grid.shape)
         shape = self.model.grid.shape
         x, y, z = self.model.grid.dimensions
@@ -184,7 +195,7 @@ class AnisotropicWaveSolver(object):
         assert(source_id.data[nzinds[0][len(nzinds[0])-1], nzinds[1][len(nzinds[0])-1], nzinds[2][len(nzinds[0])-1]] == len(nzinds[0])-1)
 
         assert(np.all(np.nonzero(source_id.data)) == np.all(np.nonzero(source_mask.data)))
-        assert(np.all(np.nonzero(source_id.data)) == np.all(np.nonzero(sgrid.data[0])))
+        assert(np.all(np.nonzero(source_id.data)) == np.all(np.nonzero(s_u.data[0])))
 
         print("-At this point source_mask and source_id have been popoulated correctly-")
 
@@ -208,27 +219,23 @@ class AnisotropicWaveSolver(object):
         id_dim = Dimension(name='id_dim')
         b_dim = Dimension(name='b_dim')
 
-        # TTCreate the forward wavefield if not provided
-        u_sol = TimeFunction(name='u_sol', grid=self.model.grid, staggered=stagg_u,
-                           save=self.geometry.nt if save else None,
-                           time_order=time_order,
-                           space_order=self.space_order)
-
-        # TT Create the forward wavefield if not provided
-        v_sol = TimeFunction(name='v_sol', grid=self.model.grid, staggered=stagg_v,
-                           save=self.geometry.nt if save else None,
-                           time_order=time_order,
-                           space_order=self.space_order)
 
 
-        save_src_sol = TimeFunction(name='save_src_sol', shape=(src.shape[0],
+
+        save_src_u = TimeFunction(name='save_src_u', shape=(src.shape[0],
                             nzinds[1].shape[0]), dimensions=(src.dimensions[0], id_dim))
-        src_sol = src.inject(field=save_src_sol.forward, expr=src)
-        save_src_sol_term = src.inject(field=save_src_sol[src.dimensions[0], source_id], expr=src)
+        save_src_v = TimeFunction(name='save_src_v', shape=(src.shape[0],
+                            nzinds[1].shape[0]), dimensions=(src.dimensions[0], id_dim))
+        src_u = src.inject(field=save_src_u.forward, expr=src)
+        src_v = src.inject(field=save_src_v.forward, expr=src)
 
-        op1 = Operator(save_src_sol_term)
+        save_src_u_term = src.inject(field=save_src_u[src.dimensions[0], source_id], expr=src)
+        save_src_v_term = src.inject(field=save_src_v[src.dimensions[0], source_id], expr=src)
+
+        print("Injecting to empty grids")
+        op1 = Operator([save_src_u_term, save_src_v_term])
         op1()
-
+        print("Injecting to empty grids finished")
         sp_zi = Dimension(name='sp_zi')
 
         sp_source_mask = Function(name='sp_source_mask', shape=(list(sparse_shape)), dimensions=(x, y, sp_zi), space_order=0, dtype=np.int32)
@@ -239,7 +246,9 @@ class AnisotropicWaveSolver(object):
         assert(np.count_nonzero(sp_source_mask.data) == len(nzinds[0]))
         assert(len(sp_source_mask.dimensions) == 3)
 
-        # import pdb; pdb.set_trace()
+        # import pdb; pdb.set_trace()         .
+
+
 
         zind = Scalar(name='zind', dtype=np.int32)
         xb_size = Scalar(name='xb_size', dtype=np.int32)
@@ -261,32 +270,31 @@ class AnisotropicWaveSolver(object):
         # eq1 = Eq(zind, sp_source_mask[x, sp_zi], implicit_dims=(time, x, sp_zi))
         eq1 = Eq(zind, sp_source_mask[x, y, sp_zi], implicit_dims=(time, x, y, sp_zi))
 
-
-        myexpr_fxx = source_mask[x, y, zind] * save_src_sol[time, source_id[x, y, zind]]
+        myexpr_u = source_mask[x, y, zind] * save_src_u[time, source_id[x, y, zind]]
+        myexpr_v = source_mask[x, y, zind] * save_src_v[time, source_id[x, y, zind]]
 
         # import pdb; pdb.set_trace()
-        eq_fxx = Inc(u_sol.forward[t+1, x, y, zind], myexpr_fxx, implicit_dims=(time, x, y, sp_zi))
+        eq_u = Inc(u.forward[t+1, x, y, zind], myexpr_u, implicit_dims=(time, x, y, sp_zi))
+        eq_v = Inc(v.forward[t+1, x, y, zind], myexpr_v, implicit_dims=(time, x, y, sp_zi))
 
-        import pdb; pdb.set_trace()
+        # import pdb; pdb.set_trace()
         # =======================================================
 
-         
-
-        op = self.op_fwd(kernel, save)
-
-        summary = op.apply(src=src, u=u, v=v,
-                           dt=kwargs.pop('dt', self.dt), **kwargs)
 
 
-        norm(u)
-        norm(v)
-
-
-        tteqs = [eqxb, eqyb, eqxb2, eqyb2, eq0, eq1, eq_fxx]
+        tteqs = (eqxb, eqyb, eqxb2, eqyb2, eq0, eq1, eq_u, eq_v)
         import pdb; pdb.set_trace()
         op_tt = self.op_fwd(kernel, save, tteqs)
+        import pdb; pdb.set_trace()
 
+        u.data[:] = 0
+        v.data[:] = 0
 
+        summary_tt = op_tt.apply(u=u, v=v,
+                              dt=kwargs.pop('dt', self.dt), **kwargs)
+
+        print(norm(u))
+        print(norm(v))
         if 0:
             cmap = plt.cm.get_cmap("viridis")
             values = u.data[0, :, :, :]
@@ -296,16 +304,14 @@ class AnisotropicWaveSolver(object):
             vistagrid.origin = (0, 0, 0)  # The bottom left corner of the data set
             vistaslices = vistagrid.slice_orthogonal()
             vistaslices.plot(cmap=cmap)
-        
-        
-        
-        
-        
-        
-        
-        
-        
+
+
+
+
+
         return rec, u, v, summary
+
+
 
     def adjoint(self, rec, srca=None, p=None, r=None, vp=None,
                 epsilon=None, delta=None, theta=None, phi=None,
