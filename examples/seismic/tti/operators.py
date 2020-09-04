@@ -466,22 +466,12 @@ def ForwardOperator(model, geometry, space_order=4,
                      time_order=time_order, space_order=space_order)
     src = PointSource(name='src', grid=model.grid, time_range=geometry.time_axis,
                       npoint=geometry.nsrc)
-<<<<<<< HEAD
-    # rec = Receiver(name='rec', grid=model.grid, time_range=geometry.time_axis,
-<<<<<<< HEAD
-    #               npoint=geometry.nrec)
-=======
-    #                npoint=geometry.nrec)
->>>>>>> 617d106b8... IVB i7-4930K
-=======
     rec = Receiver(name='rec', grid=model.grid, time_range=geometry.time_axis,
                    npoint=geometry.nrec)
->>>>>>> 34cdcae81... Cleanup Elastic/TTI
 
     # FD kernels of the PDE
     FD_kernel = kernels[(kernel, len(model.shape))]
     stencils = FD_kernel(model, u, v, space_order)
-<<<<<<< HEAD
 
     tt_stencils = kwargs['tteqs']
 
@@ -492,25 +482,23 @@ def ForwardOperator(model, geometry, space_order=4,
     # Source and receivers
     stencils += src.inject(field=u.forward, expr=src * dt**2 / m)
     stencils += src.inject(field=v.forward, expr=src * dt**2 / m)
-<<<<<<< HEAD
-<<<<<<< HEAD
-
-=======
->>>>>>> 617d106b8... IVB i7-4930K
     # stencils += rec.interpolate(expr=u + v)
-=======
-    stencils += rec.interpolate(expr=u + v)
->>>>>>> 34cdcae81... Cleanup Elastic/TTI
-=======
-    import pdb; pdb.set_trace()
+
+    
+
+    tt_stencils = kwargs['tteqs']
+    stencils += tt_stencils
+    if tt_stencils:
+        import pdb; pdb.set_trace()
+        return Operator(stencils, subs=model.spacing_map, name='ForwardTTI', **kwargs)
+
     # Source and receivers
     stencils += src.inject(field=u.forward, expr=src * dt**2 / m)
     stencils += src.inject(field=v.forward, expr=src * dt**2 / m)
-    # stencils += rec.interpolate(expr=u + v)
 
     tt_stencils = []
     stencils += tt_stencils
->>>>>>> c99bc06a2... TTI inspector-to add eqs to executor
+    # stencils += rec.interpolate(expr=u + v)
 
     # Substitute spacing terms to reduce flops
     return Operator(stencils, subs=model.spacing_map, name='ForwardTTI', **kwargs)
