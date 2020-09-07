@@ -145,21 +145,19 @@ class AnisotropicWaveSolver(object):
 
         op = self.op_fwd(kernel, save)
 
-        summary = op.apply(src=src, u=u, v=v,
-                           dt=kwargs.pop('dt', self.dt), **kwargs)
+        # summary = op.apply(src=src, u=u, v=v,
+        #                    dt=kwargs.pop('dt', self.dt), **kwargs)
 
         print("Norm u", norm(u))
         print("Norm v", norm(v))
 
         print("=========================================") 
-        import pdb; pdb.set_trace()
 
         s_u = TimeFunction(name='s_u', grid=self.model.grid, space_order=self.space_order, time_order=1)
         s_v = TimeFunction(name='s_v', grid=self.model.grid, space_order=self.space_order, time_order=1)
 
         src_u = src.inject(field=s_u.forward, expr=src * self.dt**2 / self.model.m)
         src_v = src.inject(field=s_v.forward, expr=src * self.dt**2 / self.model.m)
-        import pdb; pdb.set_trace()
 
         op_f = Operator([src_u, src_v])
         op_f()
@@ -281,7 +279,6 @@ class AnisotropicWaveSolver(object):
         # =======================================================
 
 
-
         tteqs = (eqxb, eqyb, eqxb2, eqyb2, eq0, eq1, eq_u, eq_v)
         import pdb; pdb.set_trace()
         op_tt = self.op_fwd(kernel, save, tteqs)
@@ -290,8 +287,7 @@ class AnisotropicWaveSolver(object):
         u.data[:] = 0
         v.data[:] = 0
 
-        summary_tt = op_tt.apply(u=u, v=v,
-                              dt=kwargs.pop('dt', self.dt), **kwargs)
+        summary_tt = op_tt.apply()
 
         print(norm(u))
         print(norm(v))
@@ -304,10 +300,6 @@ class AnisotropicWaveSolver(object):
             vistagrid.origin = (0, 0, 0)  # The bottom left corner of the data set
             vistaslices = vistagrid.slice_orthogonal()
             vistaslices.plot(cmap=cmap)
-
-
-
-
 
         return rec, u, v, summary
 
