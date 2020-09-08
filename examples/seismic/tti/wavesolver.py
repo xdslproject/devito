@@ -283,19 +283,24 @@ class AnisotropicWaveSolver(object):
         v.data[:] = 0
 
         summary_tt = op_tt.apply(u=u, v=v,
-                           dt=kwargs.pop('dt', self.dt), **kwargs)
+                         dt=kwargs.pop('dt', self.dt), **kwargs)
 
         print(norm(u))
         print(norm(v))
-        if 0:
+        
+        if 1:
+            import pdb;pdb.set_trace()
             cmap = plt.cm.get_cmap("viridis")
             values = u.data[0, :, :, :]
             vistagrid = pv.UniformGrid()
             vistagrid.dimensions = np.array(values.shape) + 1
             vistagrid.spacing = (1, 1, 1)
             vistagrid.origin = (0, 0, 0)  # The bottom left corner of the data set
+            vistagrid.cell_arrays["values"] = values.flatten(order="F")
             vistaslices = vistagrid.slice_orthogonal()
+            vistagrid.plot(show_edges=True)
             vistaslices.plot(cmap=cmap)
+            import pdb;pdb.set_trace()
 
         # import pdb;pdb.set_trace()
         return rec, u, v, summary
