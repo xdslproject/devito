@@ -458,12 +458,10 @@ def ForwardOperator(model, geometry, space_order=4,
     FD_kernel = kernels[(kernel, len(model.shape))]
     stencils = FD_kernel(model, u, v, space_order)
 
-    
-
     tt_stencils = kwargs['tteqs']
     stencils += tt_stencils
     if tt_stencils:
-        import pdb; pdb.set_trace()
+        # import pdb; pdb.set_trace()
         return Operator(stencils, subs=model.spacing_map, name='ForwardTTI', **kwargs)
 
     # Source and receivers

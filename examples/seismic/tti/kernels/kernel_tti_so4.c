@@ -1,3 +1,6 @@
+// DEVITO_JIT_BACKDOOR=1 python examples/seismic/tti/tti_example.py -opt advanced-fsg -d 100 100 100 --tn 50
+// DEVITO_LANGUAGE=openmp
+
 #define _POSIX_C_SOURCE 200809L
 #include "stdlib.h"
 #include "math.h"
@@ -47,7 +50,7 @@ int ForwardTTI(struct dataobj *restrict block_sizes_vec, struct dataobj *restric
   float(*restrict epsilon)[epsilon_vec->size[1]][epsilon_vec->size[2]] __attribute__((aligned(64))) = (float(*)[epsilon_vec->size[1]][epsilon_vec->size[2]])epsilon_vec->data;
   float(*restrict vp)[vp_vec->size[1]][vp_vec->size[2]] __attribute__((aligned(64))) = (float(*)[vp_vec->size[1]][vp_vec->size[2]])vp_vec->data;
 
-  printf("Allocate \n");
+//  printf("Allocate \n");
 
   float(*r21)[y_size + 1][z_size + 1];
   posix_memalign((void **)&r21, 64, sizeof(float[x_size + 1][y_size + 1][z_size + 1]));
@@ -63,7 +66,7 @@ int ForwardTTI(struct dataobj *restrict block_sizes_vec, struct dataobj *restric
   posix_memalign((void **)&r34, 64, sizeof(float[x_size + 1][y_size + 1][z_size + 1]));
   float(*r35)[y_size + 1][z_size + 1];
   posix_memalign((void **)&r35, 64, sizeof(float[x_size + 1][y_size + 1][z_size + 1]));
-  printf("Allocate is over \n");
+//  printf("Allocate is over \n");
 
   /* Flush denormal numbers to zero in hardware */
   _MM_SET_DENORMALS_ZERO_MODE(_MM_DENORMALS_ZERO_ON);
@@ -96,7 +99,7 @@ int ForwardTTI(struct dataobj *restrict block_sizes_vec, struct dataobj *restric
       }
     }
   }
-  printf("Trigonometric is over \n");
+  //printf("Trigonometric is over \n");
 
   /* End section0 */
   gettimeofday(&end_section0, NULL);
@@ -107,7 +110,7 @@ int ForwardTTI(struct dataobj *restrict block_sizes_vec, struct dataobj *restric
     gettimeofday(&start_section1, NULL);
     /* Begin section1 */
 
-    printf("Alignemnt is over \n");
+    //printf("Alignemnt is over \n");
 
 
 #pragma omp parallel num_threads(nthreads)
@@ -122,9 +125,8 @@ int ForwardTTI(struct dataobj *restrict block_sizes_vec, struct dataobj *restric
             for (int y = y0_blk0; y <= y0_blk0 + y0_blk0_size - 1; y += 1)
             {
 #pragma omp simd aligned(u, v : 32)
-              for (int z = z_m; z <= z_M; z += 1)
+              for (int z = z_m - 1; z <= z_M; z += 1)
               {
-                printf(" Updating x %d z: %d \n", x, z );
                 float r39 = -v[t0][x + 4][y + 4][z + 4];
                 r35[x + 1][y + 1][z + 1] = 1.0e-1F * (-(r39 + v[t0][x + 4][y + 4][z + 5]) * r18[x + 1][y + 1][z + 1] - (r39 + v[t0][x + 4][y + 5][z + 4]) * r19[x + 1][y + 1][z + 1] * r20[x + 1][y + 1][z + 1] - (r39 + v[t0][x + 5][y + 4][z + 4]) * r20[x + 1][y + 1][z + 1] * r21[x + 1][y + 1][z + 1]);
                 float r40 = -u[t0][x + 4][y + 4][z + 4];
@@ -136,14 +138,14 @@ int ForwardTTI(struct dataobj *restrict block_sizes_vec, struct dataobj *restric
       }
     }
 
-    printf("First loop is over \n");
+//    printf("First loop is over \n");
 
 #pragma omp parallel num_threads(nthreads)
     {
 #pragma omp for collapse(1) schedule(dynamic, 1)
-      for (int x1_blk0 = x_m; x1_blk0 <= x_M; x1_blk0 += x1_blk0_size)
+      for (int x1_blk0 = x_m; x1_blk0 <= x_M - (x_M - x_m + 1)%(x1_blk0_size); x1_blk0 += x1_blk0_size)
       {
-        for (int y1_blk0 = y_m; y1_blk0 <= y_M; y1_blk0 += y1_blk0_size)
+        for (int y1_blk0 = y_m; y1_blk0 <= y_M - (y_M - y_m + 1)%(y1_blk0_size); y1_blk0 += y1_blk0_size)
         {
           for (int x = x1_blk0; x <= x1_blk0 + x1_blk0_size - 1; x += 1)
           {
@@ -163,30 +165,31 @@ int ForwardTTI(struct dataobj *restrict block_sizes_vec, struct dataobj *restric
                 u[t1][x + 4][y + 4][z + 4] = r41 * ((-r32) * r43 + r42 * (2 * epsilon[x + 4][y + 4][z + 4] + 1) + 1.0e-1F * r44 * r17[x + 1][y + 1][z + 1] + r46 * (damp[x + 1][y + 1][z + 1] * u[t0][x + 4][y + 4][z + 4]));
                 v[t1][x + 4][y + 4][z + 4] = r41 * ((-r33) * r43 + r42 * r17[x + 1][y + 1][z + 1] + 1.0e-1F * r44 + r46 * (damp[x + 1][y + 1][z + 1] * v[t0][x + 4][y + 4][z + 4]));
               }
-              /*
               for (int sp_zi = sp_zi_m; sp_zi <= nnz_sp_source_mask[x][y] - 1; sp_zi += 1)
               {
+
                 int zind = sp_source_mask[x][y][sp_zi];
                 float r22 = save_src_u[time][source_id[x][y][zind]] * source_mask[x][y][zind];
 #pragma omp atomic update
                 u[t1][x + 4][y + 4][zind + 4] += r22;
+                //printf("\n Source injection of r22: %f at x, y: %d, %d", r22, x, y);
                 float r23 = save_src_v[time][source_id[x][y][zind]] * source_mask[x][y][zind];
 #pragma omp atomic update
                 v[t1][x + 4][y + 4][zind + 4] += r23;
+                //printf("\n Source injection of r23: %f at x, y: %d, %d", r23, x, y);
               }
-              */
             }
           }
         }
       }
     }
-    printf("Second loop is over \n");
+  //  printf("\n Second loop is over \n");
 
     /* End section1 */
     gettimeofday(&end_section1, NULL);
     timers->section1 += (double)(end_section1.tv_sec - start_section1.tv_sec) + (double)(end_section1.tv_usec - start_section1.tv_usec) / 1000000;
   }
-  printf(" free \n");
+  //printf(" free \n");
   free(r21);
   free(r20);
   free(r19);
@@ -194,21 +197,9 @@ int ForwardTTI(struct dataobj *restrict block_sizes_vec, struct dataobj *restric
   free(r17);
   free(r34);
   free(r35);
-  printf(" freeing has finished \n");
+  //printf(" freeing has finished \n");
   return 0;
 }
-/* Backdoor edit at Mon Sep  7 17:48:55 2020*/
-/* Backdoor edit at Mon Sep  7 17:58:16 2020*/
-/* Backdoor edit at Mon Sep  7 18:01:48 2020*/
-/* Backdoor edit at Mon Sep  7 18:11:14 2020*/
-/* Backdoor edit at Mon Sep  7 18:15:56 2020*/
-/* Backdoor edit at Mon Sep  7 18:19:30 2020*/
-/* Backdoor edit at Mon Sep  7 18:21:32 2020*/
-/* Backdoor edit at Mon Sep  7 18:23:52 2020*/
-/* Backdoor edit at Mon Sep  7 18:28:43 2020*/
-/* Backdoor edit at Mon Sep  7 18:31:14 2020*/
-/* Backdoor edit at Mon Sep  7 18:37:28 2020*/ 
-/* Backdoor edit at Mon Sep  7 18:39:59 2020*/ 
-/* Backdoor edit at Mon Sep  7 18:42:54 2020*/ 
-/* Backdoor edit at Mon Sep  7 19:07:47 2020*/ 
-/* Backdoor edit at Mon Sep  7 19:55:53 2020*/ 
+/* Backdoor edit at Tue Sep  8 18:32:37 2020*/ 
+/* Backdoor edit at Tue Sep  8 18:36:13 2020*/ 
+/* Backdoor edit at Tue Sep  8 18:38:30 2020*/ 

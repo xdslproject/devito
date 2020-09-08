@@ -145,8 +145,8 @@ class AnisotropicWaveSolver(object):
 
         op = self.op_fwd(kernel, save)
 
-        # summary = op.apply(src=src, u=u, v=v,
-        #                    dt=kwargs.pop('dt', self.dt), **kwargs)
+        summary = op.apply(src=src, u=u, v=v,
+                           dt=kwargs.pop('dt', self.dt), **kwargs)
 
         print("Norm u", norm(u))
         print("Norm v", norm(v))
@@ -204,7 +204,7 @@ class AnisotropicWaveSolver(object):
 
         nnz_sp_source_mask.data[:, :] = source_mask.data[:, :, :].sum(2)
         inds = np.where(source_mask.data == 1.)
-
+        print(inds)
         maxz = len(np.unique(inds[-1]))
         sparse_shape = (self.model.grid.shape[0], self.model.grid.shape[1], maxz)  # Change only 3rd dim
 
@@ -217,9 +217,6 @@ class AnisotropicWaveSolver(object):
         id_dim = Dimension(name='id_dim')
         b_dim = Dimension(name='b_dim')
 
-
-
-
         save_src_u = TimeFunction(name='save_src_u', shape=(src.shape[0],
                             nzinds[1].shape[0]), dimensions=(src.dimensions[0], id_dim))
         save_src_v = TimeFunction(name='save_src_v', shape=(src.shape[0],
@@ -227,8 +224,8 @@ class AnisotropicWaveSolver(object):
         src_u = src.inject(field=save_src_u.forward, expr=src)
         src_v = src.inject(field=save_src_v.forward, expr=src)
 
-        save_src_u_term = src.inject(field=save_src_u[src.dimensions[0], source_id], expr=src)
-        save_src_v_term = src.inject(field=save_src_v[src.dimensions[0], source_id], expr=src)
+        save_src_u_term = src.inject(field=save_src_u[src.dimensions[0], source_id], expr=src* self.dt**2 / self.model.m)
+        save_src_v_term = src.inject(field=save_src_v[src.dimensions[0], source_id], expr=src* self.dt**2 / self.model.m)
 
         print("Injecting to empty grids")
         op1 = Operator([save_src_u_term, save_src_v_term])
@@ -280,14 +277,13 @@ class AnisotropicWaveSolver(object):
 
 
         tteqs = (eqxb, eqyb, eqxb2, eqyb2, eq0, eq1, eq_u, eq_v)
-        import pdb; pdb.set_trace()
         op_tt = self.op_fwd(kernel, save, tteqs)
-        import pdb; pdb.set_trace()
 
         u.data[:] = 0
         v.data[:] = 0
 
-        summary_tt = op_tt.apply()
+        summary_tt = op_tt.apply(u=u, v=v,
+                           dt=kwargs.pop('dt', self.dt), **kwargs)
 
         print(norm(u))
         print(norm(v))
@@ -301,6 +297,7 @@ class AnisotropicWaveSolver(object):
             vistaslices = vistagrid.slice_orthogonal()
             vistaslices.plot(cmap=cmap)
 
+        # import pdb;pdb.set_trace()
         return rec, u, v, summary
 
 
