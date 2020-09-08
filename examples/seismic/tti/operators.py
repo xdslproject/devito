@@ -474,22 +474,9 @@ def ForwardOperator(model, geometry, space_order=4,
     stencils = FD_kernel(model, u, v, space_order)
 
     tt_stencils = kwargs['tteqs']
-
-    if tt_stencils:
-        stencils += tt_stencils
-        return Operator(stencils, subs=model.spacing_map, name='ForwardTTI', **kwargs)
-
-    # Source and receivers
-    stencils += src.inject(field=u.forward, expr=src * dt**2 / m)
-    stencils += src.inject(field=v.forward, expr=src * dt**2 / m)
-    # stencils += rec.interpolate(expr=u + v)
-
-    
-
-    tt_stencils = kwargs['tteqs']
     stencils += tt_stencils
     if tt_stencils:
-        import pdb; pdb.set_trace()
+        # import pdb; pdb.set_trace()
         return Operator(stencils, subs=model.spacing_map, name='ForwardTTI', **kwargs)
 
     # Source and receivers
