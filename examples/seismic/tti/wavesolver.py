@@ -114,8 +114,8 @@ class AnisotropicWaveSolver(object):
         rec = rec or Receiver(name='rec', grid=self.model.grid,
                               time_range=self.geometry.time_axis,
                               coordinates=self.geometry.rec_positions)
-
         # Create the forward wavefield if not provided
+
         if u is None:
             u = TimeFunction(name='u', grid=self.model.grid, staggered=stagg_u,
                              save=self.geometry.nt if save else None,
@@ -127,6 +127,9 @@ class AnisotropicWaveSolver(object):
                              save=self.geometry.nt if save else None,
                              time_order=time_order,
                              space_order=self.space_order)
+
+        print("Initial Norm u", norm(u))
+        print("Initial Norm v", norm(v))
 
         if kernel == 'staggered':
             vx, vz, vy = particle_velocity_fields(self.model, self.space_order)
@@ -144,23 +147,40 @@ class AnisotropicWaveSolver(object):
         # Execute operator and return wavefield and receiver data
 
         op = self.op_fwd(kernel, save)
-
+        print(kwargs)
         summary = op.apply(src=src, u=u, v=v,
-                           dt=kwargs.pop('dt', self.dt), **kwargs)
+        #                   dt=kwargs.pop('dt', self.dt), **kwargs)
+                           dt=kwargs.pop('dt', self.dt))
+
+
 
         print("Norm u", norm(u))
         print("Norm v", norm(v))
+
+        if 0 :
+            import pdb;pdb.set_trace()
+            cmap = plt.cm.get_cmap("viridis")
+            values = u.data[0, :, :, :]
+            vistagrid = pv.UniformGrid()
+            vistagrid.dimensions = np.array(values.shape) + 1
+            vistagrid.spacing = (1, 1, 1)
+            vistagrid.origin = (0, 0, 0)  # The bottom left corner of the data set
+            vistagrid.cell_arrays["values"] = values.flatten(order="F")
+            vistaslices = vistagrid.slice_orthogonal()
+            vistagrid.plot(show_edges=True)
+            vistaslices.plot(cmap=cmap)
 
         print("=========================================") 
 
         s_u = TimeFunction(name='s_u', grid=self.model.grid, space_order=self.space_order, time_order=1)
         s_v = TimeFunction(name='s_v', grid=self.model.grid, space_order=self.space_order, time_order=1)
+        print("dt is :", self.model.grid.time_dim.spacing)
 
-        src_u = src.inject(field=s_u.forward, expr=src * self.dt**2 / self.model.m)
-        src_v = src.inject(field=s_v.forward, expr=src * self.dt**2 / self.model.m)
+        src_u = src.inject(field=s_u.forward, expr=src* self.model.grid.time_dim.spacing**2 / self.model.m)
+        src_v = src.inject(field=s_v.forward, expr=src * self.model.grid.time_dim.spacing**2 / self.model.m)
 
         op_f = Operator([src_u, src_v])
-        op_f()
+        op_f.apply(src=src, dt=kwargs.pop('dt', self.dt))
 
         print("Norm s_u", norm(s_u))
         print("Norm s_v", norm(s_v))
@@ -185,7 +205,7 @@ class AnisotropicWaveSolver(object):
         # plot3d(source_mask.data, model)
         # import pdb; pdb.set_trace()
 
-        print("Number of unique affected points is: %d", len(nzinds[0])+1)
+        print("Number of unique affected points is: %d", len(nzinds[0]))
 
         # Assert that first and last index are as expected
         assert(source_id.data[nzinds[0][0], nzinds[1][0], nzinds[2][0]] == 0)
@@ -224,12 +244,12 @@ class AnisotropicWaveSolver(object):
         src_u = src.inject(field=save_src_u.forward, expr=src)
         src_v = src.inject(field=save_src_v.forward, expr=src)
 
-        save_src_u_term = src.inject(field=save_src_u[src.dimensions[0], source_id], expr=src* self.dt**2 / self.model.m)
-        save_src_v_term = src.inject(field=save_src_v[src.dimensions[0], source_id], expr=src* self.dt**2 / self.model.m)
+        save_src_u_term = src.inject(field=save_src_u[src.dimensions[0], source_id], expr=src*  self.model.grid.time_dim.spacing**2 / self.model.m)
+        save_src_v_term = src.inject(field=save_src_v[src.dimensions[0], source_id], expr=src*  self.model.grid.time_dim.spacing**2 / self.model.m)
 
         print("Injecting to empty grids")
         op1 = Operator([save_src_u_term, save_src_v_term])
-        op1()
+        op1.apply(src=src, dt=kwargs.pop('dt', self.dt))
         print("Injecting to empty grids finished")
         sp_zi = Dimension(name='sp_zi')
 
@@ -242,8 +262,6 @@ class AnisotropicWaveSolver(object):
         assert(len(sp_source_mask.dimensions) == 3)
 
         # import pdb; pdb.set_trace()         .
-
-
 
         zind = Scalar(name='zind', dtype=np.int32)
         xb_size = Scalar(name='xb_size', dtype=np.int32)
@@ -277,19 +295,25 @@ class AnisotropicWaveSolver(object):
 
 
         tteqs = (eqxb, eqyb, eqxb2, eqyb2, eq0, eq1, eq_u, eq_v)
+
+        # Pick vp and Thomsen parameters from model unless explicitly provided
+        kwargs.update(self.model.physical_params(
+            vp=vp, epsilon=epsilon, delta=delta, theta=theta, phi=phi)
+        )
         op_tt = self.op_fwd(kernel, save, tteqs)
 
+        print(norm(u))
+        print(norm(v))
         u.data[:] = 0
         v.data[:] = 0
-
+        print(kwargs)
         summary_tt = op_tt.apply(u=u, v=v,
                          dt=kwargs.pop('dt', self.dt), **kwargs)
 
         print(norm(u))
         print(norm(v))
-        
+
         if 1:
-            import pdb;pdb.set_trace()
             cmap = plt.cm.get_cmap("viridis")
             values = u.data[0, :, :, :]
             vistagrid = pv.UniformGrid()
@@ -302,7 +326,7 @@ class AnisotropicWaveSolver(object):
             vistaslices.plot(cmap=cmap)
             import pdb;pdb.set_trace()
 
-        # import pdb;pdb.set_trace()
+        import pdb;pdb.set_trace()
         return rec, u, v, summary
 
 
