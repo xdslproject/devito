@@ -466,8 +466,8 @@ def ForwardOperator(model, geometry, space_order=4,
                      time_order=time_order, space_order=space_order)
     src = PointSource(name='src', grid=model.grid, time_range=geometry.time_axis,
                       npoint=geometry.nsrc)
-    rec = Receiver(name='rec', grid=model.grid, time_range=geometry.time_axis,
-                   npoint=geometry.nrec)
+    # rec = Receiver(name='rec', grid=model.grid, time_range=geometry.time_axis,
+    #               npoint=geometry.nrec)
 
     # FD kernels of the PDE
     FD_kernel = kernels[(kernel, len(model.shape))]
@@ -477,7 +477,7 @@ def ForwardOperator(model, geometry, space_order=4,
 
     if tt_stencils:
         stencils += tt_stencils
-        # import pdb; pdb.set_trace()
+        import pdb; pdb.set_trace()
         return Operator(stencils, subs=model.spacing_map, name='ForwardTTI', **kwargs)
 
     # Source and receivers
@@ -489,6 +489,7 @@ def ForwardOperator(model, geometry, space_order=4,
     # stencils += rec.interpolate(expr=u + v)
 
     # Substitute spacing terms to reduce flops
+    import pdb; pdb.set_trace()
     return Operator(stencils, subs=model.spacing_map, name='ForwardTTI', **kwargs)
 
 
