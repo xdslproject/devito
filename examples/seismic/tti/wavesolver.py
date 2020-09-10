@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from devito.types.basic import Scalar
 
+
 class AnisotropicWaveSolver(object):
     """
     Solver object that provides operators for seismic inversion problems
@@ -149,16 +150,14 @@ class AnisotropicWaveSolver(object):
         op = self.op_fwd(kernel, save)
         print(kwargs)
         summary = op.apply(src=src, u=u, v=v,
-        #                   dt=kwargs.pop('dt', self.dt), **kwargs)
-                           dt=kwargs.pop('dt', self.dt))
+                           dt=kwargs.pop('dt', self.dt), **kwargs)
 
-
-
-        print("Norm u", norm(u))
-        print("Norm v", norm(v))
+        regnormu = norm(u)
+        regnormv = norm(v)
+        print("Norm u:", regnormu)
+        print("Norm v:", regnormv)
 
         if 0 :
-            import pdb;pdb.set_trace()
             cmap = plt.cm.get_cmap("viridis")
             values = u.data[0, :, :, :]
             vistagrid = pv.UniformGrid()
@@ -174,7 +173,6 @@ class AnisotropicWaveSolver(object):
 
         s_u = TimeFunction(name='s_u', grid=self.model.grid, space_order=self.space_order, time_order=1)
         s_v = TimeFunction(name='s_v', grid=self.model.grid, space_order=self.space_order, time_order=1)
-        print("dt is :", self.model.grid.time_dim.spacing)
 
         src_u = src.inject(field=s_u.forward, expr=src* self.model.grid.time_dim.spacing**2 / self.model.m)
         src_v = src.inject(field=s_v.forward, expr=src * self.model.grid.time_dim.spacing**2 / self.model.m)
@@ -186,7 +184,7 @@ class AnisotropicWaveSolver(object):
         print("Norm s_v", norm(s_v))
 
 
-        #Get the nonzero indices
+        # Get the nonzero indices
         nzinds = np.nonzero(s_u.data[0])  # nzinds is a tuple
         assert len(nzinds) == len(self.model.grid.shape)
         shape = self.model.grid.shape
@@ -217,35 +215,36 @@ class AnisotropicWaveSolver(object):
 
         print("-At this point source_mask and source_id have been popoulated correctly-")
 
-        nnz_shape = (self.model.grid.shape[0], self.model.grid.shape[1])  # Change only 3rd dim
+        nnz_shape = (self.model.grid.shape[0], self.model.grid.shape[1])
 
         nnz_sp_source_mask = Function(name='nnz_sp_source_mask', shape=(list(nnz_shape)), dimensions=(x,y ), space_order=0, dtype=np.int32)
 
-
         nnz_sp_source_mask.data[:, :] = source_mask.data[:, :, :].sum(2)
         inds = np.where(source_mask.data == 1.)
-        print(inds)
+        print("Grid - source positions:", inds)
         maxz = len(np.unique(inds[-1]))
-        sparse_shape = (self.model.grid.shape[0], self.model.grid.shape[1], maxz)  # Change only 3rd dim
+        # Change only 3rd dim
+        sparse_shape = (self.model.grid.shape[0], self.model.grid.shape[1], maxz)
 
         assert(len(nnz_sp_source_mask.dimensions) == (len(source_mask.dimensions)-1))
 
-
-        # Note:sparse_source_id is not needed as long as sparse info is kept in mask
+        # Note : sparse_source_id is not needed as long as sparse info is kept in mask
         # sp_source_id.data[inds[0],inds[1],:] = inds[2][:maxz]
 
         id_dim = Dimension(name='id_dim')
         b_dim = Dimension(name='b_dim')
 
         save_src_u = TimeFunction(name='save_src_u', shape=(src.shape[0],
-                            nzinds[1].shape[0]), dimensions=(src.dimensions[0], id_dim))
+                                  nzinds[1].shape[0]), dimensions=(src.dimensions[0],
+                                  id_dim))
         save_src_v = TimeFunction(name='save_src_v', shape=(src.shape[0],
-                            nzinds[1].shape[0]), dimensions=(src.dimensions[0], id_dim))
-        src_u = src.inject(field=save_src_u.forward, expr=src)
-        src_v = src.inject(field=save_src_v.forward, expr=src)
+                                  nzinds[1].shape[0]), dimensions=(src.dimensions[0],
+                                  id_dim))
 
-        save_src_u_term = src.inject(field=save_src_u[src.dimensions[0], source_id], expr=src*  self.model.grid.time_dim.spacing**2 / self.model.m)
-        save_src_v_term = src.inject(field=save_src_v[src.dimensions[0], source_id], expr=src*  self.model.grid.time_dim.spacing**2 / self.model.m)
+        save_src_u_term = src.inject(field=save_src_u[src.dimensions[0], source_id],
+                                     expr=src * self.model.grid.time_dim.spacing**2 / self.model.m)
+        save_src_v_term = src.inject(field=save_src_v[src.dimensions[0], source_id],
+                                     expr=src * self.model.grid.time_dim.spacing**2 / self.model.m)
 
         print("Injecting to empty grids")
         op1 = Operator([save_src_u_term, save_src_v_term])
@@ -253,7 +252,8 @@ class AnisotropicWaveSolver(object):
         print("Injecting to empty grids finished")
         sp_zi = Dimension(name='sp_zi')
 
-        sp_source_mask = Function(name='sp_source_mask', shape=(list(sparse_shape)), dimensions=(x, y, sp_zi), space_order=0, dtype=np.int32)
+        sp_source_mask = Function(name='sp_source_mask', shape=(list(sparse_shape)),
+                                  dimensions=(x, y, sp_zi), space_order=0, dtype=np.int32)
 
         # Now holds IDs
         sp_source_mask.data[inds[0], inds[1], :] = tuple(inds[-1][:len(np.unique(inds[-1]))])
@@ -269,7 +269,8 @@ class AnisotropicWaveSolver(object):
         x0_blk0_size = Scalar(name='x0_blk0_size', dtype=np.int32)
         y0_blk0_size = Scalar(name='y0_blk0_size', dtype=np.int32)
 
-        block_sizes = Function(name='block_sizes', shape=(4, ), dimensions=(b_dim,), space_order=0, dtype=np.int32)
+        block_sizes = Function(name='block_sizes', shape=(4, ), dimensions=(b_dim,),
+                               space_order=0, dtype=np.int32)
 
         bsizes = (8, 8, 32, 32)
         block_sizes.data[:] = bsizes
@@ -279,31 +280,32 @@ class AnisotropicWaveSolver(object):
         eqxb2 = Eq(x0_blk0_size, block_sizes[2])
         eqyb2 = Eq(y0_blk0_size, block_sizes[3])
 
-        eq0 = Eq(sp_zi.symbolic_max, nnz_sp_source_mask[x, y] - 1, implicit_dims=(time, x, y))
+        eq0 = Eq(sp_zi.symbolic_max, nnz_sp_source_mask[x, y] - 1,
+                 implicit_dims=(time, x, y))
         # eq1 = Eq(zind, sp_source_mask[x, sp_zi], implicit_dims=(time, x, sp_zi))
         eq1 = Eq(zind, sp_source_mask[x, y, sp_zi], implicit_dims=(time, x, y, sp_zi))
 
-        myexpr_u = source_mask[x, y, zind] * save_src_u[time, source_id[x, y, zind]]
-        myexpr_v = source_mask[x, y, zind] * save_src_v[time, source_id[x, y, zind]]
+        inj_u = source_mask[x, y, zind] * save_src_u[time, source_id[x, y, zind]]
+        inj_v = source_mask[x, y, zind] * save_src_v[time, source_id[x, y, zind]]
 
-        # import pdb; pdb.set_trace()
-        eq_u = Inc(u.forward[t+1, x, y, zind], myexpr_u, implicit_dims=(time, x, y, sp_zi))
-        eq_v = Inc(v.forward[t+1, x, y, zind], myexpr_v, implicit_dims=(time, x, y, sp_zi))
+        eq_u = Inc(u.forward[t+1, x, y, zind], inj_u, implicit_dims=(time, x, y, sp_zi))
+        eq_v = Inc(v.forward[t+1, x, y, zind], inj_v, implicit_dims=(time, x, y, sp_zi))
 
-        # import pdb; pdb.set_trace()
-        # =======================================================
-
-
+        # The additional time-tiling equations
         tteqs = (eqxb, eqyb, eqxb2, eqyb2, eq0, eq1, eq_u, eq_v)
 
         # Pick vp and Thomsen parameters from model unless explicitly provided
-        kwargs.update(self.model.physical_params(
-            vp=vp, epsilon=epsilon, delta=delta, theta=theta, phi=phi)
-        )
+        # kwargs.update(self.model.physical_params(
+        #    vp=vp, epsilon=epsilon, delta=delta, theta=theta, phi=phi)
+        # )
+
         op_tt = self.op_fwd(kernel, save, tteqs)
 
-        print(norm(u))
-        print(norm(v))
+        norm_tt_u = norm(u)
+        norm_tt_v = norm(v)
+
+        print(norm_tt_u)
+        print(norm_tt_v)
         u.data[:] = 0
         v.data[:] = 0
         print(kwargs)
@@ -324,12 +326,8 @@ class AnisotropicWaveSolver(object):
             vistaslices = vistagrid.slice_orthogonal()
             vistagrid.plot(show_edges=True)
             vistaslices.plot(cmap=cmap)
-            import pdb;pdb.set_trace()
 
-        import pdb;pdb.set_trace()
         return rec, u, v, summary
-
-
 
     def adjoint(self, rec, srca=None, p=None, r=None, vp=None,
                 epsilon=None, delta=None, theta=None, phi=None,
