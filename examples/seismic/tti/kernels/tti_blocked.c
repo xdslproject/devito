@@ -113,7 +113,7 @@ int ForwardTTI(struct dataobj *restrict block_sizes_vec, struct dataobj *restric
   {
     struct timeval start_section2, end_section2;
     gettimeofday(&start_section2, NULL);
-/* Begin section2
+ Begin section2
 #pragma omp parallel num_threads(nthreads_nonaffine)
     {
       int chunk_size = (int)(fmax(1, (1.0F / 3.0F) * (x_M - x_m + 1) / nthreads_nonaffine));
@@ -251,6 +251,4 @@ void bf1(struct dataobj *restrict damp_vec, const float dt, struct dataobj *rest
 }
 /* Backdoor edit at Wed Sep  9 19:03:00 2020*/
 
-/* Backdoor edit at Wed Sep  9 19:40:01 2020*/ 
-/* Backdoor edit at Wed Sep  9 19:42:19 2020*/ 
-/* Backdoor edit at Wed Sep  9 19:47:21 2020*/ 
+
