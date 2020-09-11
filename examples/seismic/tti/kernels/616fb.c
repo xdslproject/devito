@@ -91,10 +91,10 @@ int ForwardTTI(struct dataobj *restrict block_sizes_vec, struct dataobj *restric
   gettimeofday(&end_section0, NULL);
   timers->section0 += (double)(end_section0.tv_sec - start_section0.tv_sec) + (double)(end_section0.tv_usec - start_section0.tv_usec) / 1000000;
 
-  int y0_blk0_size = block_sizes[3];
-  int x0_blk0_size = block_sizes[2];
-  int yb_size = block_sizes[1];
-  int xb_size = block_sizes[0];
+  int y0_blk0_size = 4; //block_sizes[3];
+  int x0_blk0_size = 4; //block_sizes[2];
+  int yb_size = 8; // block_sizes[1];
+  int xb_size = 8; //block_sizes[0];
   int sf = 4;
   int t_blk_size = 2 * sf * (time_M - time_m);
 
@@ -107,16 +107,17 @@ int ForwardTTI(struct dataobj *restrict block_sizes_vec, struct dataobj *restric
       //printf(" Change of outer xblock %d \n", xb);
       for (int yb = y_m; yb <= (y_M + sf * (time_M - time_m)); yb += yb_size)
       {
-        printf(" Updating x: %d y: %d \n", xb, yb);
+        //printf(" Updating x: %d y: %d \n", xb, yb);
 
-        for (int time = time_m, t0 = (time) % (3), t1 = (time + 1) % (3), t2 = (time + 2) % (3); time <= time_M; time += 1, t0 = (time) % (3), t1 = (time + 1) % (3), t2 = (time + 2) % (3))
+        for (int time = t_blk, t0 = (time) % (3), t1 = (time + 1) % (3), t2 = (time + 2) % (3); time <= 1 + min(t_blk + t_blk_size - 1, sf * (time_M - time_m)); time += sf, t0 = (((time / sf) % (time_M - time_m + 1))) % (3), t1 = (((time / sf) % (time_M - time_m + 1)) + 1) % (3), t2 = (((time / sf) % (time_M - time_m + 1)) + 2) % (3))
         {
           int tw = ((time / sf) % (time_M - time_m + 1));
           struct timeval start_section1, end_section1;
           gettimeofday(&start_section1, NULL);
           /* Begin section1 */
 
-          bf0((float *)r18, (float *)r19, (float *)r20, (float *)r21, (float *)r34, (float *)r35, u_vec, v_vec, x_size, y_size, z_size, time, t0, x0_blk0_size, x_M - (x_M - x_m + 2) % (x0_blk0_size), x_m - 1, y0_blk0_size, y_M - (y_M - y_m + 2) % (y0_blk0_size), y_m - 1, z_M, z_m, nthreads, xb, yb, xb_size, yb_size, tw);
+          //bf0((float *)r18, (float *)r19, (float *)r20, (float *)r21, (float *)r34, (float *)r35, u_vec, v_vec, x_size, y_size, z_size, time, t0, x0_blk0_size, x_M - (x_M - x_m + 2) % (x0_blk0_size), x_m - 1, y0_blk0_size, y_M - (y_M - y_m + 2) % (y0_blk0_size), y_m - 1, z_M, z_m, nthreads, xb, yb, xb_size, yb_size, tw);
+          bf0((float *)r18, (float *)r19, (float *)r20, (float *)r21, (float *)r34, (float *)r35, u_vec, v_vec, x_size, y_size, z_size, time, t0, x0_blk0_size, x_M, x_m , y0_blk0_size, y_M , y_m , z_M, z_m, nthreads, xb, yb, xb_size, yb_size, tw);
           //printf("\n BF0 - 1 IS OVER");
 
           //bf0((float *)r18, (float *)r19, (float *)r20, (float *)r21, (float *)r34, (float *)r35, u_vec, v_vec, x_size, y_size, z_size, time, t0, x0_blk0_size, x_M - (x_M - x_m + 2) % (x0_blk0_size), x_m - 1, (y_M - y_m + 2) % (y0_blk0_size), y_M, y_M - (y_M - y_m + 2) % (y0_blk0_size) + 1, z_M, z_m, nthreads, xb, yb, xb_size, yb_size, tw);
@@ -129,6 +130,7 @@ int ForwardTTI(struct dataobj *restrict block_sizes_vec, struct dataobj *restric
 
           /*==============================================*/
           //bf1(damp_vec, dt, epsilon_vec, (float *)r17, (float *)r18, (float *)r19, (float *)r20, (float *)r21, (float *)r34, (float *)r35, u_vec, v_vec, vp_vec, nnz_sp_source_mask_vec, sp_source_mask_vec, save_src_u_vec, save_src_v_vec, source_id_vec, source_mask_vec, x_size, y_size, z_size, time, t0, t1, t2, x1_blk0_size, -2 + x_M - (x_M - x_m + 1) % (x1_blk0_size), x_m, y1_blk0_size, -2 + y_M - (y_M - y_m + 1) % (y1_blk0_size), y_m, z_M, z_m, sp_zi_m, nthreads, xb, yb, xb_size, yb_size, tw);
+          bf1(damp_vec, dt, epsilon_vec, (float *)r17, (float *)r18, (float *)r19, (float *)r20, (float *)r21, (float *)r34, (float *)r35, u_vec, v_vec, vp_vec, nnz_sp_source_mask_vec, sp_source_mask_vec, save_src_u_vec, save_src_v_vec, source_id_vec, source_mask_vec, x_size, y_size, z_size, time, t0, t1, t2, x0_blk0_size, x_M, x_m, y0_blk0_size, y_M, y_m, z_M, z_m, sp_zi_m, nthreads, xb, yb, xb_size, yb_size, tw);
           //printf("\n BF1 - 1 IS OVER");
 
           //bf1(damp_vec, dt, epsilon_vec, (float *)r17, (float *)r18, (float *)r19, (float *)r20, (float *)r21, (float *)r34, (float *)r35, u_vec, v_vec, vp_vec, nnz_sp_source_mask_vec, sp_source_mask_vec, save_src_u_vec, save_src_v_vec, source_id_vec, source_mask_vec, x_size, y_size, z_size, time, t0, t1, t2, x1_blk0_size, x_M - (x_M - x_m + 1) % (x1_blk0_size), x_m, (y_M - y_m + 1) % (y1_blk0_size), y_M, y_M - (y_M - y_m + 1) % (y1_blk0_size) + 1, z_M, z_m, sp_zi_m, nthreads, xb, yb, xb_size, yb_size, tw);
@@ -208,9 +210,9 @@ void bf0(float *restrict r18_vec, float *restrict r19_vec, float *restrict r20_v
           for (int y = y0_blk0; y <= min(min((y_M + time), (yb + yb_size - 1)), (y0_blk0 + y0_blk0_size - 1)); y++)
           {
 #pragma omp simd aligned(u, v : 32)
-            for (int z = z_m - 1; z <= z_M; z += 1)
+            for (int z = z_m ; z <= z_M; z += 1)
             {
-              //printf(" bf0 Updating x: %d y: %d z: %d \n", x - time + 4, y - time + 4,  z + 4);
+              //printf(" bf0 Updating x: %d y: %d z: %d \n", x - time + 1, y - time + 1,  z + 1);
               float r39 = -v[t0][x - time + 4][y - time + 4][z + 4];
               r35[x - time + 1][y - time + 1][z + 1] = 1.0e-1F * (-(r39 + v[t0][x - time + 4][y - time + 4][z + 5]) * r18[x - time + 1][y - time + 1][z + 1] - (r39 + v[t0][x - time + 4][y - time + 5][z + 4]) * r19[x - time + 1][y - time + 1][z + 1] * r20[x - time + 1][y - time + 1][z + 1] - (r39 + v[t0][x - time + 5][y - time + 4][z + 4]) * r20[x - time + 1][y - time + 1][z + 1] * r21[x - time + 1][y - time + 1][z + 1]);
               float r40 = -u[t0][x - time + 4][y - time + 4][z + 4];
@@ -244,6 +246,7 @@ void bf1(struct dataobj *restrict damp_vec, const float dt, struct dataobj *rest
   int(*restrict source_id)[source_id_vec->size[1]][source_id_vec->size[2]] __attribute__((aligned(64))) = (int(*)[source_id_vec->size[1]][source_id_vec->size[2]])source_id_vec->data;
   int(*restrict source_mask)[source_mask_vec->size[1]][source_mask_vec->size[2]] __attribute__((aligned(64))) = (int(*)[source_mask_vec->size[1]][source_mask_vec->size[2]])source_mask_vec->data;
   int(*restrict sp_source_mask)[sp_source_mask_vec->size[1]][sp_source_mask_vec->size[2]] __attribute__((aligned(64))) = (int(*)[sp_source_mask_vec->size[1]][sp_source_mask_vec->size[2]])sp_source_mask_vec->data;
+  //printf("In bf1 \n");
 
   if (x1_blk0_size == 0)
   {
@@ -252,10 +255,10 @@ void bf1(struct dataobj *restrict damp_vec, const float dt, struct dataobj *rest
 #pragma omp parallel num_threads(nthreads)
   {
 #pragma omp for collapse(1) schedule(dynamic, 1)
-    for (int x1_blk0 = max((x_m + time), xb ); x1_blk0 <= -2 +min((x_M + time), (xb - 2 + xb_size)); x1_blk0 += x1_blk0_size)
+    for (int x1_blk0 = max((x_m + time), xb - 2 ); x1_blk0 <= +min((x_M + time), (xb - 2 + xb_size)); x1_blk0 += x1_blk0_size)
     {
       //printf(" Change of inner x1_blk0 %d \n", x1_blk0);
-      for (int y1_blk0 = max((y_m + time), yb ); y1_blk0 <= -2 +min((y_M + time), (yb - 2 + yb_size)); y1_blk0 += y1_blk0_size)
+      for (int y1_blk0 = max((y_m + time), yb -2 ); y1_blk0 <= +min((y_M + time), (yb - 2 + yb_size)); y1_blk0 += y1_blk0_size)
       {
         for (int x = x1_blk0; x <= min(min((x_M + time), (xb - 2 + xb_size - 1)), (x1_blk0 + x1_blk0_size - 1)); x++)
         {
@@ -266,11 +269,13 @@ void bf1(struct dataobj *restrict damp_vec, const float dt, struct dataobj *rest
             for (int z = z_m; z <= z_M; z += 1)
             {
               //printf(" bf1 Updating x: %d y: %d z: %d \n", x - time + 4, y - time + 4,  z + 4);
+
+              //printf(" bf1 Updating x: %d y: %d z: %d \n", x - time + 4, y - time + 4,  z + 4);
               float r46 = 1.0 / dt;
               float r45 = 1.0 / (dt * dt);
-              float r44 = r18[x - time + 1][y - time + 1][z] * r35[x - time + 1][y - time + 1][z] - r18[x - time + 1][y - time + 1][z + 1] * r35[x - time + 1][y - time + 1][z + 1] + r19[x - time + 1][y][z + 1] * r20[x - time + 1][y][z + 1] * r35[x - time + 1][y][z + 1] - r19[x - time + 1][y - time + 1][z + 1] * r20[x - time + 1][y - time + 1][z + 1] * r35[x - time + 1][y - time + 1][z + 1] + r20[x][y - time + 1][z + 1] * r21[x][y - time + 1][z + 1] * r35[x][y - time + 1][z + 1] - r20[x - time + 1][y - time + 1][z + 1] * r21[x - time + 1][y - time + 1][z + 1] * r35[x - time + 1][y - time + 1][z + 1];
+              float r44 = r18[x - time + 1][y - time + 1][z] * r35[x - time + 1][y - time + 1][z] - r18[x - time + 1][y - time + 1][z + 1] * r35[x - time + 1][y - time + 1][z + 1] + r19[x - time + 1][y - time][z + 1] * r20[x - time + 1][y - time][z + 1] * r35[x - time + 1][y - time][z + 1] - r19[x - time + 1][y - time + 1][z + 1] * r20[x - time + 1][y - time + 1][z + 1] * r35[x - time + 1][y - time + 1][z + 1] + r20[x - time][y - time + 1][z + 1] * r21[x - time][y - time + 1][z + 1] * r35[x - time][y - time + 1][z + 1] - r20[x - time + 1][y - time + 1][z + 1] * r21[x - time + 1][y - time + 1][z + 1] * r35[x - time + 1][y - time + 1][z + 1];
               float r43 = pow(vp[x - time + 4][y - time + 4][z + 4], -2);
-              float r42 = 1.0e-1F * (-r18[x - time + 1][y - time + 1][z] * r34[x - time + 1][y - time + 1][z] + r18[x - time + 1][y - time + 1][z + 1] * r34[x - time + 1][y - time + 1][z + 1] - r19[x - time + 1][y][z + 1] * r20[x - time + 1][y][z + 1] * r34[x - time + 1][y][z + 1] + r19[x - time + 1][y - time + 1][z + 1] * r20[x - time + 1][y - time + 1][z + 1] * r34[x - time + 1][y - time + 1][z + 1] - r20[x][y - time + 1][z + 1] * r21[x][y - time + 1][z + 1] * r34[x][y - time + 1][z + 1] + r20[x - time + 1][y - time + 1][z + 1] * r21[x - time + 1][y - time + 1][z + 1] * r34[x - time + 1][y - time + 1][z + 1]) - 8.33333315e-4F * (u[t0][x - time + 2][y - time + 4][z + 4] + u[t0][x - time + 4][y - time + 2][z + 4] + u[t0][x - time + 4][y - time + 4][z + 2] + u[t0][x - time + 4][y - time + 4][z + 6] + u[t0][x - time + 4][y - time + 6][z + 4] + u[t0][x - time + 6][y - time + 4][z + 4]) + 1.3333333e-2F * (u[t0][x - time + 3][y - time + 4][z + 4] + u[t0][x - time + 4][y - time + 3][z + 4] + u[t0][x - time + 4][y - time + 4][z + 3] + u[t0][x - time + 4][y - time + 4][z + 5] + u[t0][x - time + 4][y - time + 5][z + 4] + u[t0][x - time + 5][y - time + 4][z + 4]) - 7.49999983e-2F * u[t0][x - time + 4][y - time + 4][z + 4];
+              float r42 = 1.0e-1F * (-r18[x - time + 1][y - time + 1][z] * r34[x - time + 1][y - time + 1][z] + r18[x - time + 1][y - time + 1][z + 1] * r34[x - time + 1][y - time + 1][z + 1] - r19[x - time + 1][y - time][z + 1] * r20[x - time + 1][y - time][z + 1] * r34[x - time + 1][y - time][z + 1] + r19[x - time + 1][y - time + 1][z + 1] * r20[x - time + 1][y - time + 1][z + 1] * r34[x - time + 1][y - time + 1][z + 1] - r20[x - time][y - time + 1][z + 1] * r21[x - time][y - time + 1][z + 1] * r34[x - time][y - time + 1][z + 1] + r20[x - time + 1][y - time + 1][z + 1] * r21[x - time + 1][y - time + 1][z + 1] * r34[x - time + 1][y - time + 1][z + 1]) - 8.33333315e-4F * (u[t0][x - time + 2][y - time + 4][z + 4] + u[t0][x - time + 4][y - time + 2][z + 4] + u[t0][x - time + 4][y - time + 4][z + 2] + u[t0][x - time + 4][y - time + 4][z + 6] + u[t0][x - time + 4][y - time + 6][z + 4] + u[t0][x - time + 6][y - time + 4][z + 4]) + 1.3333333e-2F * (u[t0][x - time + 3][y - time + 4][z + 4] + u[t0][x - time + 4][y - time + 3][z + 4] + u[t0][x - time + 4][y - time + 4][z + 3] + u[t0][x - time + 4][y - time + 4][z + 5] + u[t0][x - time + 4][y - time + 5][z + 4] + u[t0][x - time + 5][y - time + 4][z + 4]) - 7.49999983e-2F * u[t0][x - time + 4][y - time + 4][z + 4];
               float r41 = 1.0 / (r43 * r45 + r46 * damp[x - time + 1][y - time + 1][z + 1]);
               float r32 = r45 * (-2.0F * u[t0][x - time + 4][y - time + 4][z + 4] + u[t2][x - time + 4][y - time + 4][z + 4]);
               float r33 = r45 * (-2.0F * v[t0][x - time + 4][y - time + 4][z + 4] + v[t2][x - time + 4][y - time + 4][z + 4]);
@@ -282,12 +287,12 @@ void bf1(struct dataobj *restrict damp_vec, const float dt, struct dataobj *rest
             {
               int zind = sp_source_mask[x - time][y - time][sp_zi];
               float r22 = save_src_u[tw][source_id[x - time][y - time][zind]] * source_mask[x - time][y - time][zind];
-#pragma omp atomic update
+//#pragma omp atomic update
               u[t1][x - time + 4][y - time + 4][zind + 4] += r22;
               float r23 = save_src_v[tw][source_id[x - time][y - time][zind]] * source_mask[x - time][y - time][zind];
-#pragma omp atomic update
+//#pragma omp atomic update
               v[t1][x - time + 4][y - time + 4][zind + 4] += r23;
-              printf(" Time %d , at : %d, %d \n", tw, x - time + 4, zind + 4);
+              printf("Source injection at time %d , at : x: %d, y: %d, %d, %f, %f \n", tw, x - time + 4, y - time + 4, zind + 4, r22, r23);
             }
           }
         }
