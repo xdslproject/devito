@@ -309,7 +309,7 @@ class AnisotropicWaveSolver(object):
         u.data[:] = 0
         v.data[:] = 0
         print(kwargs)
-        import pdb; pdb.set_trace()
+        # import pdb; pdb.set_trace()
         summary_tt = op_tt.apply(u=u, v=v,
                          dt=kwargs.pop('dt', self.dt), **kwargs)
 
