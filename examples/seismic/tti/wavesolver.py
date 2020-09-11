@@ -147,10 +147,10 @@ class AnisotropicWaveSolver(object):
             kwargs.pop('phi', None)
         # Execute operator and return wavefield and receiver data
 
-        # op = self.op_fwd(kernel, save)
+        op = self.op_fwd(kernel, save)
         print(kwargs)
-        # summary = op.apply(src=src, u=u, v=v,
-        #                    dt=kwargs.pop('dt', self.dt), **kwargs)
+        summary = op.apply(src=src, u=u, v=v,
+                           dt=kwargs.pop('dt', self.dt), **kwargs)
 
         regnormu = norm(u)
         regnormv = norm(v)
