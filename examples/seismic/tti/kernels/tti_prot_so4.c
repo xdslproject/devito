@@ -87,6 +87,7 @@ int ForwardTTI(struct dataobj *restrict damp_vec, struct dataobj *restrict delta
     gettimeofday(&start_section1, NULL);
     /* Begin section1 */
     bf0((float *)r18,(float *)r19,(float *)r20,(float *)r21,(float *)r48,(float *)r49,u_vec,v_vec,x_size,y_size,z_size,t0,x0_blk0_size,x_M - (x_M - x_m + 2)%(x0_blk0_size),x_m - 1,y0_blk0_size,y_M - (y_M - y_m + 2)%(y0_blk0_size),y_m - 1,z_M,z_m,nthreads);
+    
     bf0((float *)r18,(float *)r19,(float *)r20,(float *)r21,(float *)r48,(float *)r49,u_vec,v_vec,x_size,y_size,z_size,t0,x0_blk0_size,x_M - (x_M - x_m + 2)%(x0_blk0_size),x_m - 1,(y_M - y_m + 2)%(y0_blk0_size),y_M,y_M - (y_M - y_m + 2)%(y0_blk0_size) + 1,z_M,z_m,nthreads);
     bf0((float *)r18,(float *)r19,(float *)r20,(float *)r21,(float *)r48,(float *)r49,u_vec,v_vec,x_size,y_size,z_size,t0,(x_M - x_m + 2)%(x0_blk0_size),x_M,x_M - (x_M - x_m + 2)%(x0_blk0_size) + 1,y0_blk0_size,y_M - (y_M - y_m + 2)%(y0_blk0_size),y_m - 1,z_M,z_m,nthreads);
     bf0((float *)r18,(float *)r19,(float *)r20,(float *)r21,(float *)r48,(float *)r49,u_vec,v_vec,x_size,y_size,z_size,t0,(x_M - x_m + 2)%(x0_blk0_size),x_M,x_M - (x_M - x_m + 2)%(x0_blk0_size) + 1,(y_M - y_m + 2)%(y0_blk0_size),y_M,y_M - (y_M - y_m + 2)%(y0_blk0_size) + 1,z_M,z_m,nthreads);
