@@ -217,15 +217,15 @@ void bf1(struct dataobj *restrict damp_vec, const float dt, struct dataobj *rest
 #pragma omp parallel num_threads(nthreads)
   {
 #pragma omp for collapse(1) schedule(dynamic, 1)
-    for (int x1_blk0 = max((x_m + time), xb - 2 ); x1_blk0 <= +min((x_M + time), (xb - 2 + xb_size)); x1_blk0 += x1_blk0_size)
+    for (int x1_blk0 = max((x_m + time), xb - 0 ); x1_blk0 <= +min((x_M + time), (xb - 0 + xb_size)); x1_blk0 += x1_blk0_size)
     {
       //printf(" Change of inner x1_blk0 %d \n", x1_blk0);
-      for (int y1_blk0 = max((y_m + time), yb - 2 ); y1_blk0 <= +min((y_M + time), (yb - 2 + yb_size)); y1_blk0 += y1_blk0_size)
+      for (int y1_blk0 = max((y_m + time), yb - 0 ); y1_blk0 <= +min((y_M + time), (yb - 0 + yb_size)); y1_blk0 += y1_blk0_size)
       {
-        for (int x = x1_blk0; x <= min(min((x_M + time), (xb - 2 + xb_size - 1)), (x1_blk0 + x1_blk0_size - 1)); x++)
+        for (int x = x1_blk0; x <= min(min((x_M + time), (xb - 0 + xb_size - 1)), (x1_blk0 + x1_blk0_size - 1)); x++)
         {
           //printf(" bf1 Timestep tw: %d, Updating x: %d \n", tw, x - time + 4);
-          for (int y = y1_blk0; y <= min(min((y_M + time), (yb - 2 + yb_size - 1)), (y1_blk0 + y1_blk0_size - 1)); y++)
+          for (int y = y1_blk0; y <= min(min((y_M + time), (yb - 0 + yb_size - 1)), (y1_blk0 + y1_blk0_size - 1)); y++)
           {
             //printf(" bf1 Timestep tw: %d, Updating x: %d y: %d \n", tw, x - time + 4, y - time + 4);
             #pragma omp simd aligned(damp, epsilon, u, v, vp : 32)
