@@ -373,7 +373,7 @@ class AnisotropicWaveSolver(object):
 
 
 
-        if 1:
+        if 0:
             cmap = plt.cm.get_cmap("viridis")
             values = u.data[0, :, :, :]
             vistagrid = pv.UniformGrid()
