@@ -70,7 +70,7 @@ int ForwardTTI(struct dataobj *restrict block_sizes_vec, struct dataobj *restric
 /* Begin section0 */
 #pragma omp parallel num_threads(nthreads)
   {
-#pragma omp for collapse(1) schedule(static, 1)
+#pragma omp for collapse(2) schedule(static, 1)
     for (int x = x_m - 1; x <= x_M; x += 1)
     {
       for (int y = y_m - 1; y <= y_M; y += 1)
@@ -154,7 +154,7 @@ void bf0(float *restrict r18_vec, float *restrict r19_vec, float *restrict r20_v
 
 #pragma omp parallel num_threads(nthreads)
   {
-#pragma omp for collapse(1) schedule(dynamic, 1)
+#pragma omp for collapse(2) schedule(dynamic, 1)
     for (int x0_blk0 = max((x_m + time), xb); x0_blk0 <= min((x_M + time), (xb + xb_size)); x0_blk0 += x0_blk0_size)
     {
       for (int y0_blk0 = max((y_m + time), yb); y0_blk0 <= min((y_M + time), (yb + yb_size)); y0_blk0 += y0_blk0_size)
@@ -166,7 +166,7 @@ void bf0(float *restrict r18_vec, float *restrict r19_vec, float *restrict r20_v
           for (int y = y0_blk0; y <= min(min((y_M + time), (yb + yb_size - 1)), (y0_blk0 + y0_blk0_size - 1)); y++)
           {
             // printf(" bf0 Timestep tw: %d, Updating x: %d y: %d \n", tw, x - time + 1, y - time + 1);
-#pragma omp simd aligned(u, v : 32)
+#pragma omp simd aligned(u, v : 64)
             for (int z = z_m - 1 ; z <= z_M; z += 1)
             {
               //printf(" bf0 Updating x: %d y: %d z: %d \n", x - time + 1, y - time + 1,  z + 1);
@@ -207,7 +207,7 @@ void bf1(struct dataobj *restrict damp_vec, const float dt, struct dataobj *rest
 
 #pragma omp parallel num_threads(nthreads)
   {
-#pragma omp for collapse(1) schedule(dynamic, 1)
+#pragma omp for collapse(2) schedule(dynamic, 1)
     for (int x1_blk0 = max((x_m + time), xb - 0 ); x1_blk0 <= +min((x_M + time), (xb - 0 + xb_size)); x1_blk0 += x1_blk0_size)
     {
       //printf(" Change of inner x1_blk0 %d \n", x1_blk0);
@@ -219,7 +219,7 @@ void bf1(struct dataobj *restrict damp_vec, const float dt, struct dataobj *rest
           for (int y = y1_blk0; y <= min(min((y_M + time), (yb - 0 + yb_size - 1)), (y1_blk0 + y1_blk0_size - 1)); y++)
           {
             //printf(" bf1 Timestep tw: %d, Updating x: %d y: %d \n", tw, x - time + 4, y - time + 4);
-            #pragma omp simd aligned(damp, epsilon, u, v, vp : 32)
+            #pragma omp simd aligned(damp, epsilon, u, v, vp : 64)
             for (int z = z_m ; z <= z_M; z += 1)
             {
               //printf(" bf1 Updating x: %d y: %d z: %d \n", x - time + 4, y - time + 4,  z + 4);
