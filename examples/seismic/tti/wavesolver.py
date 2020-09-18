@@ -160,9 +160,7 @@ class AnisotropicWaveSolver(object):
         print("Norm u:", regnormu)
         print("Norm v:", regnormv)
 
-        import pdb; pdb.set_trace()
-
-        if 1:
+        if 0:
             cmap = plt.cm.get_cmap("viridis")
             values = u.data[0, :, :, :]
             vistagrid = pv.UniformGrid()
@@ -301,16 +299,16 @@ class AnisotropicWaveSolver(object):
 
         performance_map = np.array([[0, 0, 0, 0, 0]])
 
-        bxstart = 4
-        bxend = 35
-        bystart = 4
-        byend = 35
+        bxstart = 8
+        bxend = 9
+        bystart = 8
+        byend = 9
         bstep = 4
 
         txstart = 32
-        txend = 65
+        txend = 33
         tystart = 32
-        tyend = 65
+        tyend = 33
 
         tstep = 8
         # Temporal autotuning
