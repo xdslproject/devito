@@ -305,10 +305,10 @@ class AnisotropicWaveSolver(object):
         byend = 9
         bstep = 4
 
-        txstart = 32
-        txend = 33
-        tystart = 32
-        tyend = 33
+        txstart = 16
+        txend = 17
+        tystart = 16
+        tyend = 17
 
         tstep = 8
         # Temporal autotuning

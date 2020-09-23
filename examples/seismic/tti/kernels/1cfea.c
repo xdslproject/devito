@@ -167,7 +167,7 @@ void bf0(float *restrict r18_vec, float *restrict r19_vec, float *restrict r20_v
           {
             // printf(" bf0 Timestep tw: %d, Updating x: %d y: %d \n", tw, x - time + 1, y - time + 1);
 #pragma omp simd aligned(u, v : 32)
-            for (int z = z_m - 1 ; z <= z_M; z += 1)
+            for (int z = z_m - 1; z <= z_M; z += 1)
             {
               //printf(" bf0 Updating x: %d y: %d z: %d \n", x - time + 1, y - time + 1,  z + 1);
               float r39 = -v[t0][x - time + 4][y - time + 4][z + 4];
@@ -208,19 +208,19 @@ void bf1(struct dataobj *restrict damp_vec, const float dt, struct dataobj *rest
 #pragma omp parallel num_threads(nthreads)
   {
 #pragma omp for collapse(1) schedule(dynamic, 1)
-    for (int x1_blk0 = max((x_m + time), xb - 0 ); x1_blk0 <= +min((x_M + time), (xb - 0 + xb_size)); x1_blk0 += x1_blk0_size)
+    for (int x1_blk0 = max((x_m + time), xb - 0); x1_blk0 <= +min((x_M + time), (xb - 0 + xb_size)); x1_blk0 += x1_blk0_size)
     {
       //printf(" Change of inner x1_blk0 %d \n", x1_blk0);
-      for (int y1_blk0 = max((y_m + time), yb - 0 ); y1_blk0 <= +min((y_M + time), (yb - 0 + yb_size)); y1_blk0 += y1_blk0_size)
+      for (int y1_blk0 = max((y_m + time), yb - 0); y1_blk0 <= +min((y_M + time), (yb - 0 + yb_size)); y1_blk0 += y1_blk0_size)
       {
         for (int x = x1_blk0; x <= min(min((x_M + time), (xb - 0 + xb_size - 1)), (x1_blk0 + x1_blk0_size - 1)); x++)
         {
           //printf(" bf1 Timestep tw: %d, Updating x: %d \n", tw, x - time + 4);
           for (int y = y1_blk0; y <= min(min((y_M + time), (yb - 0 + yb_size - 1)), (y1_blk0 + y1_blk0_size - 1)); y++)
           {
-            //printf(" bf1 Timestep tw: %d, Updating x: %d y: %d \n", tw, x - time + 4, y - time + 4);
-            #pragma omp simd aligned(damp, epsilon, u, v, vp : 32)
-            for (int z = z_m ; z <= z_M; z += 1)
+//printf(" bf1 Timestep tw: %d, Updating x: %d y: %d \n", tw, x - time + 4, y - time + 4);
+#pragma omp simd aligned(damp, epsilon, u, v, vp : 32)
+            for (int z = z_m; z <= z_M; z += 1)
             {
               //printf(" bf1 Updating x: %d y: %d z: %d \n", x - time + 4, y - time + 4,  z + 4);
               //printf(" bf1 Updating x: %d y: %d z: %d \n", x - time + 4, y - time + 4,  z + 4);
@@ -240,10 +240,10 @@ void bf1(struct dataobj *restrict damp_vec, const float dt, struct dataobj *rest
             {
               int zind = sp_source_mask[x - time][y - time][sp_zi];
               float r22 = save_src_u[tw][source_id[x - time][y - time][zind]] * source_mask[x - time][y - time][zind];
-//#pragma omp atomic update
+              //#pragma omp atomic update
               u[t1][x - time + 4][y - time + 4][zind + 4] += r22;
               float r23 = save_src_v[tw][source_id[x - time][y - time][zind]] * source_mask[x - time][y - time][zind];
-//#pragma omp atomic update
+              //#pragma omp atomic update
               v[t1][x - time + 4][y - time + 4][zind + 4] += r23;
               //printf("Source injection at time %d , at : x: %d, y: %d, %d, %f, %f \n", tw, x - time + 4, y - time + 4, zind + 4, r22, r23);
             }
@@ -253,4 +253,3 @@ void bf1(struct dataobj *restrict damp_vec, const float dt, struct dataobj *rest
     }
   }
 }
-
