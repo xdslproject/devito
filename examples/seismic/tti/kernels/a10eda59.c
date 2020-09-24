@@ -82,7 +82,7 @@ int ForwardTTI(struct dataobj *restrict block_sizes_vec, struct dataobj *restric
 /* Begin section0 */
 #pragma omp parallel num_threads(nthreads)
     {
-#pragma omp for collapse(2) schedule(static, 1)
+#pragma omp for collapse(1) schedule(static, 1)
         for (int x = x_m - 1; x <= x_M; x += 1)
         {
             for (int y = y_m - 1; y <= y_M; y += 1)
@@ -166,6 +166,10 @@ void bf0(struct dataobj *restrict damp_vec, const float dt, struct dataobj *rest
     int(*restrict source_mask)[source_mask_vec->size[1]][source_mask_vec->size[2]] __attribute__((aligned(64))) = (int(*)[source_mask_vec->size[1]][source_mask_vec->size[2]])source_mask_vec->data;
     int(*restrict sp_source_mask)[sp_source_mask_vec->size[1]][sp_source_mask_vec->size[2]] __attribute__((aligned(64))) = (int(*)[sp_source_mask_vec->size[1]][sp_source_mask_vec->size[2]])sp_source_mask_vec->data;
 
+    if (x0_blk0_size == 0)
+    {
+        return;
+    }
 #pragma omp parallel num_threads(nthreads)
     {
         const int tid = omp_get_thread_num();
