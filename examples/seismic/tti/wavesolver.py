@@ -305,10 +305,10 @@ class AnisotropicWaveSolver(object):
         byend = 17
         bstep = 16
 
-        txstart = 16
-        txend = 17
-        tystart = 16
-        tyend = 17
+        txstart = 32
+        txend = 33
+        tystart = 32
+        tyend = 33
 
         tstep = 16
         # Temporal autotuning
@@ -373,8 +373,7 @@ class AnisotropicWaveSolver(object):
                 plt.savefig(str(shape[0]) + str(np.int32(tx)) + str(np.int32(ty)) + ".pdf")
 
 
-
-        if 1:
+        if 0:
             cmap = plt.cm.get_cmap("viridis")
             values = u.data[0, :, :, :]
             vistagrid = pv.UniformGrid()
