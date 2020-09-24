@@ -305,10 +305,10 @@ class AnisotropicWaveSolver(object):
         byend = 17
         bstep = 16
 
-        txstart = 32
-        txend = 33
-        tystart = 32
-        tyend = 33
+        txstart = 16
+        txend = 17
+        tystart = 16
+        tyend = 17
 
         tstep = 16
         # Temporal autotuning
@@ -335,7 +335,8 @@ class AnisotropicWaveSolver(object):
                                                  dt=kwargs.pop('dt', self.dt), **kwargs)
                         norm_tt_u = norm(u)
                         norm_tt_v = norm(v)
-
+                        print("Norm u:", regnormu)
+                        print("Norm v:", regnormv)
                         print("Norm(tt_u):", norm_tt_u)
                         print("Norm(tt_v):", norm_tt_v)
 
@@ -373,7 +374,7 @@ class AnisotropicWaveSolver(object):
 
 
 
-        if 0:
+        if 1:
             cmap = plt.cm.get_cmap("viridis")
             values = u.data[0, :, :, :]
             vistagrid = pv.UniformGrid()
