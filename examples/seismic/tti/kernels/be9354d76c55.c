@@ -107,10 +107,10 @@ int ForwardTTI(struct dataobj *restrict block_sizes_vec, struct dataobj *restric
 
     for (int t_blk = time_m; t_blk <= 1 + sf * (time_M - time_m); t_blk += sf * t_blk_size) // for each t block
     {
-        for (int xb = x_m-1 ; xb <= (x_M + sf * (time_M - time_m)); xb += xb_size)
+        for (int xb = x_m - 1; xb <= (x_M + sf * (time_M - time_m)); xb += xb_size)
         {
             //printf(" Change of outer xblock %d \n", xb);
-            for (int yb = y_m-1 ; yb <= (y_M + sf * (time_M - time_m)); yb += yb_size)
+            for (int yb = y_m - 1; yb <= (y_M + sf * (time_M - time_m)); yb += yb_size)
             {
                 for (int time = t_blk, t0 = (time) % (3), t1 = (time + 2) % (3), t2 = (time + 1) % (3); time <= 2 + min(t_blk + t_blk_size - 1, sf * (time_M - time_m)); time += sf, t0 = (((time / sf) % (time_M - time_m + 1))) % (3), t1 = (((time / sf) % (time_M - time_m + 1)) + 2) % (3), t2 = (((time / sf) % (time_M - time_m + 1)) + 1) % (3))
                 {
@@ -119,7 +119,7 @@ int ForwardTTI(struct dataobj *restrict block_sizes_vec, struct dataobj *restric
                     struct timeval start_section1, end_section1;
                     gettimeofday(&start_section1, NULL);
                     /* Begin section1 */
-                    bf0(damp_vec, dt, epsilon_vec, (float *)r17, (float *)r18, (float *)r19, (float *)r20, (float *)r21, u_vec, v_vec, vp_vec, nnz_sp_source_mask_vec, sp_source_mask_vec, save_src_u_vec, save_src_v_vec, source_id_vec, source_mask_vec, x0_blk0_size, x_size, y0_blk0_size, y_size, z_size, t0, t1, t2, x_M , x_m, y_M , y_m, z_M, z_m, sp_zi_m, nthreads, xb, yb, xb_size, yb_size, (float **)r47, (float **)r48, time, tw);
+                    bf0(damp_vec, dt, epsilon_vec, (float *)r17, (float *)r18, (float *)r19, (float *)r20, (float *)r21, u_vec, v_vec, vp_vec, nnz_sp_source_mask_vec, sp_source_mask_vec, save_src_u_vec, save_src_v_vec, source_id_vec, source_mask_vec, x0_blk0_size, x_size, y0_blk0_size, y_size, z_size, t0, t1, t2, x_M, x_m, y_M, y_m, z_M, z_m, sp_zi_m, nthreads, xb, yb, xb_size, yb_size, (float **)r47, (float **)r48, time, tw);
                     // x_M - (x_M - x_m + 1)%(x0_blk0_size), x_m, y_M - (y_M - y_m + 1)%(y0_blk0_size), y_m,
                     /* End section1 */
                     gettimeofday(&end_section1, NULL);
@@ -210,16 +210,15 @@ void bf0(struct dataobj *restrict damp_vec, const float dt, struct dataobj *rest
                             u[t2][x - time + 4][y - time + 4][z + 4] = r41 * ((-r32) * r43 + r42 * (2 * epsilon[x - time + 4][y - time + 4][z + 4] + 1) + 1.0e-1F * r44 * r17[x - time + 1][y - time + 1][z + 1] + r46 * (damp[x - time + 1][y - time + 1][z + 1] * u[t0][x - time + 4][y - time + 4][z + 4]));
                             v[t2][x - time + 4][y - time + 4][z + 4] = r41 * ((-r33) * r43 + r42 * r17[x - time + 1][y - time + 1][z + 1] + 1.0e-1F * r44 + r46 * (damp[x - time + 1][y - time + 1][z + 1] * v[t0][x - time + 4][y - time + 4][z + 4]));
                         }
-                        int sp_zi_M = nnz_sp_source_mask[x-time][y-time] - 1;
+                        int sp_zi_M = nnz_sp_source_mask[x - time][y - time] - 1;
                         for (int sp_zi = sp_zi_m; sp_zi <= sp_zi_M; sp_zi += 1)
                         {
-                            int zind = sp_source_mask[x-time][y-time][sp_zi];
-                            float r22 = save_src_u[tw][source_id[x-time][y-time][zind]] * source_mask[x-time][y-time][zind];
-                            u[t2][x -time + 4][y -time + 4][zind + 4] += r22;
-                            float r23 = save_src_v[tw][source_id[x-time][y-time][zind]] * source_mask[x-time][y-time][zind];
-                            v[t2][x-time + 4][y-time + 4][zind + 4] += r23;
+                            int zind = sp_source_mask[x - time][y - time][sp_zi];
+                            float r22 = save_src_u[tw][source_id[x - time][y - time][zind]] * source_mask[x - time][y - time][zind];
+                            u[t2][x - time + 4][y - time + 4][zind + 4] += r22;
+                            float r23 = save_src_v[tw][source_id[x - time][y - time][zind]] * source_mask[x - time][y - time][zind];
+                            v[t2][x - time + 4][y - time + 4][zind + 4] += r23;
                             //printf("Source injection at time %d , at : x: %d, y: %d, %d, %f, %f \n", tw, x - time + 4, y - time + 4, zind + 4, r22, r23);
-
                         }
                     }
                 }
