@@ -724,10 +724,8 @@ class Operator(Callable):
 
             v = summary.globals.get('fdlike')
             if v is not None:
-                metrics.append("%.2f GPts/s" % fround(v.gpointss))
-
-            if metrics:
-                perf("Global performance: [%s]" % ', '.join(metrics))
+                perf("%s* Achieved %.2f FD-GPts/s, %.2f GFlops/s" %
+                     (indent, v.gpointss, v.gflopss))
 
             perf("Local performance:")
             indent = " "*2
