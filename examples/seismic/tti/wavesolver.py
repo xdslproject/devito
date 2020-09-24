@@ -300,17 +300,17 @@ class AnisotropicWaveSolver(object):
         performance_map = np.array([[0, 0, 0, 0, 0]])
 
         bxstart = 8
-        bxend = 9
+        bxend = 17
         bystart = 8
-        byend = 9
-        bstep = 4
+        byend = 17
+        bstep = 16
 
-        txstart = 16
-        txend = 17
-        tystart = 16
-        tyend = 17
+        txstart = 32
+        txend = 33
+        tystart = 32
+        tyend = 33
 
-        tstep = 8
+        tstep = 16
         # Temporal autotuning
         for tx in range(txstart, txend, tstep):
             # import pdb; pdb.set_trace()
