@@ -64,10 +64,8 @@ int ForwardTTI(struct dataobj *restrict block_sizes_vec, struct dataobj *restric
     int x0_blk0_size = block_sizes[2];
     int yb_size = block_sizes[1];
     int xb_size = block_sizes[0];
-    int sf = 6;
+    int sf = 2;
     int t_blk_size = 2 * sf * (time_M - time_m);
-
-    printf(" Tiles: %d, %d ::: Blocks %d, %d \n", xb_size, yb_size, x0_blk0_size, y0_blk0_size);
 
 #pragma omp parallel num_threads(nthreads)
     {

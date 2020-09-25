@@ -209,7 +209,8 @@ void bf0(struct dataobj *restrict damp_vec, const float dt, struct dataobj *rest
                             u[t2][x - time + 8][y - time + 8][z + 8] = r88 * ((-r80) * r89 + r87 * (2 * epsilon[x - time + 8][y - time + 8][z + 8] + 1) + r93 * (damp[x - time + 1][y - time + 1][z + 1] * u[t0][x - time + 8][y - time + 8][z + 8]) + (r90 + r91) * r49[x - time + 2][y - time + 2][z + 2]);
                             v[t2][x - time + 8][y - time + 8][z + 8] = r88 * ((-r81) * r89 + r87 * r49[x - time + 2][y - time + 2][z + 2] + r90 + r91 + r93 * (damp[x - time + 1][y - time + 1][z + 1] * v[t0][x - time + 8][y - time + 8][z + 8]));
                         }
-                        for (int sp_zi = sp_zi_m; sp_zi <= nnz_sp_source_mask[x - time][y - time] - 1; sp_zi += 1)
+                        int sp_zi_M = nnz_sp_source_mask[x - time][y - time] - 1;
+                        for (int sp_zi = sp_zi_m; sp_zi <= sp_zi_M; sp_zi += 1)
                         {
                             int zind = sp_source_mask[x - time][y - time][sp_zi];
                             float r22 = save_src_u[tw][source_id[x - time][y - time][zind]] * source_mask[x - time][y - time][zind];
