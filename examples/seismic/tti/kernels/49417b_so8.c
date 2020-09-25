@@ -181,7 +181,6 @@ void bf0(struct dataobj *restrict damp_vec, const float dt, struct dataobj *rest
                     for (int y = y0_blk0 - 2, ys = 0; y <= min(min((y_M + time), (yb + yb_size + 1)), (y0_blk0 + y0_blk0_size + 1)); y++, ys++)
                     {
                      //printf(" bf0 Timestep tw: %d, Updating x: %d y: %d , Updating xs: %d ys: %d \n", tw, x - time + 8, y - time + 8, xs, ys);
-
 #pragma omp simd aligned(u, v : 64)
                         for (int z = z_m - 2; z <= z_M + 2; z += 1)
                         {
@@ -210,8 +209,7 @@ void bf0(struct dataobj *restrict damp_vec, const float dt, struct dataobj *rest
                             u[t2][x - time + 8][y - time + 8][z + 8] = r88 * ((-r80) * r89 + r87 * (2 * epsilon[x - time + 8][y - time + 8][z + 8] + 1) + r93 * (damp[x - time + 1][y - time + 1][z + 1] * u[t0][x - time + 8][y - time + 8][z + 8]) + (r90 + r91) * r49[x - time + 2][y - time + 2][z + 2]);
                             v[t2][x - time + 8][y - time + 8][z + 8] = r88 * ((-r81) * r89 + r87 * r49[x - time + 2][y - time + 2][z + 2] + r90 + r91 + r93 * (damp[x - time + 1][y - time + 1][z + 1] * v[t0][x - time + 8][y - time + 8][z + 8]));
                         }
-                        int sp_zi_M = nnz_sp_source_mask[x - time][y - time] - 1;
-                        for (int sp_zi = sp_zi_m; sp_zi <= sp_zi_M; sp_zi += 1)
+                        for (int sp_zi = sp_zi_m; sp_zi <= nnz_sp_source_mask[x - time][y - time] - 1; sp_zi += 1)
                         {
                             int zind = sp_source_mask[x - time][y - time][sp_zi];
                             float r22 = save_src_u[tw][source_id[x - time][y - time][zind]] * source_mask[x - time][y - time][zind];
