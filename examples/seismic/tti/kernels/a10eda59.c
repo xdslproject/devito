@@ -82,7 +82,7 @@ int ForwardTTI(struct dataobj *restrict block_sizes_vec, struct dataobj *restric
 /* Begin section0 */
 #pragma omp parallel num_threads(nthreads)
     {
-#pragma omp for collapse(1) schedule(static, 1)
+#pragma omp for collapse(2) schedule(static, 1)
         for (int x = x_m - 1; x <= x_M; x += 1)
         {
             for (int y = y_m - 1; y <= y_M; y += 1)
