@@ -40,7 +40,7 @@ shape = (nx, ny, nz)  # Number of grid point (nx, ny, nz)
 spacing = (10., 10., 10.)  # Grid spacing in m. The domain size is now 1km by 1km
 origin = (0., 0., 0.)
 so = args.space_order
-extent = (600., 600, 600)
+extent = (6000., 6000, 6000)
 x = SpaceDimension(name='x', spacing=Constant(name='h_x', value=extent[0]/(shape[0]-1)))
 y = SpaceDimension(name='y', spacing=Constant(name='h_y', value=extent[1]/(shape[1]-1)))
 z = SpaceDimension(name='z', spacing=Constant(name='h_z', value=extent[2]/(shape[2]-1)))
