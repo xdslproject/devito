@@ -9,7 +9,7 @@ import argparse
 
 from devito.logger import info
 from devito import TimeFunction, Function, Dimension, Eq, Inc
-from devito import Operator, norm
+from devito import Operator, norm, configuration
 import sys
 np.set_printoptions(threshold=sys.maxsize)  # pdb print full size
 
@@ -98,7 +98,9 @@ u_t = Eq(tau.forward, tau + dt * l * diag(div(v.forward)) +
 
 op = Operator([u_v] + [u_t]  + src_xx + src_yy + src_zz)
 # op = Operator(src_xx + src_zz)
+configuration['autotuning']='off'
 op()
+configuration['autotuning']='off'
 
 # plot_image(v[0].data[0,:], cmap="seismic"); pause(1)
 # plot_image(v[1].data[0,:], cmap="seismic"); pause(1)
