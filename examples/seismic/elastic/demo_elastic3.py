@@ -99,7 +99,7 @@ u_t = Eq(tau.forward, tau + dt * l * diag(div(v.forward)) +
 op = Operator([u_v] + [u_t]  + src_xx + src_yy + src_zz)
 # op = Operator(src_xx + src_zz)
 configuration['autotuning']='off'
-# op()
+op()
 configuration['autotuning']='off'
 
 # plot_image(v[0].data[0,:], cmap="seismic"); pause(1)
