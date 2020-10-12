@@ -1,10 +1,9 @@
-from sympy.abc import a, b, c, d, e
+import numpy as np
 import pytest
+from sympy.abc import a, b, c, d, e
+import time
 
-from conftest import skipif
-from devito.tools import toposort
-
-pytestmark = skipif(['yask', 'ops'])
+from devito.tools import toposort, filter_ordered
 
 
 @pytest.mark.parametrize('elements, expected', [
@@ -20,3 +19,16 @@ def test_toposort(elements, expected):
         assert ordering == expected
     except ValueError:
         assert expected is None
+
+
+def test_sorting():
+    key = lambda x: x
+    array = np.random.rand(10000)
+    t0 = time.time()
+    sort_key = filter_ordered(array, key=key)
+    t1 = time.time()
+    sort_nokey = filter_ordered(array)
+    t2 = time.time()
+    # This one is slightly faster
+    assert t2 - t1 < .5 * (t1 - t0)
+    assert sort_key == sort_nokey

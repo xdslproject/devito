@@ -11,9 +11,10 @@ from devito.tools import Pickable, dtype_to_cstr, is_integer, memoized_meth
 from devito.types.args import ArgProvider
 from devito.types.basic import Symbol, DataSymbol, Scalar
 
+
 __all__ = ['Dimension', 'SpaceDimension', 'TimeDimension', 'DefaultDimension',
-           'SteppingDimension', 'SubDimension', 'ConditionalDimension', 'dimensions',
-           'ModuloDimension', 'IncrDimension']
+           'CustomDimension', 'SteppingDimension', 'SubDimension', 'ConditionalDimension',
+           'dimensions', 'ModuloDimension', 'IncrDimension', 'ShiftedDimension']
 
 
 Thickness = namedtuple('Thickness', 'left right')
@@ -30,19 +31,19 @@ class Dimension(ArgProvider):
     just like any other symbol.
 
     Dimension is the root of a hierarchy of classes, which looks as follows (only
-    the classes exposed to the level of the user API are shown).
+    the classes exposed to the level of the user API are shown)::
 
-                                      Dimension
-                                          |
-                             ---------------------------
-                             |                         |
-                      BasicDimension            DefaultDimension
-                             |
-                     DerivedDimension
-                             |
-          ----------------------------------------
-          |                  |                   |
-    SteppingDimension   SubDimension   ConditionalDimension
+                                       Dimension
+                                           |
+                              ---------------------------
+                              |                         |
+                       BasicDimension            DefaultDimension
+                              |
+                      DerivedDimension
+                              |
+            ---------------------------------------
+            |                 |                   |
+      SteppingDimension   SubDimension   ConditionalDimension
 
     Parameters
     ----------
@@ -95,6 +96,7 @@ class Dimension(ArgProvider):
     is_Time = False
 
     is_Default = False
+    is_Custom = False
     is_Derived = False
     is_NonlinearDerived = False
     is_Sub = False
@@ -102,6 +104,7 @@ class Dimension(ArgProvider):
     is_Stepping = False
     is_Modulo = False
     is_Incr = False
+    is_Shifted = False
 
     _C_typename = 'const %s' % dtype_to_cstr(np.int32)
     _C_typedata = _C_typename
@@ -148,13 +151,10 @@ class Dimension(ArgProvider):
         """Symbol defining the maximum point of the Dimension."""
         return Scalar(name=self.max_name, dtype=np.int32, is_const=True)
 
-    @cached_property
-    def extreme_min(self):
-        return self.symbolic_min
-
-    @cached_property
-    def extreme_max(self):
-        return self.symbolic_max
+    @property
+    def symbolic_incr(self):
+        """The increment value while iterating over the Dimension."""
+        return sympy.S.One
 
     @cached_property
     def size_name(self):
@@ -167,6 +167,10 @@ class Dimension(ArgProvider):
     @cached_property
     def max_name(self):
         return "%s_M" % self.name
+
+    @property
+    def is_const(self):
+        return False
 
     @property
     def root(self):
@@ -184,6 +188,12 @@ class Dimension(ArgProvider):
     @cached_property
     def _defines(self):
         return frozenset({self})
+
+    @cached_property
+    def _defines_symbols(self):
+        candidates = [self.symbolic_min, self.symbolic_max, self.symbolic_size,
+                      self.symbolic_incr]
+        return frozenset(i for i in candidates if not i.is_Number)
 
     @property
     def _arg_names(self):
@@ -213,7 +223,7 @@ class Dimension(ArgProvider):
         """
         Produce a map of argument values after evaluating user input. If no user
         input is provided, get a known value in ``args`` and adjust it so that no
-        out-of-bounds memory accesses will be performeed. The adjustment exploits
+        out-of-bounds memory accesses will be performed. The adjustment exploits
         the information in ``interval``, an Interval describing the Dimension data
         space. If no value is available in ``args``, use a default value.
 
@@ -553,16 +563,8 @@ class SubDimension(DerivedDimension):
 
     @cached_property
     def symbolic_size(self):
-        # The size must be given as a function of the parent's size
+        # The size must be given as a function of the parent's symbols
         return self.symbolic_max - self.symbolic_min + 1
-
-    @cached_property
-    def extreme_min(self):
-        return self._offset_left.extreme
-
-    @cached_property
-    def extreme_max(self):
-        return self._offset_right.extreme
 
     @property
     def local(self):
@@ -579,6 +581,10 @@ class SubDimension(DerivedDimension):
     @cached_property
     def _thickness_map(self):
         return dict(self.thickness)
+
+    @cached_property
+    def _defines_symbols(self):
+        return super()._defines_symbols | frozenset(self._thickness_map)
 
     @cached_property
     def _offset_left(self):
@@ -625,8 +631,21 @@ class SubDimension(DerivedDimension):
     def _arg_defaults(self, grid=None, **kwargs):
         if grid is not None and grid.is_distributed(self.root):
             # Get local thickness
-            ltkn = grid.distributor.glb_to_loc(self.root, self.thickness.left[1], LEFT)
-            rtkn = grid.distributor.glb_to_loc(self.root, self.thickness.right[1], RIGHT)
+            if self.local:
+                # dimension is of type ``left``/right`` - compute the 'offset'
+                # and then add 1 to get the appropriate thickness
+                ltkn = grid.distributor.glb_to_loc(self.root,
+                                                   self.thickness.left[1]-1, LEFT)
+                rtkn = grid.distributor.glb_to_loc(self.root,
+                                                   self.thickness.right[1]-1, RIGHT)
+                ltkn = ltkn+1 if ltkn is not None else 0
+                rtkn = rtkn+1 if rtkn is not None else 0
+            else:
+                # dimension is of type ``middle``
+                ltkn = grid.distributor.glb_to_loc(self.root, self.thickness.left[1],
+                                                   LEFT) or 0
+                rtkn = grid.distributor.glb_to_loc(self.root, self.thickness.right[1],
+                                                   RIGHT) or 0
             return {i.name: v for i, v in zip(self._thickness_map, (ltkn, rtkn))}
         else:
             return {k.name: v for k, v in self.thickness}
@@ -676,7 +695,7 @@ class ConditionalDimension(DerivedDimension):
     >>> i = Dimension(name='i')
     >>> ci = ConditionalDimension(name='ci', parent=i, factor=factor)
     >>> g = Function(name='g', shape=(size,), dimensions=(i,))
-    >>> f = Function(name='f', shape=(size/factor,), dimensions=(ci,))
+    >>> f = Function(name='f', shape=(int(size/factor),), dimensions=(ci,))
     >>> op = Operator([Eq(g, 1), Eq(f, g)])
 
     The Operator generates the following for-loop (pseudocode)
@@ -698,7 +717,7 @@ class ConditionalDimension(DerivedDimension):
     >>> from sympy import And
     >>> ci = ConditionalDimension(name='ci', parent=i,
     ...                           condition=And(g[i] > 0, g[i] < 4, evaluate=False))
-    >>> f = Function(name='f', shape=(size/factor,), dimensions=(ci,))
+    >>> f = Function(name='f', shape=(int(size/factor),), dimensions=(ci,))
     >>> op = Operator(Eq(f[g[i]], f[g[i]] + 1))
 
     The Operator generates the following for-loop (pseudocode)
@@ -787,7 +806,7 @@ class SteppingDimension(DerivedDimension):
     def _arg_names(self):
         return (self.min_name, self.max_name, self.name) + self.parent._arg_names
 
-    def _arg_defaults(self, _min=None, size=None, **kwargs):
+    def _arg_defaults(self, _min=None, **kwargs):
         """
         A map of default argument values defined by this dimension.
 
@@ -795,14 +814,13 @@ class SteppingDimension(DerivedDimension):
         ----------
         _min : int, optional
             Minimum point as provided by data-carrying objects.
-        size : int, optional
-            Size as provided by data-carrying symbols.
 
         Notes
         -----
-        A SteppingDimension does not know its max point.
+        A SteppingDimension does not know its max point and therefore
+        does not have a size argument.
         """
-        return {self.parent.min_name: _min, self.size_name: size}
+        return {self.parent.min_name: _min}
 
     def _arg_values(self, *args, **kwargs):
         """
@@ -824,6 +842,9 @@ class SteppingDimension(DerivedDimension):
         return values
 
 
+# The Dimensions below are for internal use only
+
+
 class ModuloDimension(DerivedDimension):
 
     """
@@ -831,34 +852,57 @@ class ModuloDimension(DerivedDimension):
     ``parent`` Dimension, which cyclically produces a finite range of values,
     such as ``0, 1, 2, 0, 1, 2, 0, ...``.
 
+    When ``modulo=None``, the ModuloDimension degenerates and keeps generating
+    the same number such as ``2, 2, 2, 2, 2, ...`` (the actual value depends
+    on ``incr``).
+
     Parameters
     ----------
     parent : Dimension
         The Dimension from which the ModuloDimension is derived.
-    offset : int
-        The offset from the parent dimension
-    modulo : int
+    offset : expr-like, optional
+        Min value offset. Defaults to 0.
+    modulo : int, optional
         The divisor value.
+    incr : expr-like, optional
+        The iterator increment value. Defaults to ``offset % modulo``.
+    origin : expr-like, optional
+        The expression -- typically a function of the parent Dimension -- the
+        ModuloDimension represents.
     name : str, optional
-        To force a different Dimension name.
+        To override the default name.
 
     Notes
     -----
     This type should not be instantiated directly in user code; if in need for
     modulo buffered iteration, use SteppingDimension instead.
+
+    About `origin` -- the ModuloDimensions `t0, t1, t2, ...` are generated by the
+    compiler to implement modulo iteration along a TimeDimension. For example,
+    `t0`'s `origin` may be `t + 0` (where `t` is a SteppingDimension), `t1`'s
+    `origin` will then be `t + 1` and so on.
     """
 
     is_Modulo = True
 
-    def __new__(cls, parent, offset, modulo, name=None):
+    def __new__(cls, parent, offset=None, modulo=None, incr=None, origin=None, name=None):
+        # Sanity check
+        assert modulo is not None or incr is not None
+        assert name is not None or (modulo is not None and offset is not None)
+
         if name is None:
             name = cls._genname(parent.name, (offset, modulo))
-        return super().__new__(cls, parent, offset, modulo, name=name)
 
-    def __init_finalize__(self, parent, offset, modulo, name=None):
+        return super().__new__(cls, parent, offset=offset, modulo=modulo, incr=incr,
+                               origin=origin, name=name)
+
+    def __init_finalize__(self, parent, offset=None, modulo=None, incr=None,
+                          origin=None, name=None):
         super().__init_finalize__(name, parent)
-        self._offset = offset
+        self._offset = offset or 0
         self._modulo = modulo
+        self._incr = incr
+        self._origin = origin
 
     @property
     def offset(self):
@@ -869,14 +913,49 @@ class ModuloDimension(DerivedDimension):
         return self._modulo
 
     @property
+    def incr(self):
+        return self._incr
+
+    @property
     def origin(self):
-        return self.parent + self.offset
+        return self._origin
+
+    @cached_property
+    def symbolic_size(self):
+        try:
+            return sympy.Number(self.modulo)
+        except (TypeError, ValueError):
+            pass
+        try:
+            return sympy.Number(self.incr)
+        except (TypeError, ValueError):
+            return self.incr
 
     @cached_property
     def symbolic_min(self):
-        return (self.root + self.offset) % self.modulo
+        if self.modulo is not None:
+            return self.offset % self.modulo
+        # Make sure we return a symbolic object as this point `offset` may well
+        # be a pure Python number
+        try:
+            return sympy.Number(self.offset)
+        except (TypeError, ValueError):
+            return self.offset
 
-    symbolic_incr = symbolic_min
+    @cached_property
+    def symbolic_incr(self):
+        if self._incr is not None:
+            incr = self._incr
+        else:
+            incr = self.offset
+        if self.modulo is not None:
+            incr = incr % self.modulo
+        # Make sure we return a symbolic object as this point `incr` may well
+        # be a pure Python number
+        try:
+            return sympy.Number(incr)
+        except (TypeError, ValueError):
+            return incr
 
     def _arg_defaults(self, **kwargs):
         """
@@ -892,8 +971,8 @@ class ModuloDimension(DerivedDimension):
         return {}
 
     # Pickling support
-    _pickle_args = ['parent', 'offset', 'modulo']
-    _pickle_kwargs = ['name']
+    _pickle_args = ['parent']
+    _pickle_kwargs = ['offset', 'modulo', 'incr', 'origin', 'name']
 
 
 class IncrDimension(DerivedDimension):
@@ -908,14 +987,15 @@ class IncrDimension(DerivedDimension):
     ----------
     parent : Dimension
         The Dimension from which the IncrDimension is derived.
-    _min : int, optional
-        The minimum point of the sequence. Defaults to the parent's
-        symbolic minimum.
-    step : int, optional
+    _min : expr-like
+        The minimum point of the Dimension.
+    _max : expr-like
+        The maximum point of the Dimension.
+    step : expr-like, optional
         The distance between two consecutive points. Defaults to the
         symbolic size.
     name : str, optional
-        To force a different Dimension name.
+        To override the default name.
 
     Notes
     -----
@@ -923,57 +1003,198 @@ class IncrDimension(DerivedDimension):
     """
 
     is_Incr = True
+    is_PerfKnob = True
 
-    def __new__(cls, parent, _min=None, step=None, name=None):
+    def __new__(cls, parent, _min, _max, step=None, name=None):
         if name is None:
-            name = cls._genname(parent.name, (_min, step))
-        return super().__new__(cls, parent, _min=_min, step=step, name=name)
+            name = cls._genname(parent.name, (_min, _max, step))
+        return super().__new__(cls, parent, _min, _max, step=step, name=name)
 
-    def __init_finalize__(self, parent, _min=None, step=None, name=None):
+    def __init_finalize__(self, parent, _min, _max, step=None, name=None):
         super().__init_finalize__(name, parent)
         self._min = _min
+        self._max = _max
         self._step = step
 
     @cached_property
     def step(self):
-        return self._step if self._step is not None else self.symbolic_size
+        if self._step is not None:
+            return self._step
+        else:
+            return Scalar(name=self.size_name, dtype=np.int32, is_const=True)
 
     @cached_property
-    def max_step(self):
-        return self.parent.symbolic_max - self.parent.symbolic_min + 1
+    def symbolic_size(self):
+        # The size must be given as a function of the parent's symbols
+        return self.symbolic_max - self.symbolic_min + 1
 
     @cached_property
     def symbolic_min(self):
-        if self._min is not None:
-            # Make sure we return a symbolic object as the provided min might
-            # be for example a pure int
-            try:
-                return sympy.Number(self._min)
-            except (TypeError, ValueError):
-                return self._min
-        else:
-            return self.parent.symbolic_min
+        # Make sure we return a symbolic object as the provided min might
+        # be for example a pure int
+        try:
+            return sympy.Number(self._min)
+        except (TypeError, ValueError):
+            return self._min
 
-    @property
+    @cached_property
+    def symbolic_max(self):
+        # Make sure we return a symbolic object as the provided max might
+        # be for example a pure int
+        try:
+            return sympy.Number(self._max)
+        except (TypeError, ValueError):
+            return self._max
+
+    @cached_property
     def symbolic_incr(self):
-        return self + self.step
+        try:
+            return sympy.Number(self.step)
+        except (TypeError, ValueError):
+            return self.step
+
+    @cached_property
+    def _arg_names(self):
+        try:
+            return (self.step.name,)
+        except AttributeError:
+            # `step` not a Symbol
+            return ()
 
     def _arg_defaults(self, **kwargs):
-        """
-        An IncrDimension provides no arguments, so this method returns an empty dict.
-        """
+        # TODO: need a heuristic to pick a default incr size
+        # TODO: move default value to __new__
+        try:
+            return {self.step.name: 8}
+        except AttributeError:
+            # `step` not a Symbol
+            return {}
+
+    def _arg_values(self, args, interval, grid, **kwargs):
+        try:
+            name = self.step.name
+        except AttributeError:
+            # `step` not a Symbol
+            return {}
+        if name in kwargs:
+            return {name: kwargs.pop(name)}
+        elif isinstance(self.parent, IncrDimension):
+            # `self` is an IncrDimension within an outer IncrDimension, but
+            # no value supplied -> the sub-block will span the entire block
+            return {name: args[self.parent.step.name]}
+        else:
+            value = self._arg_defaults()[name]
+            if value <= args[self.root.max_name] - args[self.root.min_name] + 1:
+                return {name: value}
+            else:
+                # Avoid OOB (will end up here only in case of tiny iteration spaces)
+                return {name: 1}
+
+    def _arg_check(self, args, interval):
+        try:
+            name = self.step.name
+        except AttributeError:
+            # `step` not a Symbol
+            return
+
+        value = args[name]
+        if isinstance(self.parent, IncrDimension):
+            # sub-IncrDimensions must be perfect divisors of their parent
+            parent_value = args[self.parent.step.name]
+            if parent_value % value > 0:
+                raise InvalidArgument("Illegal block size `%s=%d`: sub-block sizes "
+                                      "must divide the parent block size evenly (`%s=%d`)"
+                                      % (name, value, self.parent.step.name,
+                                         parent_value))
+        else:
+            if value < 0:
+                raise InvalidArgument("Illegal block size `%s=%d`: it should be > 0"
+                                      % (name, value))
+            if value > args[self.root.max_name] - args[self.root.min_name] + 1:
+                # Avoid OOB
+                raise InvalidArgument("Illegal block size `%s=%d`: it's greater than the "
+                                      "iteration range and it will cause an OOB access"
+                                      % (name, value))
+
+    # Pickling support
+    _pickle_args = ['parent', 'symbolic_min', 'symbolic_max']
+    _pickle_kwargs = ['step', 'name']
+
+
+class ShiftedDimension(IncrDimension):
+
+    """
+    A special unit-step IncrDimension with min=0 and max=parent.symbolic_size-1.
+    """
+
+    is_Shifted = True
+
+    def __new__(cls, d, name):
+        return super().__new__(cls, d, 0, d.symbolic_size - 1, step=1, name=name)
+
+    _pickle_args = ['parent', 'name']
+    _pickle_kwargs = []
+
+
+class CustomDimension(BasicDimension):
+
+    """
+    Dimension defining an iteration space with custom (known) size.
+
+    Notes
+    -----
+    This could be extended in the future for more customization (e.g., incr.).
+    """
+
+    is_Custom = True
+
+    def __init_finalize__(self, name, symbolic_min=None, symbolic_max=None,
+                          symbolic_size=None):
+        self._symbolic_min = symbolic_min
+        self._symbolic_max = symbolic_max
+        self._symbolic_size = symbolic_size
+
+    @property
+    def symbolic_min(self):
+        try:
+            return sympy.Number(self._symbolic_min)
+        except (TypeError, ValueError):
+            pass
+        if self._symbolic_min is None:
+            return super().symbolic_min
+        else:
+            return self._symbolic_min
+
+    @property
+    def symbolic_max(self):
+        try:
+            return sympy.Number(self._symbolic_max)
+        except (TypeError, ValueError):
+            pass
+        if self._symbolic_max is None:
+            return super().symbolic_max
+        else:
+            return self._symbolic_max
+
+    @property
+    def symbolic_size(self):
+        try:
+            return sympy.Number(self._symbolic_size)
+        except (TypeError, ValueError):
+            pass
+        if self._symbolic_size is None:
+            return super().symbolic_size
+        else:
+            return self._symbolic_size
+
+    def _arg_defaults(self):
         return {}
 
     def _arg_values(self, *args, **kwargs):
-        """
-        An IncrDimension provides no arguments, so there are no argument values to
-        be derived.
-        """
         return {}
 
     # Pickling support
-    _pickle_args = ['parent', 'symbolic_min', 'step']
-    _pickle_kwargs = ['name']
+    _pickle_kwargs = ['symbolic_min', 'symbolic_max', 'symbolic_size']
 
 
 def dimensions(names):

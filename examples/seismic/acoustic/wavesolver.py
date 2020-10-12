@@ -1,6 +1,5 @@
 from devito import Function, TimeFunction
 from devito.tools import memoized_meth
-from examples.seismic import PointSource, Receiver
 from examples.seismic.acoustic.operators import (
     ForwardOperator, AdjointOperator, GradientOperator, BornOperator
 )
@@ -28,20 +27,23 @@ class AcousticWaveSolver(object):
     """
     def __init__(self, model, geometry, kernel='OT2', space_order=4, **kwargs):
         self.model = model
+        self.model._initialize_bcs(bcs="damp")
         self.geometry = geometry
 
-        assert self.model == geometry.model
+        assert self.model.grid == geometry.grid
 
         self.space_order = space_order
         self.kernel = kernel
 
-        # Time step can be \sqrt{3}=1.73 bigger with 4th order
-        self.dt = self.model.critical_dt
-        if self.kernel == 'OT4':
-            self.dt = model.dtype(self.dt*1.73)
-
         # Cache compiler options
         self._kwargs = kwargs
+
+    @property
+    def dt(self):
+        # Time step can be \sqrt{3}=1.73 bigger with 4th order
+        if self.kernel == 'OT4':
+            return self.model.dtype(1.73 * self.model.critical_dt)
+        return self.model.critical_dt
 
     @memoized_meth
     def op_fwd(self, save=None):
@@ -86,8 +88,8 @@ class AcousticWaveSolver(object):
             Stores the computed wavefield.
         vp : Function or float, optional
             The time-constant velocity.
-        save : int or Buffer, optional
-            The entire (unrolled) wavefield.
+        save : bool, optional
+            Whether or not to save the entire (unrolled) wavefield.
 
         Returns
         -------
@@ -96,9 +98,7 @@ class AcousticWaveSolver(object):
         # Source term is read-only, so re-use the default
         src = src or self.geometry.src
         # Create a new receiver object to store the result
-        rec = rec or Receiver(name='rec', grid=self.model.grid,
-                              time_range=self.geometry.time_axis,
-                              coordinates=self.geometry.rec_positions)
+        rec = rec or self.geometry.rec
 
         # Create the forward wavefield if not provided
         u = u or TimeFunction(name='u', grid=self.model.grid,
@@ -136,9 +136,7 @@ class AcousticWaveSolver(object):
         Adjoint source, wavefield and performance summary.
         """
         # Create a new adjoint source and receiver symbol
-        srca = srca or PointSource(name='srca', grid=self.model.grid,
-                                   time_range=self.geometry.time_axis,
-                                   coordinates=self.geometry.src_positions)
+        srca = srca or self.geometry.new_src(name='srca', src_type=None)
 
         # Create the adjoint wavefield if not provided
         v = v or TimeFunction(name='v', grid=self.model.grid,
@@ -152,7 +150,8 @@ class AcousticWaveSolver(object):
                                       dt=kwargs.pop('dt', self.dt), **kwargs)
         return srca, v, summary
 
-    def gradient(self, rec, u, v=None, grad=None, vp=None, checkpointing=False, **kwargs):
+    def jacobian_adjoint(self, rec, u, v=None, grad=None, vp=None,
+                         checkpointing=False, **kwargs):
         """
         Gradient modelling function for computing the adjoint of the
         Linearized Born modelling function, ie. the action of the
@@ -205,7 +204,7 @@ class AcousticWaveSolver(object):
                                            dt=dt, **kwargs)
         return grad, summary
 
-    def born(self, dmin, src=None, rec=None, u=None, U=None, vp=None, **kwargs):
+    def jacobian(self, dmin, src=None, rec=None, u=None, U=None, vp=None, **kwargs):
         """
         Linearized Born modelling function that creates the necessary
         data objects for running an adjoint modelling operator.
@@ -226,9 +225,7 @@ class AcousticWaveSolver(object):
         # Source term is read-only, so re-use the default
         src = src or self.geometry.src
         # Create a new receiver object to store the result
-        rec = rec or Receiver(name='rec', grid=self.model.grid,
-                              time_range=self.geometry.time_axis,
-                              coordinates=self.geometry.rec_positions)
+        rec = rec or self.geometry.rec
 
         # Create the forward wavefields u and U if not provided
         u = u or TimeFunction(name='u', grid=self.model.grid,
@@ -243,3 +240,7 @@ class AcousticWaveSolver(object):
         summary = self.op_born().apply(dm=dmin, u=u, U=U, src=src, rec=rec,
                                        vp=vp, dt=kwargs.pop('dt', self.dt), **kwargs)
         return rec, u, U, summary
+
+    # Backward compatibility
+    born = jacobian
+    gradient = jacobian_adjoint

@@ -1,33 +1,21 @@
 import numpy as np
-from argparse import ArgumentParser
+import pytest
 
-from devito import configuration
+from devito import norm
 from devito.logger import info
 from examples.seismic.viscoelastic import ViscoelasticWaveSolver
-from examples.seismic import demo_model, AcquisitionGeometry
+from examples.seismic import demo_model, setup_geometry, seismic_args
 
 
 def viscoelastic_setup(shape=(50, 50), spacing=(15.0, 15.0), tn=500., space_order=4,
                        nbl=10, constant=True, **kwargs):
 
-    nrec = 2*shape[0]
     preset = 'constant-viscoelastic' if constant else 'layers-viscoelastic'
     model = demo_model(preset, space_order=space_order, shape=shape, nbl=nbl,
                        dtype=kwargs.pop('dtype', np.float32), spacing=spacing)
 
     # Source and receiver geometries
-    src_coordinates = np.empty((1, len(spacing)))
-    src_coordinates[0, :] = np.array(model.domain_size) * .5
-    if len(shape) > 1:
-        src_coordinates[0, -1] = model.origin[-1] + 2 * spacing[-1]
-
-    rec_coordinates = np.empty((nrec, len(spacing)))
-    rec_coordinates[:, 0] = np.linspace(0., model.domain_size[0], num=nrec)
-    if len(shape) > 1:
-        rec_coordinates[:, 1] = np.array(model.domain_size)[1] * .5
-        rec_coordinates[:, -1] = model.origin[-1] + 2 * spacing[-1]
-    geometry = AcquisitionGeometry(model, rec_coordinates, src_coordinates,
-                                   t0=0.0, tn=tn, src_type='Ricker', f0=0.12)
+    geometry = setup_geometry(model, tn)
 
     # Create solver object to provide relevant operators
     solver = ViscoelasticWaveSolver(model, geometry, space_order=space_order, **kwargs)
@@ -47,45 +35,31 @@ def run(shape=(50, 50), spacing=(20.0, 20.0), tn=1000.0,
             [rec1, rec2, v, tau])
 
 
-def test_viscoelastic():
-    _, _, _, [rec1, rec2, v, tau] = run()
-    norm = lambda x: np.linalg.norm(x.data.reshape(-1))
-    assert np.isclose(norm(rec1), 5.774392, atol=1e-3, rtol=0)
-    assert np.isclose(norm(rec2), 0.119801, atol=1e-3, rtol=0)
+@pytest.mark.parametrize("dtype", [np.float32, np.float64])
+def test_viscoelastic(dtype):
+    _, _, _, [rec1, rec2, v, tau] = run(dtype=dtype)
+    assert np.isclose(norm(rec1), 12.28040, atol=1e-3, rtol=0)
+    assert np.isclose(norm(rec2), 0.312461, atol=1e-3, rtol=0)
+
+
+@pytest.mark.parametrize('ndim', [1, 2, 3])
+def test_viscoelastic_stability(ndim):
+    shape = tuple([11]*ndim)
+    spacing = tuple([20]*ndim)
+    _, _, _, [rec1, rec2, v, tau] = run(shape=shape, spacing=spacing, tn=20000.0, nbl=0)
+    assert np.isfinite(norm(rec1))
 
 
 if __name__ == "__main__":
     description = ("Example script for a set of viscoelastic operators.")
-    parser = ArgumentParser(description=description)
-    parser.add_argument('--2d', dest='dim2', default=False, action='store_true',
-                        help="Preset to determine the physical problem setup")
-    parser.add_argument('-a', '--autotune', default='off',
-                        choices=(configuration._accepted['autotuning']),
-                        help="Operator auto-tuning mode")
-    parser.add_argument("-so", "--space_order", default=4,
-                        type=int, help="Space order of the simulation")
-    parser.add_argument("--nbl", default=40,
-                        type=int, help="Number of boundary layers around the domain")
-    parser.add_argument("-dse", default="advanced",
-                        choices=["noop", "basic", "advanced", "aggressive"],
-                        help="Devito symbolic engine (DSE) mode")
-    parser.add_argument("-dle", default="advanced", choices=["noop", "advanced"],
-                        help="Devito loop engine (DLEE) mode")
-    parser.add_argument("--constant", default=False, action='store_true',
-                        help="Constant velocity model, default is a two layer model")
-    args = parser.parse_args()
+    args = seismic_args(description).parse_args()
 
-    # 2D preset parameters
-    if args.dim2:
-        shape = (150, 150)
-        spacing = (10.0, 10.0)
-        tn = 750.0
-    # 3D preset parameters
-    else:
-        shape = (150, 150, 150)
-        spacing = (10.0, 10.0, 10.0)
-        tn = 1250.0
+    # Preset parameters
+    ndim = args.ndim
+    shape = args.shape[:args.ndim]
+    spacing = tuple(ndim * [10.0])
+    tn = args.tn if args.tn > 0 else (750. if ndim < 3 else 1250.)
 
-    run(shape=shape, spacing=spacing, nbl=args.nbl, tn=tn, dle=args.dle,
+    run(shape=shape, spacing=spacing, nbl=args.nbl, tn=tn, opt=args.opt,
         space_order=args.space_order, autotune=args.autotune, constant=args.constant,
-        dse=args.dse)
+        dtype=args.dtype)

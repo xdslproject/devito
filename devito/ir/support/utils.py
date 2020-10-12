@@ -7,19 +7,19 @@ from devito.tools import as_tuple, flatten, filter_sorted
 from devito.types import Dimension, ModuloDimension
 
 __all__ = ['detect_accesses', 'detect_oobs', 'build_iterators', 'build_intervals',
-           'align_accesses', 'detect_io']
+           'detect_io']
 
 
-def detect_accesses(expr):
+def detect_accesses(exprs):
     """
     Return a mapper ``M : F -> S``, where F are Functions appearing
-    in ``expr`` and S are Stencils. ``M[f]`` represents all data accesses
-    to ``f`` within ``expr``. Also map ``M[None]`` to all Dimensions used in
-    ``expr`` as plain symbols, rather than as array indices.
+    in ``exprs`` and S are Stencils. ``M[f]`` represents all data accesses
+    to ``f`` within ``exprs``. Also map ``M[None]`` to all Dimensions used in
+    ``exprs`` as plain symbols, rather than as array indices.
     """
     # Compute M : F -> S
     mapper = defaultdict(Stencil)
-    for e in retrieve_indexed(expr, deep=True):
+    for e in retrieve_indexed(exprs, deep=True):
         f = e.function
         for a in e.indices:
             if isinstance(a, Dimension):
@@ -35,8 +35,8 @@ def detect_accesses(expr):
                 mapper[f][d].update(off or [0])
 
     # Compute M[None]
-    other_dims = [i for i in retrieve_terminals(expr) if isinstance(i, Dimension)]
-    other_dims.extend(list(expr.implicit_dims))
+    other_dims = [i for i in retrieve_terminals(exprs) if isinstance(i, Dimension)]
+    other_dims.extend(list(flatten(expr.implicit_dims for expr in as_tuple(exprs))))
     mapper[None] = Stencil([(i, 0) for i in other_dims])
 
     return mapper
@@ -80,14 +80,16 @@ def build_iterators(mapper):
     for k, v in mapper.items():
         for d, offs in v.items():
             if d.is_Stepping:
-                sub_iterators = iterators.setdefault(d.parent, set())
-                sub_iterators.update({ModuloDimension(d, i, k._time_size)
-                                      for i in offs})
+                values = iterators.setdefault(d.parent, [])
+                for i in sorted(offs):
+                    md = ModuloDimension(d, d.root + i, k._time_size, origin=d + i)
+                    if md not in values:
+                        values.append(md)
             elif d.is_Conditional:
                 # There are no iterators associated to a ConditionalDimension
                 continue
             else:
-                iterators.setdefault(d, set())
+                iterators.setdefault(d, [])
     return {k: tuple(v) for k, v in iterators.items()}
 
 
@@ -101,21 +103,6 @@ def build_intervals(stencil):
         dim = d.parent if d.is_NonlinearDerived else d
         mapper.setdefault(dim, set()).update(offs)
     return [Interval(d, min(offs), max(offs)) for d, offs in mapper.items()]
-
-
-def align_accesses(expr, key=lambda i: False):
-    """
-    ``expr -> expr'``, with ``expr'`` semantically equivalent to ``expr``, but
-    with data accesses aligned to the domain if ``key(function)`` gives True.
-    """
-    mapper = {}
-    for indexed in retrieve_indexed(expr):
-        f = indexed.function
-        if not key(f):
-            continue
-        subs = {i: i + j for i, j in zip(indexed.indices, f._size_nodomain.left)}
-        mapper[indexed] = indexed.xreplace(subs)
-    return expr.xreplace(mapper)
 
 
 def detect_io(exprs, relax=False):
@@ -136,7 +123,7 @@ def detect_io(exprs, relax=False):
     else:
         rule = lambda i: i.is_Scalar or i.is_Tensor
 
-    # Don't forget this nasty case, with indirections on the LHS:
+    # Don't forget the nasty case with indirections on the LHS:
     # >>> u[t, a[x]] = f[x]  -> (reads={a, f}, writes={u})
 
     roots = []
@@ -144,6 +131,7 @@ def detect_io(exprs, relax=False):
         try:
             roots.append(i.rhs)
             roots.extend(list(i.lhs.indices))
+            roots.extend(list(i.conditionals.values()))
         except AttributeError:
             # E.g., FunctionFromPointer
             roots.append(i)

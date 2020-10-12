@@ -4,7 +4,7 @@ from anytree import findall
 
 from devito.ir.stree.tree import (ScheduleTree, NodeIteration, NodeConditional,
                                   NodeExprs, NodeSection, NodeHalo, insert)
-from devito.ir.support import IterationSpace
+from devito.ir.support import SEQUENTIAL, IterationSpace
 from devito.mpi import HaloScheme, HaloSchemeException
 from devito.parameters import configuration
 from devito.tools import flatten
@@ -107,7 +107,7 @@ def stree_make_halo(stree):
             for n in ancestors:
                 # Place the halo exchange right before the first
                 # distributed Dimension which requires it
-                if any(n.dim is i.dim for i in v.halos):
+                if any(i.dim in n.dim._defines for i in v.halos):
                     spot = n
                     break
             mapper.setdefault(spot, []).append(hs.project(f))
@@ -150,7 +150,12 @@ def stree_section(stree):
             if any(p in flatten(s.nodes for s in sections) for p in n.ancestors):
                 # Already within a section
                 continue
-            elif not n.is_Iteration or n.dim.is_Time:
+            elif not n.is_Iteration:
+                section = None
+            elif n.dim.is_Time and SEQUENTIAL in n.properties:
+                # If n.dim.is_Time, we end up here in 99.9% of the cases.
+                # Sometimes, however, time is a PARALLEL Dimension (e.g.,
+                # think of `norm` Operators)
                 section = None
             elif section is None or not section.is_compatible(n):
                 section = Section(n)

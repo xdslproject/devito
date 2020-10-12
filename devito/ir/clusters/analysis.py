@@ -1,66 +1,28 @@
-from collections import defaultdict
-from functools import cmp_to_key
-
-from devito.ir.clusters.queue import Queue
-from devito.ir.support import (SEQUENTIAL, PARALLEL, PARALLEL_IF_ATOMIC, AFFINE,
-                               WRAPPABLE, ROUNDABLE, TILABLE, Forward, Scope)
+from devito.ir.clusters.queue import QueueStateful
+from devito.ir.support import (SEQUENTIAL, PARALLEL, PARALLEL_INDEP, PARALLEL_IF_ATOMIC,
+                               AFFINE, ROUNDABLE, TILABLE, Forward)
 from devito.tools import as_tuple, flatten, timed_pass
 
 __all__ = ['analyze']
 
 
-@timed_pass(name='lowering.Clusters.Analysis')
+@timed_pass()
 def analyze(clusters):
-    state = State()
+    state = QueueStateful.State()
 
     # Collect properties
     clusters = Parallelism(state).process(clusters)
     clusters = Affiness(state).process(clusters)
     clusters = Tiling(state).process(clusters)
-    clusters = Wrapping(state).process(clusters)
     clusters = Rounding(state).process(clusters)
 
-    # Rebuild Clusters to attach the discovered properties
+    # Reconstruct Clusters attaching the discovered properties
     processed = [c.rebuild(properties=state.properties.get(c)) for c in clusters]
 
     return processed
 
 
-class State(object):
-
-    def __init__(self):
-        self.properties = {}
-        self.scopes = {}
-
-
-class Detector(Queue):
-
-    def __init__(self, state):
-        super(Detector, self).__init__()
-        self.state = state
-
-    def _fetch_scope(self, clusters):
-        key = as_tuple(clusters)
-        if key not in self.state.scopes:
-            self.state.scopes[key] = Scope(flatten(c.exprs for c in key))
-        return self.state.scopes[key]
-
-    def _fetch_properties(self, clusters, prefix):
-        # If the situation is:
-        #
-        # t
-        #   x0
-        #     <some clusters>
-        #   x1
-        #     <some other clusters>
-        #
-        # then retain only the "common" properties, that is those along `t`
-        properties = defaultdict(set)
-        for c in clusters:
-            v = self.state.properties.get(c, {})
-            for i in prefix:
-                properties[i.dim].update(v.get(i.dim, set()))
-        return properties
+class Detector(QueueStateful):
 
     def process(self, elements):
         return self._process_fatd(elements, 1)
@@ -75,11 +37,14 @@ class Detector(Queue):
         # Apply the actual callback
         retval = self._callback(clusters, d, prefix)
 
+        # Normalize retval
+        retval = set(as_tuple(retval))
+
         # Update `self.state`
-        if retval is not None:
+        if retval:
             for c in clusters:
                 properties = self.state.properties.setdefault(c, {})
-                properties.setdefault(d, set()).add(retval)
+                properties.setdefault(d, set()).update(retval)
 
         return clusters
 
@@ -87,20 +52,37 @@ class Detector(Queue):
 class Parallelism(Detector):
 
     """
-    Detect SEQUENTIAL, PARALLEL, and PARALLEL_IF_ATOMIC Dimensions.
+    Detect SEQUENTIAL, PARALLEL, PARALLEL_INDEP and PARALLEL_IF_ATOMIC Dimensions.
+
+    Consider an IterationSpace over `n` Dimensions. Let `(d_1, ..., d_n)` be the
+    distance vector of a dependence. Let `i` be the `i-th` Dimension of the
+    IterationSpace. Then:
+
+        * `i` is PARALLEL_INDEP if all dependences have distance vectors:
+
+            (d_1, ..., d_i) = 0
+
+        * `i` is PARALLEL if all dependences have distance vectors:
+
+            (d_1, ..., d_i) = 0, OR
+            (d_1, ..., d_{i-1}) > 0
+
+        * `i` is PARALLEL_IF_ATOMIC if all dependences have distance vectors:
+
+            (d_1, ..., d_i) = 0, OR
+            (d_1, ..., d_{i-1}) > 0, OR
+            the 'write' is known to be an associative and commutative increment
     """
 
     def _callback(self, clusters, d, prefix):
+        # Rule out if non-unitary increment Dimension (e.g., `t0=(time+1)%2`)
+        if any(c.sub_iterators.get(d) for c in clusters):
+            return SEQUENTIAL
+
         # All Dimensions up to and including `i-1`
         prev = flatten(i.dim._defines for i in prefix[:-1])
 
-        # The i-th Dimension is PARALLEL if for all dependences (d_1, ..., d_n):
-        # test0 := (d_1, ..., d_i) = 0, OR
-        # test1 := (d_1, ..., d_{i-1}) > 0
-
-        # The i-th Dimension is PARALLEL_IF_ATOMIC if for all dependeces:
-        # test0 OR test1 OR the write is an associative and commutative increment
-
+        is_parallel_indep = True
         is_parallel_atomic = False
 
         scope = self._fetch_scope(clusters)
@@ -112,74 +94,25 @@ class Parallelism(Detector):
 
             test1 = len(prev) > 0 and any(dep.is_carried(i) for i in prev)
             if test1:
+                is_parallel_indep &= (dep.distance_mapper.get(d.root) == 0)
                 continue
 
-            if not dep.is_increment:
-                return SEQUENTIAL
+            if dep.is_increment:
+                if dep.function in scope.initialized:
+                    # False alarm, the increment is over a locally-defined symbol
+                    pass
+                else:
+                    is_parallel_atomic = True
+                continue
 
-            # At this point, if it's not SEQUENTIAL, it can only be PARALLEL_IF_ATOMIC
-            is_parallel_atomic = True
+            return SEQUENTIAL
 
         if is_parallel_atomic:
             return PARALLEL_IF_ATOMIC
+        elif is_parallel_indep:
+            return {PARALLEL, PARALLEL_INDEP}
         else:
             return PARALLEL
-
-
-class Wrapping(Detector):
-
-    """
-    Detect the WRAPPABLE Dimensions.
-    """
-
-    def _callback(self, clusters, d, prefix):
-        if not d.is_Time:
-            return
-
-        scope = self._fetch_scope(clusters)
-        accesses = [a for a in scope.accesses if a.function.is_TimeFunction]
-
-        # If not using modulo-buffered iteration, then `i` is surely not WRAPPABLE
-        if not accesses or any(not a.function._time_buffering_default for a in accesses):
-            return
-
-        stepping = {a.function.time_dim for a in accesses}
-        if len(stepping) > 1:
-            # E.g., with ConditionalDimensions we may have `stepping={t, tsub}`
-            return
-        stepping = stepping.pop()
-
-        # All accesses must be affine in `stepping`
-        if any(not a.affine_if_present(stepping._defines) for a in accesses):
-            return
-
-        # Pick the `back` and `front` slots accessed
-        try:
-            compareto = cmp_to_key(lambda a0, a1: a0.distance(a1, stepping))
-            accesses = sorted(accesses, key=compareto)
-            back, front = accesses[0][stepping], accesses[-1][stepping]
-        except TypeError:
-            return
-
-        # Check we're not accessing (read, write) always the same slot
-        if back == front:
-            return
-
-        accesses_back = [a for a in accesses if a[stepping] == back]
-
-        # There must be NO writes to the `back` timeslot
-        if any(a.is_write for a in accesses_back):
-            return
-
-        # There must be NO further accesses to the `back` timeslot after
-        # any earlier timeslot is written
-        # Note: potentially, this can be relaxed by replacing "any earlier timeslot"
-        # with the `front timeslot`
-        if not all(all(i.sink is not a or i.source.lex_ge(a) for i in scope.d_flow)
-                   for a in accesses_back):
-            return
-
-        return WRAPPABLE
 
 
 class Rounding(Detector):
@@ -235,13 +168,13 @@ class Tiling(Detector):
         return self._process_fdta(elements, 1)
 
     def _callback(self, clusters, d, prefix):
-        # A Dimension TILABLE only if it's PARALLEL and AFFINE
+        # A Dimension is TILABLE only if it's PARALLEL and AFFINE
         properties = self._fetch_properties(clusters, prefix)
-        if not {PARALLEL, AFFINE} <= set(properties[d]):
+        if not {PARALLEL, AFFINE} <= properties[d]:
             return
 
         # In addition, we use the heuristic that we do not consider
-        # TILEABLE a Dimension that is not embedded in at least one
+        # TILABLE a Dimension that is not embedded in at least one
         # SEQUENTIAL Dimension. This is to rule out tiling when the
         # computation is not expected to be expensive
         if not any(SEQUENTIAL in properties[i.dim] for i in prefix[:-1]):

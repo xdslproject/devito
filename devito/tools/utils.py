@@ -4,6 +4,7 @@ from collections.abc import Iterable
 from functools import reduce
 from itertools import chain, combinations, groupby, product, zip_longest
 from operator import attrgetter, mul
+import types
 
 import numpy as np
 import sympy
@@ -51,16 +52,16 @@ def as_tuple(item, type=None, length=None):
     return t
 
 
-def as_mapper(iterable, key=None):
+def as_mapper(iterable, key=None, get=None):
     """
     Rearrange an iterable into a dictionary of lists in which keys are
     produced by the function ``key``.
     """
-    if key is None:
-        key = lambda i: i
+    key = key or (lambda i: i)
+    get = get or (lambda i: i)
     mapper = {}
     for i in iterable:
-        mapper.setdefault(key(i), []).append(i)
+        mapper.setdefault(key(i), []).append(get(i))
     return mapper
 
 
@@ -147,22 +148,31 @@ def single_or(l):
 
 
 def filter_ordered(elements, key=None):
-    """Filter elements in a list while preserving order.
+    """
+    Filter elements in a list while preserving order.
 
     Parameters
     ----------
     key : callable, optional
         Conversion key used during equality comparison.
     """
+    if isinstance(elements, types.GeneratorType):
+        elements = list(elements)
     seen = set()
     if key is None:
-        key = lambda x: x
+        try:
+            unordered, inds = np.unique(elements, return_index=True)
+            return unordered[np.argsort(inds)].tolist()
+        except:
+            return sorted(list(set(elements)), key=elements.index)
     return [e for e in elements if not (key(e) in seen or seen.add(key(e)))]
 
 
 def filter_sorted(elements, key=None):
-    """Filter elements in a list and sort them by key. The default key is
-    ``operator.attrgetter('name')``."""
+    """
+    Filter elements in a list and sort them by key. The default key is
+    ``operator.attrgetter('name')``.
+    """
     if key is None:
         key = attrgetter('name')
     return sorted(filter_ordered(elements, key=key), key=key)

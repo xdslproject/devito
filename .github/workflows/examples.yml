@@ -17,7 +17,7 @@ jobs:
 
     env:
       DEVITO_ARCH: gcc-7
-      DEVITO_OPENMP: 1
+      DEVITO_LANGUAGE: "openmp"
       DEVITO_BACKEND: "core"
       PYTHON_VERSION: "3.7"
 
@@ -33,7 +33,7 @@ jobs:
       uses: goanpeca/setup-miniconda@v1
       with:
        activate-environment: devito
-       environment-file: environment.yml
+       environment-file: environment-dev.yml
        python-version: 3.7
        auto-activate-base: false
 
@@ -44,24 +44,36 @@ jobs:
         pip install -e .
         pip install matplotlib
 
+    - name: Tests in examples
+      shell: bash -l {0}
+      run: py.test --cov --cov-config=.coveragerc --cov-report=xml examples/
+
     - name: Seismic acoustic examples
       shell: bash -l {0}
       run: |
         python examples/seismic/acoustic/acoustic_example.py --full
         python examples/seismic/acoustic/acoustic_example.py --full --checkpointing
         python examples/seismic/acoustic/acoustic_example.py --constant --full
+        python examples/seismic/acoustic/acoustic_example.py --fs
+        python examples/seismic/inversion/fwi.py
+        python examples/seismic/self_adjoint/example_iso.py
+        python examples/seismic/viscoacoustic/viscoacoustic_example.py
+        python examples/seismic/viscoacoustic/viscoacoustic_example.py -k ren
+        python examples/seismic/viscoacoustic/viscoacoustic_example.py -k deng_mcmechan
 
     - name: Seismic tti examples
       shell: bash -l {0}
       run: |
         python examples/seismic/tti/tti_example.py -a basic
         python examples/seismic/tti/tti_example.py -a basic --noazimuth
+        python examples/seismic/tti/tti_example.py -k staggered
+        python examples/seismic/tti/tti_example.py --full -so 12
 
     - name: Seismic elastic examples
       shell: bash -l {0}
       run: |
-        py.test examples/seismic/elastic/elastic_example.py
-        py.test examples/seismic/viscoelastic/viscoelastic_example.py
+        python examples/seismic/elastic/elastic_example.py
+        python examples/seismic/viscoelastic/viscoelastic_example.py
 
     - name: Linear algebra example
       shell: bash -l {0}
@@ -72,4 +84,10 @@ jobs:
       shell: bash -l {0}
       run: |
         python examples/cfd/example_diffusion.py
-        py.test examples/cfd/example_diffusion.py
+
+    - name: Upload coverage to Codecov
+      if: matrix.name != 'pytest-docker-py36-gcc-omp'
+      uses: codecov/codecov-action@v1.0.6
+      with:
+        token: ${{ secrets.CODECOV_TOKEN }}
+        name: ${{ matrix.name }}

@@ -1,10 +1,14 @@
+from collections.abc import Iterable
 from operator import attrgetter
 
-from devito.symbolics import retrieve_indexed, split_affine
-from devito.tools import PartialOrderTuple, filter_sorted, flatten
-from devito.types import Dimension
+from sympy import sympify
 
-__all__ = ['dimension_sort']
+from devito.symbolics import (retrieve_functions, retrieve_indexed, split_affine,
+                              uxreplace)
+from devito.tools import PartialOrderTuple, filter_sorted, flatten, as_tuple
+from devito.types import Dimension, Eq
+
+__all__ = ['dimension_sort', 'generate_implicit_exprs', 'lower_exprs']
 
 
 def dimension_sort(expr):
@@ -64,3 +68,91 @@ def dimension_sort(expr):
     ordering = PartialOrderTuple(extra, relations=(relations | implicit_relations))
 
     return ordering
+
+
+def generate_implicit_exprs(expressions):
+    """
+    Create and add implicit expressions.
+
+    Implicit expressions are those not explicitly defined by the user
+    but instead are requisites of some specified functionality.
+
+    Currently, implicit expressions stem from the following:
+
+        * ``SubDomainSet``'s attached to input equations.
+    """
+    processed = []
+    for e in expressions:
+        if e.subdomain:
+            try:
+                dims = [d.root for d in e.free_symbols if isinstance(d, Dimension)]
+                sub_dims = [d.root for d in e.subdomain.dimensions]
+                sub_dims.append(e.subdomain.implicit_dimension)
+                dims = [d for d in dims if d not in frozenset(sub_dims)]
+                dims.append(e.subdomain.implicit_dimension)
+                grid = list(retrieve_functions(e, mode='unique'))[0].grid
+                processed.extend([i.func(*i.args, implicit_dims=dims) for i in
+                                  e.subdomain._create_implicit_exprs(grid)])
+                dims.extend(e.subdomain.dimensions)
+                new_e = Eq(e.lhs, e.rhs, subdomain=e.subdomain, implicit_dims=dims)
+                processed.append(new_e)
+            except AttributeError:
+                processed.append(e)
+        else:
+            processed.append(e)
+    return processed
+
+
+def lower_exprs(expressions, **kwargs):
+    """
+    Lowering an expression consists of the following passes:
+
+        * Indexify functions;
+        * Align Indexeds with the computational domain;
+        * Apply user-provided substitution;
+
+    Examples
+    --------
+    f(x - 2*h_x, y) -> f[xi + 2, yi + 4]  (assuming halo_size=4)
+    """
+    # Normalize subs
+    subs = {k: sympify(v) for k, v in kwargs.get('subs', {}).items()}
+
+    processed = []
+    for expr in as_tuple(expressions):
+        try:
+            dimension_map = expr.subdomain.dimension_map
+        except AttributeError:
+            # Some Relationals may be pure SymPy objects, thus lacking the subdomain
+            dimension_map = {}
+
+        # Handle Functions (typical case)
+        mapper = {f: f.indexify(lshift=True, subs=dimension_map)
+                  for f in retrieve_functions(expr)}
+
+        # Handle Indexeds (from index notation)
+        for i in retrieve_indexed(expr):
+            f = i.function
+
+            # Introduce shifting to align with the computational domain
+            indices = [(lower_exprs(a) + o) for a, o in
+                       zip(i.indices, f._size_nodomain.left)]
+
+            # Apply substitutions, if necessary
+            if dimension_map:
+                indices = [j.xreplace(dimension_map) for j in indices]
+
+            mapper[i] = f.indexed[indices]
+
+        # Add dimensions map to the mapper in case dimensions are used
+        # as an expression, i.e. Eq(u, x, subdomain=xleft)
+        mapper.update(dimension_map)
+        # Add the user-supplied substitutions
+        mapper.update(subs)
+        processed.append(uxreplace(expr, mapper))
+
+    if isinstance(expressions, Iterable):
+        return processed
+    else:
+        assert len(processed) == 1
+        return processed.pop()

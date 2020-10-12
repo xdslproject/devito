@@ -1,15 +1,12 @@
 import pytest
 import numpy as np
 
-from conftest import skipif
 from devito import (Grid, Function, TimeFunction, SparseTimeFunction, Dimension, # noqa
                     Eq, Operator, ALLOC_GUARD, ALLOC_FLAT, configuration, switchconfig)
 from devito.data import LEFT, RIGHT, Decomposition, loc_data_idx, convert_index
 from devito.tools import as_tuple
 from devito.types import Scalar
 from devito.data.allocators import ExternalAllocator
-
-pytestmark = skipif('ops')
 
 
 class TestDataBasic(object):
@@ -66,7 +63,6 @@ class TestDataBasic(object):
         assert np.all(u.data[1, :, :, 0] == 0.)
         assert np.all(u.data[1, :, :, -1] == 0.)
 
-    @skipif('yask')
     def test_negative_step(self):
         """Test slicing with a negative step."""
         grid = Grid(shape=(6, 6, 6))
@@ -77,7 +73,6 @@ class TestDataBasic(object):
         assert (np.array(u.data[0, 3::-1, 0, 0]) == dat[3::-1]).all()
         assert (np.array(u.data[0, 5:1:-1, 0, 0]) == dat[5:1:-1]).all()
 
-    @skipif('yask')
     def test_negative_start(self):
         """Test slicing with a negative start."""
         grid = Grid(shape=(13,))
@@ -168,7 +163,6 @@ class TestDataBasic(object):
         arr.fill(2.)
         assert np.all(arr - u.data == 1.)
 
-    @skipif('yask')
     def test_illegal_indexing(self):
         """Tests that indexing into illegal entries throws an exception."""
         nt = 5
@@ -224,7 +218,7 @@ class TestLocDataIDX(object):
     ])
     def test_loc_data_idx(self, idx, expected):
         """
-        Test loc_data_idx located in devio/data/utils.py
+        Test loc_data_idx located in devito/data/utils.py
         """
         idx = eval(idx)
         expected = eval(expected)
@@ -264,7 +258,16 @@ class TestMetaData(object):
         assert tuple(i + j*2 for i, j in zip(u.shape, u._size_halo.left)) ==\
             u.shape_with_halo
 
-    @skipif('yask')
+        # Try with different grid shape and space_order
+        grid2 = Grid(shape=(3, 3, 3))
+        u2 = Function(name='u2', grid=grid2, space_order=4, padding=0)
+        assert u2.shape == (3, 3, 3)
+        assert u2._offset_domain == (4, 4, 4)
+        assert u2._offset_halo == ((0, 7), (0, 7), (0, 7))
+        assert tuple(i + j*2 for i, j in zip(u2.shape, u2._size_halo.left)) ==\
+            u2.shape_with_halo
+        assert u2.shape_with_halo == (11, 11, 11)
+
     def test_wo_halo_w_padding(self):
         grid = Grid(shape=(4, 4, 4))
         u = Function(name='u', grid=grid, space_order=2, padding=((1, 1), (3, 3), (4, 4)))
@@ -283,7 +286,6 @@ class TestMetaData(object):
         assert u._offset_halo.right == (7, 9, 10)
         assert u._offset_owned == ((3, 5), (5, 7), (6, 8))
 
-    @skipif('yask')
     def test_w_halo_w_padding(self):
         grid = Grid(shape=(4, 4, 4))
         u = Function(name='u', grid=grid, space_order=(2, 1, 4),
@@ -299,7 +301,6 @@ class TestMetaData(object):
         assert u._offset_halo == ((1, 6), (2, 7), (3, 8))
         assert u._offset_owned == ((2, 5), (3, 6), (4, 7))
 
-    @skipif('yask')
     @switchconfig(autopadding=True, platform='bdw')  # Platform is to fix pad value
     def test_w_halo_w_autopadding(self):
         grid = Grid(shape=(4, 4, 4))
@@ -319,7 +320,6 @@ class TestMetaData(object):
         assert u1.shape_allocated == (10, 10, 24)
 
 
-@skipif('yask')
 class TestDecomposition(object):
 
     """
@@ -351,6 +351,19 @@ class TestDecomposition(object):
         assert d.index_glb_to_loc((1, 3), rel=False) == (-1, -3)
         assert d.index_glb_to_loc((1, 6), rel=False) == (5, 6)
         assert d.index_glb_to_loc((None, None), rel=False) == (5, 7)
+
+    def test_glb_to_loc_w_side(self):
+        d = Decomposition([[0, 1, 2], [3, 4], [5, 6, 7], [8, 9, 10, 11]], 2)
+
+        # A global index as single argument
+        assert d.index_glb_to_loc(5, LEFT) == 0
+        assert d.index_glb_to_loc(6, RIGHT) == 2
+        assert d.index_glb_to_loc(7, LEFT) == 2
+        assert d.index_glb_to_loc(4, RIGHT) == 0
+        assert d.index_glb_to_loc(6, LEFT) == 1
+        assert d.index_glb_to_loc(5, RIGHT) == 1
+        assert d.index_glb_to_loc(2, LEFT) is None
+        assert d.index_glb_to_loc(3, RIGHT) is None
 
     def test_loc_to_glb_index_conversions(self):
         d = Decomposition([[0, 1, 2], [3, 4], [5, 6, 7], [8, 9, 10, 11]], 2)
@@ -459,7 +472,6 @@ class TestDecomposition(object):
         assert d.reshape((1, 3, 10, 11, 14)) == Decomposition([[0], [1], [], [2, 3]], 2)
 
 
-@skipif(['yask', 'nompi'])
 class TestDataDistributed(object):
 
     """
@@ -1247,6 +1259,92 @@ class TestDataDistributed(object):
             assert(np.all(c.data[-1] == [4., 4., 6., 9., 8.]))
 
 
+class TestDataGather(object):
+
+    @pytest.mark.parallel(mode=4)
+    @pytest.mark.parametrize('rank', [0, 1, 2, 3])
+    def test_simple_gather(self, rank):
+        """ Test a simple gather on various ranks."""
+        grid = Grid(shape=(10, 10), extent=(9, 9))
+        f = Function(name='f', grid=grid, dtype=np.int32)
+        res = np.arange(100).reshape(grid.shape)
+        f.data[:] = res
+        myrank = grid._distributor.comm.Get_rank()
+        ans = f.data_gather(rank=rank)
+        if myrank == rank:
+            assert np.all(ans == res)
+        else:
+            assert ans.shape == (0, )*len(grid.shape)
+
+    @pytest.mark.parallel(mode=4)
+    @pytest.mark.parametrize('start, stop, step', [
+        (None, None, None),
+        (None, None, 2),
+        (None, None, -1),
+        (None, None, -2),
+        (1, 8, 3),
+        ((0, 4), None, (2, 1))])
+    def test_sliced_gather_2D(self, start, stop, step):
+        """ Test gather for various 2D slices."""
+        grid = Grid(shape=(10, 10), extent=(9, 9))
+        f = Function(name='f', grid=grid, dtype=np.int32)
+        dat = np.arange(100).reshape(grid.shape)
+
+        if isinstance(step, int) or step is None:
+            step = [step for _ in grid.shape]
+        if isinstance(start, int) or start is None:
+            start = [start for _ in grid.shape]
+        if isinstance(stop, int) or stop is None:
+            stop = [stop for _ in grid.shape]
+        idx = []
+        for i, j, k in zip(start, stop, step):
+            idx.append(slice(i, j, k))
+        idx = tuple(idx)
+
+        res = dat[idx]
+        f.data[:] = dat
+        myrank = grid._distributor.comm.Get_rank()
+        ans = f.data_gather(start=start, stop=stop, step=step)
+        if myrank == 0:
+            assert np.all(ans == res)
+        else:
+            assert ans.shape == (0, )*len(grid.shape)
+
+    @pytest.mark.parallel(mode=4)
+    @pytest.mark.parametrize('start, stop, step', [
+        (None, None, None),
+        (None, None, 2),
+        (None, None, -1),
+        (None, None, -2),
+        (1, 8, 3),
+        ((0, 4, 4), None, (2, 1, 1))])
+    def test_sliced_gather_3D(self, start, stop, step):
+        """ Test gather for various 3D slices."""
+        grid = Grid(shape=(10, 10, 10), extent=(9, 9, 9))
+        f = Function(name='f', grid=grid, dtype=np.int32)
+        dat = np.arange(1000).reshape(grid.shape)
+
+        if isinstance(step, int) or step is None:
+            step = [step for _ in grid.shape]
+        if isinstance(start, int) or start is None:
+            start = [start for _ in grid.shape]
+        if isinstance(stop, int) or stop is None:
+            stop = [stop for _ in grid.shape]
+        idx = []
+        for i, j, k in zip(start, stop, step):
+            idx.append(slice(i, j, k))
+        idx = tuple(idx)
+
+        res = dat[idx]
+        f.data[:] = dat
+        myrank = grid._distributor.comm.Get_rank()
+        ans = f.data_gather(start=start, stop=stop, step=step)
+        if myrank == 0:
+            assert np.all(ans == res)
+        else:
+            assert ans.shape == (0, )*len(grid.shape)
+
+
 def test_scalar_arg_substitution():
     """
     Tests the relaxed (compared to other devito sympy subclasses)
@@ -1284,8 +1382,6 @@ def test_oob_guard():
     Operator(Eq(u[2000, 0], 1.0)).apply()
 
 
-# Skip for YASK because we can't guarantee contiguous memory
-@skipif('yask')
 def test_numpy_c_contiguous():
     """
     Test that devito.Data is correctly reported by NumPy as being C-contiguous
@@ -1295,7 +1391,6 @@ def test_numpy_c_contiguous():
     assert(u._data_allocated.flags.c_contiguous)
 
 
-@skipif(['yask', 'ops'])
 def test_external_allocator():
     shape = (2, 2)
     space_order = 0

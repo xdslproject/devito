@@ -1,6 +1,5 @@
 from devito import VectorTimeFunction, TensorTimeFunction
 from devito.tools import memoized_meth
-from examples.seismic import Receiver
 from examples.seismic.viscoelastic.operators import ForwardOperator
 
 
@@ -26,12 +25,21 @@ class ViscoelasticWaveSolver(object):
     """
     def __init__(self, model, geometry, space_order=4, **kwargs):
         self.model = model
+        self.model._initialize_bcs(bcs="mask")
         self.geometry = geometry
 
         self.space_order = space_order
-        self.dt = self.model.critical_dt
+
+        # The viscoelastic equation requires a smaller dt than the standard
+        # elastic equation due to instability introduced by the viscosity.
+        self.model.dt_scale = .9
+
         # Cache compiler options
         self._kwargs = kwargs
+
+    @property
+    def dt(self):
+        return self.model.critical_dt
 
     @memoized_meth
     def op_fwd(self, save=None):
@@ -40,7 +48,7 @@ class ViscoelasticWaveSolver(object):
                                space_order=self.space_order, **self._kwargs)
 
     def forward(self, src=None, rec1=None, rec2=None, lam=None, qp=None, mu=None, qs=None,
-                irho=None, v=None, tau=None, r=None, save=None, **kwargs):
+                b=None, v=None, tau=None, r=None, save=None, **kwargs):
         """
         Forward modelling function that creates the necessary
         data objects for running a forward modelling operator.
@@ -57,18 +65,18 @@ class ViscoelasticWaveSolver(object):
             The computed stress.
         r : TensorTimeFunction, optional
             The computed memory variable.
-        lambda : Function, optional
-            The time-constant first Lame parameter (rho * vp**2 - rho * vs **2).
-        qp : Function, optional
-            The P-wave quality factor (dimensionless).
+        lam : Function, optional
+            The time-constant first Lame parameter rho * (vp**2 - 2 * vs **2).
         mu : Function, optional
             The Shear modulus (rho * vs*2).
+        qp : Function, optional
+            The P-wave quality factor (dimensionless).
         qs : Function, optional
             The S-wave quality factor (dimensionless).
-        irho : Function, optional
+        b : Function, optional
             The time-constant inverse density (1/rho=1 for water).
-        save : int or Buffer, optional
-            Option to store the entire (unrolled) wavefield.
+        save : bool, optional
+            Whether or not to save the entire (unrolled) wavefield.
 
         Returns
         -------
@@ -78,35 +86,27 @@ class ViscoelasticWaveSolver(object):
         # Source term is read-only, so re-use the default
         src = src or self.geometry.src
         # Create a new receiver object to store the result
-        rec1 = rec1 or Receiver(name='rec1', grid=self.model.grid,
-                                time_range=self.geometry.time_axis,
-                                coordinates=self.geometry.rec_positions)
-        rec2 = rec2 or Receiver(name='rec2', grid=self.model.grid,
-                                time_range=self.geometry.time_axis,
-                                coordinates=self.geometry.rec_positions)
+        rec1 = rec1 or self.geometry.new_rec(name='rec1')
+        rec2 = rec2 or self.geometry.new_rec(name='rec2')
 
         # Create all the fields v, tau, r
         save_t = src.nt if save else None
-        v = VectorTimeFunction(name="v", grid=self.model.grid, save=save_t,
-                               time_order=1, space_order=self.space_order)
+        v = v or VectorTimeFunction(name="v", grid=self.model.grid, save=save_t,
+                                    time_order=1, space_order=self.space_order)
         # Stress:
-        tau = TensorTimeFunction(name='t', grid=self.model.grid, save=save_t,
-                                 space_order=self.space_order, time_order=1)
+        tau = tau or TensorTimeFunction(name='t', grid=self.model.grid, save=save_t,
+                                        space_order=self.space_order, time_order=1)
         # Memory variable:
-        r = TensorTimeFunction(name='r', grid=self.model.grid, save=save_t,
-                               space_order=self.space_order, time_order=1)
+        r = r or TensorTimeFunction(name='r', grid=self.model.grid, save=save_t,
+                                    space_order=self.space_order, time_order=1)
 
         kwargs.update({k.name: k for k in v})
         kwargs.update({k.name: k for k in tau})
         kwargs.update({k.name: k for k in r})
         # Pick physical parameters from model unless explicitly provided
-        lam = lam or self.model.lam
-        qp = qp or self.model.qp
-        mu = mu or self.model.mu
-        qs = qs or self.model.qs
-        irho = irho or self.model.irho
+        kwargs.update(self.model.physical_params(lam=lam, mu=mu, b=b, qp=qp, qs=qs))
+
         # Execute operator and return wavefield and receiver data
-        summary = self.op_fwd(save).apply(src=src, rec1=rec1, mu=mu, qp=qp, lam=lam,
-                                          qs=qs, irho=irho, rec2=rec2,
+        summary = self.op_fwd(save).apply(src=src, rec1=rec1, rec2=rec2,
                                           dt=kwargs.pop('dt', self.dt), **kwargs)
         return rec1, rec2, v, tau, summary

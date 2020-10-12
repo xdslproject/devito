@@ -5,11 +5,13 @@ import sympy
 import numpy as np
 from cached_property import cached_property
 
-from devito.finite_differences import Differentiable, generate_fd_shortcuts
+from devito.finite_differences import generate_fd_shortcuts
 from devito.mpi import MPI, SparseDistributor
 from devito.operations import LinearInterpolator, PrecomputedInterpolator
-from devito.symbolics import INT, cast_mapper, indexify, retrieve_function_carriers
-from devito.tools import ReducerMap, flatten, prod, filter_ordered, memoized_meth
+from devito.symbolics import (INT, FLOOR, cast_mapper, indexify,
+                              retrieve_function_carriers)
+from devito.tools import (ReducerMap, as_tuple, flatten, prod, filter_ordered,
+                          memoized_meth)
 from devito.types.dense import DiscreteFunction, Function, SubFunction
 from devito.types.dimension import Dimension, ConditionalDimension
 from devito.types.basic import Symbol, Scalar
@@ -19,7 +21,7 @@ __all__ = ['SparseFunction', 'SparseTimeFunction', 'PrecomputedSparseFunction',
            'PrecomputedSparseTimeFunction']
 
 
-class AbstractSparseFunction(DiscreteFunction, Differentiable):
+class AbstractSparseFunction(DiscreteFunction):
 
     """
     An abstract class to define behaviours common to all sparse functions.
@@ -40,16 +42,20 @@ class AbstractSparseFunction(DiscreteFunction, Differentiable):
         self._space_order = kwargs.get('space_order', 0)
 
         # Dynamically add derivative short-cuts
-        self._fd = generate_fd_shortcuts(self)
+        self._fd = self.__fd_setup__()
+
+    def __fd_setup__(self):
+        """
+        Dynamically add derivative short-cuts.
+        """
+        return generate_fd_shortcuts(self.dimensions, self.space_order)
 
     @classmethod
     def __indices_setup__(cls, **kwargs):
-        dimensions = kwargs.get('dimensions')
-        if dimensions is not None:
-            return dimensions, dimensions
-        else:
+        dimensions = as_tuple(kwargs.get('dimensions'))
+        if not dimensions:
             dimensions = (Dimension(name='p_%s' % kwargs["name"]),)
-            return dimensions, dimensions
+        return dimensions, dimensions
 
     @classmethod
     def __shape_setup__(cls, **kwargs):
@@ -105,6 +111,12 @@ class AbstractSparseFunction(DiscreteFunction, Differentiable):
         """
         return self.interpolator.inject(*args, **kwargs)
 
+    def inject2nested(self, *args, **kwargs):
+        """
+        Implement an injection operation from a sparse point onto the grid
+        """
+        return self.interpolator.inject(*args, **kwargs)
+
     @property
     def _support(self):
         """
@@ -120,11 +132,16 @@ class AbstractSparseFunction(DiscreteFunction, Differentiable):
 
     @property
     def _dist_datamap(self):
+        return self._build_dist_datamap(support=self._support)
+
+    @memoized_meth
+    def _build_dist_datamap(self, support=None):
         """
         Mapper ``M : MPI rank -> required sparse data``.
         """
         ret = {}
-        for i, s in enumerate(self._support):
+        support = support or self._support
+        for i, s in enumerate(support):
             # Sparse point `i` is "required" by the following ranks
             for r in self.grid.distributor.glb_to_rank(s):
                 ret.setdefault(r, []).append(i)
@@ -164,8 +181,10 @@ class AbstractSparseFunction(DiscreteFunction, Differentiable):
         """
         ret = list(self._dist_scatter_mask)
         mask = ret[self._sparse_position]
-        ret[self._sparse_position] = [mask.tolist().index(i)
-                                      for i in filter_ordered(mask)]
+        inds = np.unique(mask, return_index=True)[1]
+        inds.sort()
+        ret[self._sparse_position] = inds.tolist()
+
         return tuple(ret)
 
     @property
@@ -346,6 +365,13 @@ class AbstractSparseTimeFunction(AbstractSparseFunction):
 
         super(AbstractSparseTimeFunction, self).__init_finalize__(*args, **kwargs)
 
+    def __fd_setup__(self):
+        """
+        Dynamically add derivative short-cuts.
+        """
+        return generate_fd_shortcuts(self.dimensions, self.space_order,
+                                     to=self.time_order)
+
     @property
     def time_dim(self):
         """The time dimension."""
@@ -353,12 +379,11 @@ class AbstractSparseTimeFunction(AbstractSparseFunction):
 
     @classmethod
     def __indices_setup__(cls, **kwargs):
-        dimensions = kwargs.get('dimensions')
-        if dimensions is not None:
-            return dimensions, dimensions
-        else:
-            dims = (kwargs['grid'].time_dim, Dimension(name='p_%s' % kwargs["name"]))
-            return dims, dims
+        dimensions = as_tuple(kwargs.get('dimensions'))
+        if not dimensions:
+            dimensions = (kwargs['grid'].time_dim,
+                          Dimension(name='p_%s' % kwargs["name"]))
+        return dimensions, dimensions
 
     @classmethod
     def __shape_setup__(cls, **kwargs):
@@ -531,6 +556,27 @@ class SparseFunction(AbstractSparseFunction):
                      for d in self.grid.dimensions)
 
     @cached_property
+    def _position_map(self):
+        """
+        Symbols map for the position of the sparse points relative to the grid
+        origin.
+
+        Notes
+        -----
+        The expression `(coord - origin)/spacing` could also be computed in the
+        mathematically equivalent expanded form `coord/spacing -
+        origin/spacing`. This particular form is problematic when a sparse
+        point is in close proximity of the grid origin, since due to a larger
+        machine precision error it may cause a +-1 error in the computation of
+        the position. We mitigate this problem by computing the positions
+        individually (hence the need for a position map).
+        """
+        symbols = [Scalar(name='pos%s' % d, dtype=self.dtype)
+                   for d in self.grid.dimensions]
+        return OrderedDict([(c - o, p) for p, c, o in
+                            zip(symbols, self._coordinate_symbols, self.grid.origin)])
+
+    @cached_property
     def _point_increments(self):
         """Index increments in each dimension for each point symbol."""
         return tuple(product(range(2), repeat=self.grid.dim))
@@ -545,19 +591,18 @@ class SparseFunction(AbstractSparseFunction):
     @cached_property
     def _coordinate_indices(self):
         """Symbol for each grid index according to the coordinates."""
-        indices = self.grid.dimensions
-        return tuple([INT(sympy.Function('floor')((c - o) / i.spacing))
-                      for c, o, i in zip(self._coordinate_symbols, self.grid.origin,
-                                         indices[:self.grid.dim])])
+        return tuple([INT(FLOOR((c - o) / i.spacing))
+                      for c, o, i in zip(self._coordinate_symbols,
+                                         self.grid.origin,
+                                         self.grid.dimensions[:self.grid.dim])])
 
     def _coordinate_bases(self, field_offset):
         """Symbol for the base coordinates of the reference grid point."""
-        indices = self.grid.dimensions
         return tuple([cast_mapper[self.dtype](c - o - idx * i.spacing)
                       for c, o, idx, i, of in zip(self._coordinate_symbols,
                                                   self.grid.origin,
                                                   self._coordinate_indices,
-                                                  indices[:self.grid.dim],
+                                                  self.grid.dimensions[:self.grid.dim],
                                                   field_offset)])
 
     @memoized_meth
@@ -585,9 +630,9 @@ class SparseFunction(AbstractSparseFunction):
             raise ValueError("No coordinates attached to this SparseFunction")
         ret = []
         for coords in self.coordinates.data._local:
-            ret.append(tuple(int(sympy.floor((c - o.data)/i.spacing.data)) for c, o, i in
+            ret.append(tuple(int(np.floor(c - o.data)/i.spacing.data) for c, o, i in
                              zip(coords, self.grid.origin, self.grid.dimensions)))
-        return ret
+        return tuple(ret)
 
     def guard(self, expr=None, offset=0):
         """
@@ -624,9 +669,13 @@ class SparseFunction(AbstractSparseFunction):
                          if f.is_SparseFunction}
             out = indexify(expr).xreplace({f._sparse_dim: cd for f in functions})
 
-        # Temporaries for the indirection dimensions
+        # Temporaries for the position
         temps = [Eq(v, k, implicit_dims=self.dimensions)
-                 for k, v in points.items() if v in conditions]
+                 for k, v in self._position_map.items()]
+        # Temporaries for the indirection dimensions
+        temps.extend([Eq(v, k.subs(self._position_map),
+                         implicit_dims=self.dimensions)
+                      for k, v in points.items() if v in conditions])
 
         return out, temps
 
@@ -868,11 +917,37 @@ class SparseTimeFunction(AbstractSparseTimeFunction, SparseFunction):
         """
         # Apply optional time symbol substitutions to field and expr
         if u_t is not None:
-            field = field.subs(field.time_dim, u_t)
+            field = field.subs({field.time_dim: u_t})
         if p_t is not None:
-            expr = expr.subs(self.time_dim, p_t)
+            expr = expr.subs({self.time_dim: p_t})
 
         return super(SparseTimeFunction, self).inject(field, expr, offset=offset)
+
+    def inject2nested(self, field, expr, offset=0, u_t=None, p_t=None):
+        """
+        Generate equations injecting an arbitrary expression into a field.
+
+        Parameters
+        ----------
+        field : Function
+            Input field into which the injection is performed.
+        expr : expr-like
+            Injected expression.
+        offset : int, optional
+            Additional offset from the boundary.
+        u_t : expr-like, optional
+            Time index at which the interpolation is performed.
+        p_t : expr-like, optional
+            Time index at which the result of the interpolation is stored.
+        """
+        # Apply optional time symbol substitutions to field and expr
+        if u_t is not None:
+            field = field.subs({field.time_dim: u_t})
+        if p_t is not None:
+            expr = expr.subs({self.time_dim: p_t})
+
+        return super(SparseTimeFunction, self).inject(field, expr, offset=offset)
+
 
     # Pickling support
     _pickle_kwargs = AbstractSparseTimeFunction._pickle_kwargs +\

@@ -2,7 +2,7 @@ from functools import wraps, partial
 from itertools import product
 
 import numpy as np
-from sympy import S
+from sympy import S, finite_diff_weights, cacheit, sympify
 
 from devito.tools import Tag, as_tuple
 from devito.finite_differences import Differentiable
@@ -95,59 +95,49 @@ def deriv_name(dims, orders):
     return ''.join(name)
 
 
-def generate_fd_shortcuts(function):
+def generate_fd_shortcuts(dims, so, to=0):
     """Create all legal finite-difference derivatives for the given Function."""
-    dimensions = function.dimensions
-    s_fd_order = function.space_order
-    t_fd_order = function.time_order if (function.is_TimeFunction or
-                                         function.is_SparseTimeFunction) else 0
-    orders = tuple(t_fd_order if i.is_Time else s_fd_order for i in dimensions)
+    orders = tuple(to if i.is_Time else so for i in dims)
 
     from devito.finite_differences.derivative import Derivative
 
-    def deriv_function(expr, deriv_order, dims, fd_order, side=None, **kwargs):
+    def diff_f(expr, deriv_order, dims, fd_order, side=None, **kwargs):
         return Derivative(expr, *as_tuple(dims), deriv_order=deriv_order,
                           fd_order=fd_order, side=side, **kwargs)
 
-    all_combs = dim_with_order(dimensions, orders)
+    all_combs = dim_with_order(dims, orders)
 
     derivatives = {}
 
     # All conventional FD shortcuts
     for o in all_combs:
-        fd_dims = tuple(d for d, o_d in zip(dimensions, o) if o_d > 0)
-        d_orders = tuple(o_d for d, o_d in zip(dimensions, o) if o_d > 0)
-        fd_orders = tuple(t_fd_order if d.is_Time else s_fd_order for d in fd_dims)
-        deriv = partial(deriv_function, deriv_order=d_orders, dims=fd_dims,
-                        fd_order=fd_orders)
+        fd_dims = tuple(d for d, o_d in zip(dims, o) if o_d > 0)
+        d_orders = tuple(o_d for d, o_d in zip(dims, o) if o_d > 0)
+        fd_orders = tuple(to if d.is_Time else so for d in fd_dims)
+        deriv = partial(diff_f, deriv_order=d_orders, dims=fd_dims, fd_order=fd_orders)
         name_fd = deriv_name(fd_dims, d_orders)
         dname = (d.root.name for d in fd_dims)
         desciption = 'derivative of order %s w.r.t dimension %s' % (d_orders, dname)
         derivatives[name_fd] = (deriv, desciption)
 
     # Add non-conventional, non-centered first-order FDs
-    for d, o in zip(dimensions, orders):
+    for d, o in zip(dims, orders):
         name = 't' if d.is_Time else d.root.name
-        if function.is_Staggered or o == 2:
-            # Add centered first derivatives if staggered
-            deriv = partial(deriv_function, deriv_order=1, dims=d,
-                            fd_order=o, side=centered)
-            name_fd = 'd%sc' % name
-            desciption = 'centered derivative staggered w.r.t dimension %s' % d.name
-            derivatives[name_fd] = (deriv, desciption)
-        if not function.is_Staggered:
-            # Left
-            deriv = partial(deriv_function, deriv_order=1,
-                            dims=d, fd_order=o, side=left)
-            name_fd = 'd%sl' % name
-            desciption = 'left first order derivative w.r.t dimension %s' % d.name
-            derivatives[name_fd] = (deriv, desciption)
-            # Right
-            deriv = partial(deriv_function, deriv_order=1,
-                            dims=d, fd_order=o, side=right)
-            name_fd = 'd%sr' % name
-            desciption = 'right first order derivative w.r.t dimension %s' % d.name
-            derivatives[name_fd] = (deriv, desciption)
+        # Add centered first derivatives
+        deriv = partial(diff_f, deriv_order=1, dims=d, fd_order=o, side=centered)
+        name_fd = 'd%sc' % name
+        desciption = 'centered derivative staggered w.r.t dimension %s' % d.name
+        derivatives[name_fd] = (deriv, desciption)
+        # Left
+        deriv = partial(diff_f, deriv_order=1, dims=d, fd_order=o, side=left)
+        name_fd = 'd%sl' % name
+        desciption = 'left first order derivative w.r.t dimension %s' % d.name
+        derivatives[name_fd] = (deriv, desciption)
+        # Right
+        deriv = partial(diff_f, deriv_order=1, dims=d, fd_order=o, side=right)
+        name_fd = 'd%sr' % name
+        desciption = 'right first order derivative w.r.t dimension %s' % d.name
+        derivatives[name_fd] = (deriv, desciption)
 
     return derivatives
 
@@ -157,7 +147,32 @@ def symbolic_weights(function, deriv_order, indices, dim):
             for j in range(0, len(indices))]
 
 
+@cacheit
+def numeric_weights(deriv_order, indices, x0):
+    return finite_diff_weights(deriv_order, indices, x0)[-1][-1]
+
+
 def generate_indices(func, dim, order, side=None, x0=None):
+    """
+    Indices for the finite-difference scheme
+
+    Parameters
+    ----------
+    func: Function
+        Function that is differentiated
+    dim: Dimension
+        Dimensions w.r.t which the derivative is taken
+    order: Int
+        Order of the finite-difference scheme
+    side: Side
+        Side of the scheme, (centered, left, right)
+    x0: Dimension or Expr or Number
+        Origin of the scheme, ie. `x`, `x + .5 * x.spacing`, ...
+
+    Returns
+    -------
+    Ordered list of indices
+    """
     # If staggered finited difference
     if func.is_Staggered and not dim.is_Time:
         x0, ind = generate_indices_staggered(func, dim, order, side=side, x0=x0)
@@ -169,20 +184,66 @@ def generate_indices(func, dim, order, side=None, x0=None):
 
 
 def generate_indices_cartesian(dim, order, side, x0):
+    """
+    Indices for the finite-difference scheme on a cartesian grid
+
+    Parameters
+    ----------
+    dim: Dimension
+        Dimensions w.r.t which the derivative is taken
+    order: Int
+        Order of the finite-difference scheme
+    side: Side
+        Side of the scheme, (centered, left, right)
+    x0: Dimension or Expr or Number
+        Origin of the scheme, ie. `x`, `x + .5 * x.spacing`, ...
+
+    Returns
+    -------
+    Ordered list of indices
+    """
     shift = 0
+    # Shift if x0 is not on the grid
+    offset_c = 0 if sympify(x0).is_Integer else (dim - x0)/dim.spacing
+    offset_c = np.sign(offset_c) * (offset_c % 1)
+    # left and right max offsets for indices
+    o_start = -order//2 + int(np.ceil(-offset_c))
+    o_end = order//2 + 1 - int(np.ceil(offset_c))
+    offset = offset_c * dim.spacing
+    # Spacing
     diff = dim.spacing
-    if side is left:
-        diff = -diff
     if side in [left, right]:
         shift = 1
-
-    ind = [(x0 + (i + shift) * diff) for i in range(-order//2, order//2 + 1)]
+        diff *= side.val
+    # Indices
     if order < 2:
-        ind = [x0, x0 + diff]
+        ind = [x0, x0 + diff] if offset == 0 else [x0 - offset, x0 + offset]
+    else:
+        ind = [(x0 + (i + shift) * diff + offset) for i in range(o_start, o_end)]
     return tuple(ind)
 
 
 def generate_indices_staggered(func, dim, order, side=None, x0=None):
+    """
+    Indices for the finite-difference scheme on a staggered grid
+
+    Parameters
+    ----------
+    func: Function
+        Function that is differentiated
+    dim: Dimension
+        Dimensions w.r.t which the derivative is taken
+    order: Int
+        Order of the finite-difference scheme
+    side: Side
+        Side of the scheme, (centered, left, right)
+    x0: Dimension or Expr or Number
+        Origin of the scheme, ie. `x`, `x + .5 * x.spacing`, ...
+
+    Returns
+    -------
+    Ordered list of indices
+    """
     diff = dim.spacing
     start = (x0 or {}).get(dim) or func.indices_ref[dim]
     try:

@@ -1,23 +1,22 @@
 import pytest
 import numpy as np
 from sympy import S
+import cgen
 
 from conftest import EVAL, skipif  # noqa
 from devito import (Eq, Inc, Grid, Constant, Function, TimeFunction, # noqa
                     Operator, Dimension, SubDimension, switchconfig)
 from devito.ir.equations import DummyEq, LoweredEq
 from devito.ir.equations.algorithms import dimension_sort
-from devito.ir.iet import (Call, Conditional, Expression, Iteration, CGen, FindNodes,
-                           FindSymbols, retrieve_iteration_tree, filter_iterations,
-                           make_efunc)
+from devito.ir.iet import (Call, Conditional, Expression, Iteration, List, CGen,
+                           FindNodes, FindSymbols, retrieve_iteration_tree,
+                           filter_iterations, make_efunc)
 from devito.ir.support.basic import (IterationInstance, TimedAccess, Scope,
                                      Vector, AFFINE, IRREGULAR)
 from devito.ir.support.space import (NullInterval, Interval, Forward, Backward,
                                      IterationSpace)
 from devito.types import Scalar, Symbol, Array
 from devito.tools import as_tuple
-
-pytestmark = skipif(['yask', 'ops'], whole_module=True)
 
 
 class TestVectorHierarchy(object):
@@ -83,7 +82,10 @@ class TestVectorHierarchy(object):
     @pytest.fixture
     def ta_literal(self, fc, x, y):
         intervals = [Interval(x, 0, 0), Interval(y, 0, 0)]
+        intervals_swap = [Interval(y, 0, 0), Interval(x, 0, 0)]
         fwd_ispace = IterationSpace(intervals, directions={x: Forward, y: Forward})
+        fwd_ispace_swap = IterationSpace(intervals_swap,
+                                         directions={x: Forward, y: Forward})
         mixed_ispace = IterationSpace(intervals, directions={x: Backward, y: Forward})
         tcxy_w0 = TimedAccess(fc[x, y], 'W', 0, fwd_ispace)
         tcxy_r0 = TimedAccess(fc[x, y], 'R', 0, fwd_ispace)
@@ -91,7 +93,11 @@ class TestVectorHierarchy(object):
         tcx1y_r1 = TimedAccess(fc[x + 1, y], 'R', 1, fwd_ispace)
         rev_tcxy_w0 = TimedAccess(fc[x, y], 'W', 0, mixed_ispace)
         rev_tcx1y1_r1 = TimedAccess(fc[x + 1, y + 1], 'R', 1, mixed_ispace)
-        return tcxy_w0, tcxy_r0, tcx1y1_r1, tcx1y_r1, rev_tcxy_w0, rev_tcx1y1_r1
+        tcyx_irr0 = TimedAccess(fc[y, x], 'R', 0, fwd_ispace)
+        tcxx_irr1 = TimedAccess(fc[x, x], 'R', 0, fwd_ispace)
+        tcxy_irr2 = TimedAccess(fc[x, y], 'R', 0, fwd_ispace_swap)
+        return (tcxy_w0, tcxy_r0, tcx1y1_r1, tcx1y_r1, rev_tcxy_w0, rev_tcx1y1_r1,
+                tcyx_irr0, tcxx_irr1, tcxy_irr2)
 
     def test_vector_cmp(self, v_num, v_literal):
         v2, v3, v4, v11, v13, v23 = v_num
@@ -130,7 +136,7 @@ class TestVectorHierarchy(object):
 
     def test_iteration_instance_arithmetic(self, x, y, ii_num, ii_literal):
         """
-        Tests arithmetic operations involving objects of type IterationInstance.
+        Test arithmetic operations involving objects of type IterationInstance.
         """
         fa4, fc00, fc11, fc23 = ii_num
         fax, fcxy, fcx1y = ii_literal
@@ -168,7 +174,7 @@ class TestVectorHierarchy(object):
 
     def test_iteration_instance_distance(self, ii_num, ii_literal):
         """
-        Tests calculation of vector distance between objects of type IterationInstance.
+        Test calculation of vector distance between objects of type IterationInstance.
         """
         _, fc00, fc11, fc23 = ii_num
         fax, fcxy, fcx1y = ii_literal
@@ -193,7 +199,7 @@ class TestVectorHierarchy(object):
 
     def test_iteration_instance_cmp(self, ii_num, ii_literal):
         """
-        Tests comparison of objects of type IterationInstance.
+        Test comparison of objects of type IterationInstance.
         """
         fa4, fc00, fc11, fc23 = ii_num
         fax, fcxy, fcx1y = ii_literal
@@ -220,11 +226,32 @@ class TestVectorHierarchy(object):
         assert fcxy <= fcxy
         assert fcxy < fcx1y
 
+    def test_timed_access_regularity(self, ta_literal):
+        """
+        Test TimedAcces.{is_regular,is_irregular}
+        """
+        (tcxy_w0, tcxy_r0, tcx1y1_r1, tcx1y_r1, rev_tcxy_w0, rev_tcx1y1_r1,
+         tcyx_irr0, tcxx_irr1, tcxy_irr2) = ta_literal
+
+        # Regulars
+        assert tcxy_w0.is_regular and not tcxy_w0.is_irregular
+        assert tcxy_r0.is_regular and not tcxy_r0.is_irregular
+        assert tcx1y1_r1.is_regular and not tcx1y1_r1.is_irregular
+        assert tcx1y_r1.is_regular and not tcx1y_r1.is_irregular
+        assert rev_tcxy_w0.is_regular and not rev_tcxy_w0.is_irregular
+        assert rev_tcx1y1_r1.is_regular and not rev_tcx1y1_r1.is_irregular
+
+        # Irregulars
+        assert tcyx_irr0.is_irregular and not tcyx_irr0.is_regular
+        assert tcxx_irr1.is_irregular and not tcxx_irr1.is_regular
+        assert tcxy_irr2.is_irregular and not tcxy_irr2.is_regular
+
     def test_timed_access_distance(self, x, y, ta_literal):
         """
-        Tests comparison of objects of type TimedAccess.
+        Test the comparison of objects of type TimedAccess.
         """
-        tcxy_w0, tcxy_r0, tcx1y1_r1, tcx1y_r1, rev_tcxy_w0, rev_tcx1y1_r1 = ta_literal
+        (tcxy_w0, tcxy_r0, tcx1y1_r1, tcx1y_r1, rev_tcxy_w0, rev_tcx1y1_r1,
+         tcyx_irr0, tcxx_irr1, tcxy_irr2) = ta_literal
 
         # Simple distance calculations
         assert tcxy_w0.distance(tcxy_r0) == (0, 0)
@@ -240,15 +267,25 @@ class TestVectorHierarchy(object):
         assert rev_tcxy_w0.distance(rev_tcx1y1_r1) == (1, -1)
         assert rev_tcx1y1_r1.distance(rev_tcxy_w0) == (-1, 1)
 
-        # Distance up to provided dimension
-        assert tcx1y1_r1.distance(tcxy_r0, x) == (1,)
-        assert tcx1y1_r1.distance(tcxy_r0, y) == (1, 1)
+        # The distance must be infinity when the findices directions
+        # are homogeneous, but one of the two TimedAccesses is irregular (in
+        # this case, the aindices differ, as the irregular TimedAccess uses
+        # `y` where `x` is expected)
+        assert tcxy_w0.distance(tcyx_irr0) == (S.Infinity)
+        assert tcx1y_r1.distance(tcyx_irr0) == (S.Infinity)
+        assert tcxy_w0.distance(tcxx_irr1) == (0, S.Infinity)
+
+        # The distance must be infinity when the aindices are compatible but
+        # one of the TimedAccesses is irregular due to mismatching
+        # findices-IterationSpace
+        assert tcxy_w0.distance(tcxy_irr2) == (S.Infinity)
 
     def test_timed_access_cmp(self, ta_literal):
         """
-        Tests comparison of objects of type TimedAccess.
+        Test comparison of objects of type TimedAccess.
         """
-        tcxy_w0, tcxy_r0, tcx1y1_r1, tcx1y_r1, rev_tcxy_w0, rev_tcx1y1_r1 = ta_literal
+        (tcxy_w0, tcxy_r0, tcx1y1_r1, tcx1y_r1, rev_tcxy_w0, rev_tcx1y1_r1,
+         tcyx_irr0, tcxx_irr1, tcxy_irr2) = ta_literal
 
         # Equality check
         assert tcxy_w0 == tcxy_w0
@@ -278,6 +315,28 @@ class TestVectorHierarchy(object):
             assert True
         except:
             assert False
+
+        # Non-comparable due to different aindices
+        try:
+            tcxy_w0 > tcyx_irr0
+            assert False
+        except TypeError:
+            assert True
+        except:
+            assert False
+
+        # Non-comparable due to mismatching Intervals
+        try:
+            tcxy_w0 > tcyx_irr0
+            assert False
+        except TypeError:
+            assert True
+        except:
+            assert False
+
+        # Comparable even though the TimedAccess is irregular (reflexivity)
+        assert tcyx_irr0 >= tcyx_irr0
+        assert tcyx_irr0 == tcyx_irr0
 
 
 class TestSpace(object):
@@ -434,6 +493,19 @@ class TestSpace(object):
         assert ix4.subtract(ix5) == Interval(x, 1, -1)
         assert ix5.subtract(ix4) == Interval(x, -1, 1)
         assert ix5.subtract(ix) == Interval(x, c - 1, c + 7)
+
+    def test_intervals_switch(self, x, y):
+        nullx = NullInterval(x)
+        nully = NullInterval(y)
+
+        assert nullx.switch(y) == nully
+
+        ix = Interval(x, 2, -2)
+        iy = Interval(y, 2, -2)
+
+        assert ix.switch(y) == iy
+        assert iy.switch(x) == ix
+        assert ix.switch(y).switch(x) == ix
 
 
 class TestDependenceAnalysis(object):
@@ -739,6 +811,21 @@ else
 
         assert [f.name for f in found] == eval(expected)
 
+    def test_list_denesting(self):
+        l0 = List(header=cgen.Line('a'), body=List(header=cgen.Line('b')))
+        l1 = l0._rebuild(body=List(header=cgen.Line('c')))
+        assert len(l0.body) == 0
+        assert len(l1.body) == 0
+        assert str(l1) == "a\nb\nc"
+
+        l2 = l1._rebuild(l1.body)
+        assert len(l2.body) == 0
+        assert str(l2) == str(l1)
+
+        l3 = l2._rebuild(l2.body, **l2.args_frozen)
+        assert len(l3.body) == 0
+        assert str(l3) == str(l2)
+
 
 class TestAnalysis(object):
 
@@ -787,7 +874,7 @@ class TestAnalysis(object):
         for i, e in enumerate(list(exprs)):
             exprs[i] = eval(e)
 
-        op = Operator(exprs, dle='openmp')
+        op = Operator(exprs, opt='openmp')
 
         iters = FindNodes(Iteration).visit(op)
         assert all(i.is_ParallelAtomic for i in iters if i.dim.name in atomic)
@@ -800,6 +887,10 @@ class TestAnalysis(object):
          ['p', 'rx', 'ry', 'rz'], []),
         (['Eq(rcv, 0)', 'Inc(rcv, cx*cy*cz)'],
          ['rx', 'ry', 'rz'], ['time', 'p']),
+        (['Eq(s, 0, implicit_dims=[time, p])',
+          'Inc(s, time*p*2, implicit_dims=[time, p])',
+          'Eq(rcv, s)'],
+         [], ['time', 'p']),
         (['Eq(v.forward, u+1)', 'Eq(rcv, 0)',
           'Inc(rcv, v[t, gp[p, 0]+rx, gp[p, 1]+ry, gp[p, 2]+rz]*cx*cy*cz)'],
          ['rx', 'ry', 'rz'], ['x', 'y', 'z', 'p']),
@@ -829,6 +920,8 @@ class TestAnalysis(object):
         ry = Dimension(name='ry')
         rz = Dimension(name='rz')
 
+        s = Scalar(name='s')  # noqa
+
         u = Function(name='u', grid=grid)  # noqa
         v = TimeFunction(name='v', grid=grid, save=None)  # noqa
 
@@ -845,52 +938,13 @@ class TestAnalysis(object):
             exprs[i] = eval(e)
 
         # Use 'openmp' here instead of 'advanced' to disable loop blocking
-        op = Operator(exprs, dle='openmp')
+        op = Operator(exprs, opt='openmp')
 
         iters = FindNodes(Iteration).visit(op)
         assert all([i.is_ParallelAtomic for i in iters if i.dim.name in atomic])
         assert all([not i.is_ParallelAtomic for i in iters if i.dim.name not in atomic])
         assert all([i.is_Parallel for i in iters if i.dim.name in parallel])
         assert all([not i.is_Parallel for i in iters if i.dim.name not in parallel])
-
-    @pytest.mark.parametrize('exprs,wrappable', [
-        # Easy: wrappable
-        (['Eq(u.forward, u + 1)'], True),
-        # Easy: wrappable
-        (['Eq(w.forward, w + 1)'], True),
-        # Not wrappable, as we're accessing w's back in a subsequent equation
-        (['Eq(w.forward, w + 1)', 'Eq(v.forward, w)'], False),
-        # Wrappable, but need to touch multiple indices with different modulos
-        (['Eq(w.forward, u + w + 1)'], True),
-        # Wrappable as the back timeslot is accessed only once, even though
-        # later equations are writing again to w.forward
-        (['Eq(w.forward, w + 1)', 'Eq(w.forward, w.forward + 2)'], True),
-        # Not wrappable as the front is written before the back timeslot could be read
-        (['Eq(w.forward, w + 1)', 'Eq(u.forward, u + w + 2)'], False),
-    ])
-    def test_loop_wrapping(self, exprs, wrappable):
-        """Tests detection of WRAPPABLE property."""
-        grid = Grid(shape=(3, 3, 3))
-
-        u = TimeFunction(name='u', grid=grid)  # noqa
-        v = TimeFunction(name='v', grid=grid, time_order=4)  # noqa
-        w = TimeFunction(name='w', grid=grid, time_order=4)  # noqa
-
-        # List comprehension would need explicit locals/globals mappings to eval
-        for i, e in enumerate(list(exprs)):
-            exprs[i] = eval(e)
-
-        op = Operator(exprs)
-
-        iters = FindNodes(Iteration).visit(op)
-
-        # Dependence analysis checks
-        time_iter = [i for i in iters if i.dim.is_Time]
-        assert len(time_iter) == 1
-        time_iter = time_iter[0]
-        if wrappable:
-            assert time_iter.is_Wrappable
-        assert all(not i.is_Wrappable for i in iters if i is not time_iter)
 
 
 class TestEquationAlgorithms(object):

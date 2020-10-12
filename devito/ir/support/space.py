@@ -4,12 +4,12 @@ from functools import reduce
 from operator import mul
 
 from cached_property import cached_property
-from frozendict import frozendict
 from sympy import Expr
 
 from devito.ir.support.vector import Vector, vmin, vmax
-from devito.tools import PartialOrderTuple, as_tuple, filter_ordered, toposort, is_integer
-
+from devito.tools import (PartialOrderTuple, as_list, as_tuple, filter_ordered,
+                          frozendict, toposort, is_integer)
+from devito.types import Dimension
 
 __all__ = ['NullInterval', 'Interval', 'IntervalGroup', 'IterationSpace', 'DataSpace',
            'Forward', 'Backward', 'Any']
@@ -18,7 +18,7 @@ __all__ = ['NullInterval', 'Interval', 'IntervalGroup', 'IterationSpace', 'DataS
 class AbstractInterval(object):
 
     """
-    A representation of a closed interval on Z.
+    An abstract representation of an iterated closed interval on Z.
     """
 
     __metaclass__ = abc.ABCMeta
@@ -67,9 +67,15 @@ class AbstractInterval(object):
     flip = negate
     lift = negate
     reset = negate
+    switch = negate
+    translate = negate
 
 
 class NullInterval(AbstractInterval):
+
+    """
+    A degenerate iterated closed interval on Z.
+    """
 
     is_Null = True
 
@@ -80,11 +86,11 @@ class NullInterval(AbstractInterval):
         return hash(self.dim)
 
     def _rebuild(self):
-        return NullInterval(self.dim)
+        return NullInterval(self.dim, self.stamp)
 
     @property
     def relaxed(self):
-        return NullInterval(self.dim.root)
+        return NullInterval(self.dim.root, self.stamp)
 
     def union(self, o):
         if self.dim is o.dim:
@@ -93,26 +99,37 @@ class NullInterval(AbstractInterval):
             raise ValueError("Cannot compute union of Intervals over "
                              "different Dimensions")
 
+    def switch(self, d):
+        return NullInterval(d, self.stamp)
+
 
 class Interval(AbstractInterval):
 
     """
     Interval(dim, lower, upper)
 
-    Create an Interval of size:
+    A concrete iterated closed interval on Z.
 
-        (dim.extreme_max - dim.extreme_min + 1) + (upper - lower)
+    An Interval defines the compact region
+
+        [dim.symbolic_min + lower, dim.symbolic_max + upper]
     """
 
     is_Defined = True
 
     def __init__(self, dim, lower, upper, stamp=0):
-        assert is_integer(lower) or isinstance(lower, Expr)
-        assert is_integer(upper) or isinstance(upper, Expr)
         super(Interval, self).__init__(dim, stamp)
-        self.lower = lower
-        self.upper = upper
-        self.size = (dim.extreme_max - dim.extreme_min + 1) + (upper - lower)
+
+        try:
+            self.lower = int(lower)
+        except TypeError:
+            assert isinstance(lower, Expr)
+            self.lower = lower
+        try:
+            self.upper = int(upper)
+        except TypeError:
+            assert isinstance(upper, Expr)
+            self.upper = upper
 
     def __repr__(self):
         return "%s[%s,%s]<%d>" % (self.dim, self.lower, self.upper, self.stamp)
@@ -121,12 +138,69 @@ class Interval(AbstractInterval):
         return hash((self.dim, self.offsets))
 
     def __eq__(self, o):
+        if self is o:
+            return True
+
         return (super(Interval, self).__eq__(o) and
                 self.lower == o.lower and
                 self.upper == o.upper)
 
     def _rebuild(self):
         return Interval(self.dim, self.lower, self.upper, self.stamp)
+
+    @cached_property
+    def size(self):
+        """
+        The Interval size, defined as the number of points iterated over through
+        ``self.dim``, namely
+
+            (dim.symbolic_max + upper - dim.symbolic_min - lower + 1) / dim.symbolic_incr
+
+        Notes
+        -----
+        The Interval size is typically a function of several symbols (e.g.,
+        `self.dim.symbolic_max`), and all such symbols must be mappable
+        to actual numbers at `op.apply` time (i.e., the runtime values).
+        When `self.dim` is an "unstructured Dimension", such as ModuloDimension,
+        things can get nasty since the symbolic min/max/incr can literally be
+        anything (any expression involving any Dimension/symbol/...), which makes
+        it extremely complicated to numerically compute the size. However,
+        the compiler only uses such unstructured Dimensions in well defined
+        circumstances, which we explicitly handle here. Ultimately, therefore,
+        we return a `size` that is made up of known symbols.
+        """
+        if self.dim.is_Custom:
+            # Special case 1)
+            # May be caused by the performance option `cire-rotate=True`
+            d = self.dim.symbolic_min
+            assert d.is_Modulo
+            n = d.parent.symbolic_size
+
+            # Iteration 0:
+            assert is_integer(d.symbolic_min)
+            assert is_integer(d.symbolic_incr)
+            assert is_integer(self.dim.symbolic_max)
+            assert self.lower == self.upper == 0
+            npoints = self.dim.symbolic_max - d.symbolic_min + 1
+            # Iterations [1, ..., n-1]:
+            assert d.symbolic_incr == self.dim.symbolic_max
+            npoints += 1 * (n-1)
+            npoints /= n
+        else:
+            # Typically we end up here (Dimension, SubDimension, IncrDimension)
+            assert not self.dim.is_Modulo
+            assert not self.dim.is_Conditional
+
+            upper_extreme = self.dim.symbolic_max + self.upper
+            lower_extreme = self.dim.symbolic_min + self.lower
+
+            npoints = (upper_extreme - lower_extreme + 1)
+
+        return npoints / self.dim.symbolic_incr
+
+    @cached_property
+    def min_size(self):
+        return self.upper - self.lower + 1
 
     @property
     def relaxed(self):
@@ -178,11 +252,19 @@ class Interval(AbstractInterval):
     def flip(self):
         return Interval(self.dim, self.upper, self.lower, self.stamp)
 
-    def lift(self):
-        return Interval(self.dim, self.lower, self.upper, self.stamp + 1)
+    def lift(self, v=None):
+        if v is None:
+            v = self.stamp + 1
+        return Interval(self.dim, self.lower, self.upper, v)
 
     def reset(self):
         return Interval(self.dim, self.lower, self.upper, 0)
+
+    def switch(self, d):
+        return Interval(d, self.lower, self.upper, self.stamp)
+
+    def translate(self, v):
+        return Interval(self.dim, self.lower + v, self.upper + v, self.stamp)
 
 
 class IntervalGroup(PartialOrderTuple):
@@ -204,8 +286,11 @@ class IntervalGroup(PartialOrderTuple):
 
     def __eq__(self, o):
         # No need to look at the relations -- if the partial ordering is the same,
-        # then then IntervalGroups are considered equal
+        # then the IntervalGroups are considered equal
         return len(self) == len(o) and all(i == j for i, j in zip(self, o))
+
+    def __contains__(self, d):
+        return any(i.dim is d for i in self)
 
     def __hash__(self):
         return hash(tuple(self))
@@ -219,12 +304,10 @@ class IntervalGroup(PartialOrderTuple):
 
     @property
     def size(self):
-        return reduce(mul, [i.size for i in self]) if self else 0
-
-    @property
-    def dimension_map(self):
-        """Map between Dimensions and their symbolic size."""
-        return OrderedDict([(i.dim, i.size) for i in self])
+        if self:
+            return reduce(mul, [i.size for i in self])
+        else:
+            return 0
 
     @cached_property
     def is_well_defined(self):
@@ -324,8 +407,14 @@ class IntervalGroup(PartialOrderTuple):
         return IntervalGroup(intervals, relations=(self.relations | o.relations))
 
     def drop(self, d):
-        return IntervalGroup([i._rebuild() for i in self if i.dim not in as_tuple(d)],
-                             relations=self.relations)
+        # Dropping
+        dims = set().union(*[i._defines for i in as_tuple(d)])
+        intervals = [i._rebuild() for i in self if not i.dim._defines & dims]
+
+        # Clean up relations
+        relations = [tuple(i for i in r if i in intervals) for r in self.relations]
+
+        return IntervalGroup(intervals, relations=relations)
 
     def negate(self):
         return IntervalGroup([i.negate() for i in self], relations=self.relations)
@@ -335,22 +424,46 @@ class IntervalGroup(PartialOrderTuple):
         return IntervalGroup([i.zero() if i.dim in d else i for i in self],
                              relations=self.relations)
 
-    def lift(self, d):
+    def lift(self, d=None, v=None):
         d = set(self.dimensions if d is None else as_tuple(d))
-        return IntervalGroup([i.lift() if i.dim._defines & d else i for i in self],
+        return IntervalGroup([i.lift(v) if i.dim._defines & d else i for i in self],
                              relations=self.relations)
 
     def reset(self):
         return IntervalGroup([i.reset() for i in self], relations=self.relations)
 
+    def switch(self, d0, d1):
+        return IntervalGroup([i.switch(d1) if i.dim is d0 else i for i in self],
+                             relations=self.relations)
+
+    def index(self, key):
+        if isinstance(key, Interval):
+            return super(IntervalGroup, self).index(key)
+        elif isinstance(key, Dimension):
+            return super(IntervalGroup, self).index(self[key])
+        raise ValueError("Expected Interval or Dimension, got `%s`" % type(key))
+
     def __getitem__(self, key):
-        if isinstance(key, slice) or is_integer(key):
+        if is_integer(key):
             return super(IntervalGroup, self).__getitem__(key)
+        elif isinstance(key, slice):
+            retval = super(IntervalGroup, self).__getitem__(key)
+            return IntervalGroup(retval, relations=self.relations)
+
         if not self.is_well_defined:
             raise ValueError("Cannot fetch Interval from ill defined Space")
+
+        if not isinstance(key, Dimension):
+            return NullInterval(key)
+
         for i in self:
             if i.dim is key:
                 return i
+            if key.is_NonlinearDerived and i.dim is key.parent:
+                # NonlinearDerived Dimensions cannot appear in iteration Intervals,
+                # but their parent can
+                return i
+
         return NullInterval(key)
 
 
@@ -389,16 +502,16 @@ class IterationInterval(object):
     An Interval associated with an IterationDirection.
     """
 
-    def __init__(self, interval, direction):
+    def __init__(self, interval, direction, sub_iterators):
         self.interval = interval
         self.direction = direction
+        self.sub_iterators = sub_iterators
 
     def __repr__(self):
         return "%s%s" % (self.interval, self.direction)
 
     def __eq__(self, other):
-        return isinstance(other, IterationInterval) and\
-            self.interval == other.interval and self.direction is other.direction
+        return self.direction is other.direction and self.interval == other.interval
 
     def __hash__(self):
         return hash((self.interval, self.direction))
@@ -415,7 +528,7 @@ class IterationInterval(object):
 class Space(object):
 
     """
-    A compact N-dimensional space, represented as a sequence of N Intervals.
+    A compact N-dimensional space defined by N Intervals.
 
     Parameters
     ----------
@@ -439,11 +552,18 @@ class Space(object):
     def __hash__(self):
         return hash(self.intervals)
 
+    def __len__(self):
+        return len(self.intervals)
+
+    def __iter__(self):
+        for i in self.intervals:
+            yield i
+
     @property
     def intervals(self):
         return self._intervals
 
-    @property
+    @cached_property
     def dimensions(self):
         return filter_ordered(self.intervals.dimensions)
 
@@ -453,13 +573,16 @@ class Space(object):
 
     @property
     def dimension_map(self):
-        return self.intervals.dimension_map
+        """
+        Map between the Space Dimensions and the size of their iterated region.
+        """
+        return OrderedDict([(i.dim, i.size) for i in self.intervals])
 
 
 class DataSpace(Space):
 
     """
-    A compact N-dimensional data space.
+    Represent a data space as an enriched Space.
 
     Parameters
     ----------
@@ -550,7 +673,7 @@ class DataSpace(Space):
 class IterationSpace(Space):
 
     """
-    A compact N-dimensional iteration space.
+    Represent an iteration space as an enriched Space.
 
     Parameters
     ----------
@@ -565,7 +688,13 @@ class IterationSpace(Space):
 
     def __init__(self, intervals, sub_iterators=None, directions=None):
         super(IterationSpace, self).__init__(intervals)
-        self._sub_iterators = frozendict(sub_iterators or {})
+
+        # Normalize sub-iterators
+        sub_iterators = sub_iterators or {}
+        self._sub_iterators = frozendict([(k, tuple(filter_ordered(as_tuple(v))))
+                                          for k, v in sub_iterators.items()])
+
+        # Normalize directions
         if directions is None:
             self._directions = frozendict([(i.dim, Any) for i in self.intervals])
         else:
@@ -577,13 +706,25 @@ class IterationSpace(Space):
         return "IterationSpace[%s]" % ret
 
     def __eq__(self, other):
+        if self is other:
+            return True
+
         return (isinstance(other, IterationSpace) and
                 self.intervals == other.intervals and
                 self.directions == other.directions)
 
+    def __lt__(self, other):
+        """
+        A rudimentary less-then comparison between two IterationSpaces.
+        """
+        return len(self.itintervals) < len(other.itintervals)
+
     def __hash__(self):
         return hash((super(IterationSpace, self).__hash__(), self.sub_iterators,
                      self.directions))
+
+    def __getitem__(self, key):
+        return self.intervals[key]
 
     @classmethod
     def union(cls, *others):
@@ -591,7 +732,9 @@ class IterationSpace(Space):
             return IterationSpace(IntervalGroup())
         elif len(others) == 1:
             return others[0]
+
         intervals = IntervalGroup.generate('union', *[i.intervals for i in others])
+
         directions = {}
         for i in others:
             for k, v in i.directions.items():
@@ -602,16 +745,33 @@ class IterationSpace(Space):
                     # Clash detected
                     raise ValueError("Cannot compute the union of `IterationSpace`s "
                                      "with incompatible directions")
+
         sub_iterators = {}
         for i in others:
             for k, v in i.sub_iterators.items():
                 ret = sub_iterators.setdefault(k, [])
                 ret.extend([d for d in v if d not in ret])
+
         return IterationSpace(intervals, sub_iterators, directions)
 
     def add(self, other):
         return IterationSpace(self.intervals.add(other), self.sub_iterators,
                               self.directions)
+
+    def augment(self, sub_iterators):
+        """
+        Create a new IterationSpace with additional sub-iterators.
+        """
+        items = dict(self.sub_iterators)
+        for k, v in sub_iterators.items():
+            if k not in self.intervals:
+                continue
+            items[k] = as_list(items.get(k))
+            for i in as_list(v):
+                if i not in items[k]:
+                    items[k].append(i)
+
+        return IterationSpace(self.intervals, items, self.directions)
 
     def reset(self):
         return IterationSpace(self.intervals.reset(), self.sub_iterators, self.directions)
@@ -619,7 +779,7 @@ class IterationSpace(Space):
     def project(self, cond):
         """
         Create a new IterationSpace in which only some Dimensions
-        in ``self`` are retained. In particular, a dimension ``d`` in ``self`` is
+        in ``self`` are retained. In particular, a Dimension ``d`` in ``self`` is
         retained if:
 
             * either ``cond(d)`` is true (``cond`` is a callable),
@@ -629,10 +789,21 @@ class IterationSpace(Space):
             func = cond
         else:
             func = lambda i: i in cond
+
         intervals = [i for i in self.intervals if func(i.dim)]
         sub_iterators = {k: v for k, v in self.sub_iterators.items() if func(k)}
         directions = {k: v for k, v in self.directions.items() if func(k)}
         return IterationSpace(intervals, sub_iterators, directions)
+
+    def zero(self, d=None):
+        intervals = self.intervals.zero(d)
+
+        return IterationSpace(intervals, self.sub_iterators, self.directions)
+
+    def lift(self, d=None, v=None):
+        intervals = self.intervals.lift(d, v)
+
+        return IterationSpace(intervals, self.sub_iterators, self.directions)
 
     def is_compatible(self, other):
         """
@@ -646,6 +817,14 @@ class IterationSpace(Space):
         return self.directions[dim] is Forward
 
     @property
+    def itdimensions(self):
+        return self.intervals.dimensions
+
+    @property
+    def relations(self):
+        return self.intervals.relations
+
+    @property
     def sub_iterators(self):
         return self._sub_iterators
 
@@ -653,19 +832,17 @@ class IterationSpace(Space):
     def directions(self):
         return self._directions
 
-    @property
+    @cached_property
     def itintervals(self):
-        return tuple(IterationInterval(i, self.directions[i.dim]) for i in self.intervals)
+        return tuple(IterationInterval(
+            i, self.directions[i.dim], self.sub_iterators.get(i.dim)
+        ) for i in self.intervals)
 
-    @property
-    def args(self):
-        return (self.intervals, self.sub_iterators, self.directions)
-
-    @property
+    @cached_property
     def dimensions(self):
         sub_dims = [i.parent for v in self.sub_iterators.values() for i in v]
         return filter_ordered(self.intervals.dimensions + sub_dims)
 
-    @property
+    @cached_property
     def nonderived_directions(self):
         return {k: v for k, v in self.directions.items() if not k.is_Derived}

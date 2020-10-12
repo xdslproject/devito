@@ -50,19 +50,22 @@ def ForwardOperator(model, geometry, space_order=4, save=False, **kwargs):
     """
 
     v = VectorTimeFunction(name='v', grid=model.grid,
+                           save=geometry.nt if save else None,
                            space_order=space_order, time_order=1)
     tau = TensorTimeFunction(name='tau', grid=model.grid,
+                             save=geometry.nt if save else None,
                              space_order=space_order, time_order=1)
 
-    lam, mu, ro = model.lam, model.mu, model.irho
+    lam, mu, b = model.lam, model.mu, model.b
 
     dt = model.critical_dt
-    u_v = Eq(v.forward, model.damp * v + model.damp * dt * ro * div(tau))
+    u_v = Eq(v.forward, model.damp * v + model.damp * dt * b * div(tau))
     u_t = Eq(tau.forward, model.damp * tau +
              model.damp * dt * lam * diag(div(v.forward)) +
              model.damp * dt * mu * (grad(v.forward) + grad(v.forward).T))
 
     srcrec = src_rec(v, tau, model, geometry)
-    op = Operator([u_v] + [u_t] + srcrec, subs=model.spacing_map, name="ForwardElastic")
+    op = Operator([u_v] + [u_t] + srcrec, subs=model.spacing_map, name="ForwardElastic",
+                  **kwargs)
     # Substitute spacing terms to reduce flops
     return op

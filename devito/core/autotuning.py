@@ -9,9 +9,7 @@ from devito.logger import perf, warning as _warning
 from devito.mpi.distributed import MPI, MPINeighborhood
 from devito.mpi.routines import MPIMsgEnriched
 from devito.parameters import configuration
-from devito.passes import BlockDimension
-from devito.symbolics import evaluate
-from devito.tools import filter_ordered, flatten, prod
+from devito.tools import filter_ordered, flatten, is_integer, prod
 
 __all__ = ['autotune']
 
@@ -88,7 +86,7 @@ def autotune(operator, args, level, mode):
     # Perform autotuning
     timings = {}
     for n, tree in enumerate(trees):
-        blockable = [i.dim for i in tree if isinstance(i.dim, BlockDimension)]
+        blockable = [i.dim for i in tree if not is_integer(i.step)]
 
         # Tunable arguments
         try:
@@ -119,7 +117,7 @@ def autotune(operator, args, level, mode):
             # Make sure we remain within stack bounds, otherwise skip run
             try:
                 stack_footprint = operator._mem_summary['stack']
-                if int(evaluate(stack_footprint, **at_args)) > options['stack_limit']:
+                if int(stack_footprint.subs(at_args)) > options['stack_limit']:
                     continue
             except TypeError:
                 warning("could not determine stack size; skipping run %s" % str(i))
@@ -280,7 +278,7 @@ def generate_block_shapes(blockable, args, level):
     # Generate level-0 block shapes
     level_0 = [d for d, v in mapper.items() if v == 0]
     # Max attemptable block shape
-    max_bs = tuple((d.step, d.max_step.subs(args)) for d in level_0)
+    max_bs = tuple((d.step, d.symbolic_size.subs(args)) for d in level_0)
     # Defaults (basic mode)
     ret = [tuple((d.step, v) for d in level_0) for v in options['blocksize-l0']]
     # Always try the entire iteration space (degenerate block)
@@ -325,7 +323,7 @@ def generate_block_shapes(blockable, args, level):
             ret.remove(bs)
 
     # Generate level-n (n > 1) block shapes
-    # TODO -- currently, there's no DLE rewriter producing depth>2 hierarchical blocking,
+    # TODO -- currently, there's no Operator producing depth>2 hierarchical blocking,
     # so for simplicity we ignore this for the time being
 
     # Normalize
@@ -348,20 +346,22 @@ def generate_nthreads(nthreads, args, level):
         # 1) num_threads == num_physical_cores
         # 2) num_threads == num_logical_cores
         platform = configuration['platform']
+        name = nthreads.name
         if platform in (KNL, KNL7210):
-            ret.extend([((nthreads.name, platform.cores_physical),),
-                        ((nthreads.name, platform.cores_physical * 2),),
-                        ((nthreads.name, platform.cores_logical),)])
+            cases = filter_ordered([platform.cores_physical,
+                                    platform.cores_physical * 2,
+                                    platform.cores_logical])
         else:
-            ret.extend([((nthreads.name, platform.cores_physical),),
-                        ((nthreads.name, platform.cores_logical),)])
+            cases = filter_ordered([platform.cores_physical,
+                                    platform.cores_logical])
+        ret.extend([((name, nthread),) for nthread in cases])
 
         if basic not in ret:
             warning("skipping `%s`; perhaps you've set OMP_NUM_THREADS to a "
                     "non-standard value while attempting autotuning in "
                     "`max` mode?" % dict(basic))
 
-    return filter_ordered(ret)
+    return ret
 
 
 options = {

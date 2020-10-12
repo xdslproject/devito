@@ -4,9 +4,10 @@ import sympy
 import numpy as np
 from cached_property import cached_property
 
+from devito.finite_differences import Evaluable
 from devito.logger import warning
-from devito.symbolics import retrieve_function_carriers, indexify, INT
-from devito.tools import Evaluable, powerset, flatten, prod
+from devito.symbolics import retrieve_function_carriers, retrieve_functions, indexify, INT
+from devito.tools import powerset, flatten, prod
 from devito.types import Eq, Inc
 from devito.types.basic import Scalar
 from devito.types.dense import SubFunction
@@ -99,6 +100,10 @@ class GenericInterpolator(ABC):
         pass
 
     @abstractmethod
+    def inject2nested(self, *args, **kwargs):
+        pass
+
+    @abstractmethod
     def interpolate(self, *args, **kwargs):
         pass
 
@@ -186,11 +191,16 @@ class LinearInterpolator(GenericInterpolator):
             # Track Indexed substitutions
             idx_subs.append(mapper)
 
-        # Temporaries for the indirection dimensions
+        # Temporaries for the position
         temps = [Eq(v, k, implicit_dims=self.sfunction.dimensions)
-                 for k, v in points.items()]
+                 for k, v in self.sfunction._position_map.items()]
+        # Temporaries for the indirection dimensions
+        temps.extend([Eq(v, k.subs(self.sfunction._position_map),
+                         implicit_dims=self.sfunction.dimensions)
+                      for k, v in points.items()])
         # Temporaries for the coefficients
-        temps.extend([Eq(p, c, implicit_dims=self.sfunction.dimensions)
+        temps.extend([Eq(p, c.subs(self.sfunction._position_map),
+                         implicit_dims=self.sfunction.dimensions)
                       for p, c in zip(self.sfunction._point_symbols,
                                       self.sfunction._coordinate_bases(field_offset))])
 
@@ -244,7 +254,7 @@ class LinearInterpolator(GenericInterpolator):
 
         return Interpolation(expr, offset, increment, self_subs, self, callback)
 
-    def inject(self, field, expr, offset=0):
+    def inject(self, field, expr, offset=0, **kwargs):
         """
         Generate equations injecting an arbitrary expression into a field.
 
@@ -268,11 +278,53 @@ class LinearInterpolator(GenericInterpolator):
             variables = list(retrieve_function_carriers(_expr)) + [field]
 
             # Need to get origin of the field in case it is staggered
-            field_offset = field.origin
+            for ind in field.indices:
+                try:
+                    field_offset = field.indices[1].origin
+                except AttributeError:
+                    field_offset = field.origin
+
             # List of indirection indices for all adjacent grid points
             idx_subs, temps = self._interpolation_indices(variables, offset,
                                                           field_offset=field_offset)
+            # Substitute coordinate base symbols into the interpolation coefficients
+            eqns = [Inc(field.xreplace(vsub), _expr.xreplace(vsub) * b,
+                        implicit_dims=self.sfunction.dimensions)
+                    for b, vsub in zip(self._interpolation_coeffs, idx_subs)]
 
+            return temps + eqns
+
+        return Injection(field, expr, offset, self, callback)
+
+    def inject2nested(self, field, expr, offset=0, **kwargs):
+        """
+        Generate equations injecting an arbitrary expression into a field.
+
+        Parameters
+        ----------
+        field : Function
+            Input field into which the injection is performed.
+        expr : expr-like
+            Injected expression.
+        offset : int, optional
+            Additional offset from the boundary.
+        """
+        def callback():
+            # Derivatives must be evaluated before the introduction of indirect accesses
+            try:
+                _expr = expr[0].evaluate
+            except AttributeError:
+                # E.g., a generic SymPy expression or a number
+                _expr = expr[0]
+
+            variables = list(retrieve_function_carriers(_expr)) + [field[1]]
+
+            # Need to get origin of the field in case it is staggered
+            field_offset = field[1].origin
+            # List of indirection indices for all adjacent grid points
+            idx_subs, temps = self._interpolation_indices(variables, offset,
+                                                          field_offset=field_offset)
+            import pdb; pdb.set_trace()
             # Substitute coordinate base symbols into the interpolation coefficients
             eqns = [Inc(field.xreplace(vsub), _expr.xreplace(vsub) * b,
                         implicit_dims=self.sfunction.dimensions)
@@ -349,6 +401,36 @@ class PrecomputedInterpolator(GenericInterpolator):
         return Interpolation(expr, offset, increment, self_subs, self, callback)
 
     def inject(self, field, expr, offset=0):
+        """
+        Generate equations injecting an arbitrary expression into a field.
+
+        Parameters
+        ----------
+        field : Function
+            Input field into which the injection is performed.
+        expr : expr-like
+            Injected expression.
+        offset : int, optional
+            Additional offset from the boundary.
+        """
+        def callback():
+            _expr = indexify(expr)
+            _field = indexify(field)
+
+            p, _ = self.gridpoints.indices
+            dim_subs = []
+            coeffs = []
+            for i, d in enumerate(self.grid.dimensions):
+                rd = DefaultDimension(name="r%s" % d.name, default_value=self.r)
+                dim_subs.append((d, INT(rd + self.gridpoints[p, i])))
+                coeffs.append(self.obj.interpolation_coeffs[p, i, rd])
+            rhs = prod(coeffs) * _expr
+            _field = _field.subs(dim_subs)
+            return [Eq(_field, _field + rhs.subs(dim_subs))]
+
+        return Injection(field, expr, offset, self, callback)
+
+    def inject2nested(self, field, expr, offset=0):
         """
         Generate equations injecting an arbitrary expression into a field.
 

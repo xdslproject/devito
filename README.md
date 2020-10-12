@@ -1,135 +1,110 @@
-# Devito: Fast Finite Difference Computation from Symbolic Specification
+# The wavefront temporal blocking rabbit-hole
+
+# Prerequisites:
+  - A working devito installation https://www.devitoproject.org/devito/download.html
+  - 
+  
+# Steps:
+
+  - `cd devito`
+  - `git checkout timetiling_on_cd`
+  - Set env variables and pinning.
+DEVITO_LANGUAGE=openmp
+OMP_PROC_BIND=?
+DEVITO_LOGGING=DEBUG
+
+  - Run `DEVITO_JIT_BACKDOOR=0 python3 examples/seismic/acoustic/demo_temporal_sources.py -so 4` 
+  This will generate code for a space order 4 acoustic devito kernel and another kernel that we will modify.
+  You will notice difference between `norm(usol)` and `norm(uref)`. This is expected. Ignore that for now.
+The generated log will end executing a kernel under `===Temporal blocking================================`
 
 [![Build Status for the Core backend](https://github.com/devitocodes/devito/workflows/CI-core/badge.svg)](https://github.com/devitocodes/devito/actions?query=workflow%3ACI-core)
 [![Build Status with MPI](https://github.com/devitocodes/devito/workflows/CI-mpi/badge.svg)](https://github.com/devitocodes/devito/actions?query=workflow%3ACI-mpi)
+[![Build Status on GPU](https://github.com/devitocodes/devito/workflows/CI-gpu/badge.svg)](https://github.com/devitocodes/devito/actions?query=workflow%3ACI-gpu)
 [![Code Coverage](https://codecov.io/gh/devitocodes/devito/branch/master/graph/badge.svg)](https://codecov.io/gh/devitocodes/devito)
+[![Slack Status](https://img.shields.io/badge/chat-on%20slack-%2336C5F0)](https://join.slack.com/t/devitocodes/shared_invite/zt-gtd2yxj9-Y31YKk_7lr9AwfXeL2iMFg)
+[![asv](http://img.shields.io/badge/benchmarked%20by-asv-blue.svg?style=flat)](https://devitocodes.github.io/devito-performance)
+[![PyPI version](https://badge.fury.io/py/devito.svg)](https://badge.fury.io/py/devito)
+[![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/devitocodes/devito/master)
 
-[Devito](http://www.devitoproject.org) is a software to
-implement optimised finite difference (FD) computation from
-high-level symbolic problem definitions. Starting from symbolic
-equations defined in [SymPy](http://www.sympy.org/en/index.html),
-Devito employs automated code generation and just-in-time (JIT)
-compilation to execute FD kernels on multiple computer platforms.
+[Devito](http://www.devitoproject.org) is a Python package to implement
+optimized stencil computation (e.g., finite differences, image processing,
+machine learning) from high-level symbolic problem definitions.  Devito builds
+on [SymPy](http://www.sympy.org/en/index.html) and employs automated code
+generation and just-in-time compilation to execute optimized computational
+kernels on several computer platforms, including CPUs, GPUs, and clusters
+thereof.
 
-## Get in touch
+- [About Devito](#about-devito)
+- [Installation](#installation)
+- [Resources](#resources)
+- [Performance](#performance)
+- [Get in touch](#get-in-touch)
+- [Interactive jupyter notebooks](#interactive-jupyter-notebooks)
 
-If you're using Devito, we would like to hear from you. Whether you
-are facing issues or just trying it out, join the
-[conversation](https://opesci-slackin.now.sh).
+## About Devito
 
-## Quickstart
+Devito provides a functional language to implement sophisticated operators that
+can be made up of multiple stencil computations, boundary conditions, sparse
+operations (e.g., interpolation), and much more.  A typical use case is
+explicit finite difference methods for approximating partial differential
+equations. For example, a 2D diffusion operator may be implemented with Devito
+as follows
 
-The recommended way to install Devito uses the Conda package manager
-for installation of the necessary software dependencies. Please
-install either [Anaconda](https://www.continuum.io/downloads) or
-[Miniconda](https://conda.io/miniconda.html) using the instructions
-provided at the download links. You will need the Python 3 version.
-
-To install Devito, including examples, tests and tutorial notebooks,
-follow these simple passes:
-
-```sh
-git clone https://github.com/devitocodes/devito.git
-cd devito
-conda env create -f environment.yml
-source activate devito
-pip install -e .
+```python
+>>> grid = Grid(shape=(10, 10))
+>>> f = TimeFunction(name='f', grid=grid, space_order=2)
+>>> eqn = Eq(f.dt, 0.5 * f.laplace)
+>>> op = Operator(Eq(f.forward, solve(eqn, f.forward)))
+```
+===Temporal blocking======================================
+Allocating memory for n(1,)
+Allocating memory for usol(3, 236, 236, 236)
+gcc -O3 -g -fPIC -Wall -std=c99 -march=native -Wno-unused-result -Wno-unused-variable -Wno-unused-but-set-variable -ffast-math -shared -fopenmp /tmp/devito-jitcache-uid1000/xxx-hash-xxx.c -lm -o /tmp/devito-jitcache-uid1000/xxx-hash-xxx.so
+Operator `Kernel` jit-compiled `/tmp/devito-jitcache-uid1000/xxx-hash-xxx.c` in 0.48 s with `GNUCompiler`
+Operator `Kernel` run in 0.49 s
 ```
 
-Alternatively, you can also install and run Devito via
-[Docker](https://www.docker.com/):
+Copy the space order 4 kernel from `devito/examples/seismic/acoustic/kernels/` to the `xxx-hash-xxx.c`
+`cp kernels/kernel_so8_acoustic.c /tmp/devito-jitcache-uid1000/d3cee7726ce639b303537a387aa51cd42d9feecd.c`
 
-```sh
-# get the code
-git clone https://github.com/devitocodes/devito.git
-cd devito
+Then try `DEVITO_JIT_BACKDOOR=1 python3 examples/seismic/acoustic/demo_temporal_sources.py -so 4`
+to re-run. Now the norms should match. If not contact me ASAP :-).
 
-# run the tests
-docker-compose run devito /tests
+Use arguments `-d nx ny nx` , `-tn timesteps` to pass as arguments domain size and number of timesteps.
+e.g.:
+`DEVITO_JIT_BACKDOOR=1 python3 examples/seismic/acoustic/demo_temporal_sources.py -d 200 200 200 --tn 100 -so 8`
 
-# start a jupyter notebook server on port 8888
-docker-compose up devito
+There exist available kernels for space orders 4, 8, 12.
 
-# start a bash shell with devito
-docker-compose run devito /bin/bash
+# Tuning Devito
+Run Devito with `DEVITO_LOGGING=aggressive` so as to ensure that one of the best space-blocking configurations are selected.
+
+# Tuning time-tiled kernel
+In order to manually tune the Devito time-tiled kernel one should use an editor and jit-backdoor.
+You can and should manually play around tile and block size values.
 ```
-
-## Examples
-
-At the core of the Devito API are the so-called `Operator` objects, which
-allow the creation and execution of efficient FD kernels from SymPy
-expressions. Examples of how to define operators are provided:
-
-* A set of introductory notebook tutorials introducing the basic
-  features of Devito operators can be found under
-  `examples/cfd`. These tutorials cover a range of well-known examples
-  from Computational Fluid Dynamics (CFD) and are based on the excellent
-  introductory blog ["CFD Python:12 steps to
-  Navier-Stokes"](http://lorenabarba.com/blog/cfd-python-12-steps-to-navier-stokes/)
-  by the Lorena A. Barba group. To run these, simply go into the tutorial
-  directory and run `jupyter notebook`.
-* A set of tutorial notebooks for seismic inversion examples is available in
-  `examples/seismic/tutorials`.
-* A set of tutorial notebooks concerning the Devito compiler can be found in
-  `examples/compiler`.
-* Devito with MPI can be explored in `examples/mpi`.
-* Example implementations of acoustic forward, adjoint, gradient and born
-  operators for use in full-waveform inversion (FWI) methods can be found in
-  `examples/seismic/acoustic`.
-* An advanced example of a Tilted Transverse Isotropy forward operator
-  for use in FWI can be found in `examples/seismic/tti`.
-* A benchmark script for the acoustic and TTI forward operators can be
-  found in `benchmarks/user/benchmark.py`.
-
-
-## Compilation
-
-Devito's JIT compiler engine supports multiple backends, with provided
-presets for the most common compiler toolchains. By default, Devito
-will use the default GNU compiler `g++`, but other toolchains may be
-selected by setting the `DEVITO_ARCH` environment variable to one of
-the following values:
- * `gcc` or `gnu` - Standard GNU compiler toolchain
- * `clang` or `osx` - Mac OSX compiler toolchain via `clang`
- * `intel` or `icpc` - Intel compiler toolchain via `icpc`
-
-Thread parallel execution via OpenMP can also be enabled by setting
-`DEVITO_OPENMP=1`.
-
-For the full list of available environment variables and their
-possible values, simply run:
-
-```py
-from devito import print_defaults
-print_defaults()
+  int xb_size = 32;
+  int yb_size = 32; // to fix as 8/16 etc
+  int num_threads = 8;
+  int x0_blk0_size = 8;
+  int y0_blk0_size = 8;
 ```
+You should also change accordingly the number of threads manually.
+According to experiments x0_blk0_size, y0_blk0_size are best at 8
+while xb_size, yb_size are nice in {32, 48, 64} depending on the platform.
 
-Or with Docker, run:
+`xb_size, yb_size == tiles`
+`x0_blk0_size, y0_blk0_size == blocks`
 
-```sh
-docker-compose run devito /print-defaults
-```
+When on Skylake: you may also need to change SIMD parallelism from 32 to 64.
 
-## Performance optimizations
+As of YASK:
+`From YASK: Although the terms "block" and "tile" are often used interchangeably, in
+this section, we [arbitrarily] use the term "block" for spatial-only grouping
+and "tile" when multiple temporal updates are allowed.`
 
-Devito supports two classes of performance optimizations:
- * Flop-count optimizations - They aim to reduce the operation count of an FD
-   kernel. These include, for example, code motion, factorization, and
-   detection of cross-stencil redundancies. The flop-count optimizations
-   are performed by routines built on top of SymPy, implemented in the
-   Devito Symbolic Engine (DSE), a sub-module of Devito.
- * Loop optimizations - Examples include SIMD vectorization and parallelism
-   (via code annotations) and loop blocking. These are performed by the Devito
-   Loop Engine (DLE), another sub-module of Devito.
+Let me know your findings and your performance results. https://opesci-slackin.now.sh/ at #time-tiling
 
-Further, [YASK](https://github.com/intel/yask) is being integrated as a Devito
-backend, for optimized execution on Intel architectures.
-
-Devito supports automatic auto-tuning of block sizes when loop blocking is
-enabled. Enabling auto-tuning is simple: it can be done by passing the special
-flag `autotune=True` to an `Operator`. Auto-tuning parameters can be set
-through the special environment variable `DEVITO_AUTOTUNING`.
-
-For more information on how to drive Devito for maximum run-time performance,
-see [here](benchmarks/user/README.md) or ask the developers on the Slack
-channel linked above.
+Depending on platform, I would expect speed-ups along the following lines:
+![Perf results](https://github.com/devitocodes/devito/blob/timetiling_on_cd/examples/seismic/acoustic/kernels/temporal_performance.pdf)
