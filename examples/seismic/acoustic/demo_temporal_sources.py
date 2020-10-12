@@ -62,7 +62,7 @@ dt = model.critical_dt  # Time step from model grid spacing
 time_range = TimeAxis(start=t0, stop=tn, step=dt)
 f0 = 0.010  # Source peak frequency is 10Hz (0.010 kHz)
 src = RickerSource(name='src', grid=model.grid, f0=f0,
-                   npoint=9, time_range=time_range)
+                   npoint=1, time_range=time_range)
 
 
 # First, position source centrally in all dimensions, then set depth
@@ -246,8 +246,7 @@ print("Norm(uref):", normuref)
 #plt.imshow(usol.data[2, int(nx/2) ,:, :]); pause(1)
 
 
-assert np.isclose(normuref, normusol, atol=1e-06)
-
-#import pdb; pdb.set_trace()
 # Uncomment to plot a slice of the field
 #plt.imshow(usol.data[2, int(nx/2) ,:, :]); pause(1)
+
+assert np.isclose(normuref, normusol, atol=1e-06)
