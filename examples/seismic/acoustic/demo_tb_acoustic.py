@@ -16,7 +16,7 @@ from devito.types.basic import Scalar, Symbol # noqa
 from mpl_toolkits.mplot3d import Axes3D # noqa
 import time
 
-# configuration['jit-backdoor'] = False
+configuration['jit-backdoor'] = True
 
 parser = argparse.ArgumentParser(description='Process arguments.')
 
@@ -60,7 +60,7 @@ src = RickerSource(name='src', grid=model.grid, f0=f0,
 # First, position source centrally in all dimensions, then set depth
 stx = 0.1
 ste = 0.9
-stepx = (ste-stx)/int(np.cbrt(nsrc))
+stepx = (ste-stx)/int(np.sqrt(nsrc))
 
 # Square arrangement
 src.coordinates.data[:, :2] = np.array(np.meshgrid(np.arange(stx, ste, stepx), np.arange(stx, ste, stepx))).T.reshape(-1,2)*np.array(model.domain_size[:1])
@@ -197,12 +197,14 @@ eqyb2 = Eq(y0_blk0_size, block_sizes[3])
 # import pdb; pdb.set_trace()
 # plot3d(source_mask.data, model)
 
-opref = Operator([stencil_ref, src_term_ref], opt=('advanced', {'openmp': True}))
+#opref = Operator([stencil_ref, src_term_ref], opt=('advanced', {'openmp': True}))
+opref = Operator([stencil_ref, src_term_ref])
 print("===Space blocking==")
 # Turn autotuning on for better performance
 configuration['autotuning']='off'
 opref.apply(time=time_range.num-2, dt=model.critical_dt)
 configuration['autotuning']='off'
+
 print("===========")
 
 normuref = norm(uref)
@@ -214,10 +216,13 @@ print("===========")
 print("-----")
 op2 = Operator([eqxb, eqyb, eqxb2, eqyb2, stencil_2, eq0, eq1, eq2], eqxb=32, opt=('advanced'))
 # print(op2.ccode)
+# import pdb;pdb.set_trace()
 print("===Temporal blocking=====")
 op2.apply(time=time_range.num-1, dt=model.critical_dt)
 print("===========")
+# import pdb;pdb.set_trace()
 
+configuration['jit-backdoor'] = True
 normusol = norm(usol)
 print("===========")
 print(normusol)
