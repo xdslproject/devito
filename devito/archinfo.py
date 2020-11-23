@@ -122,7 +122,12 @@ def get_cpu_info():
         if not physical:
             # Fallback 2: we might end up here on more exotic platforms such as Power8
             try:
-                physical = lscpu()['Core(s) per socket'] * lscpu()['Socket(s)']
+                lscpu_mapper = lscpu()
+                # Fallback 2: we might end up here
+                # on more exotic platforms such a Power8 or due to
+                # erroneous autodetection
+                physical = (lscpu_mapper['Core(s) per socket']
+                            * lscpu_mapper['Socket(s)'])
             except KeyError:
                 warning("Physical core count autodetection failed")
                 physical = 1
