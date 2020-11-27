@@ -78,7 +78,7 @@ def get_cpu_info():
 
     # Detect number of logical cores
     try:
-        if cpu_info['brand'] == 'aarch64':
+        if 'arm' in cpu_info['brand']:
             # In some ARM processors psutils and lscpu fail to detect cores correctly
             logical = psutil.cpu_count(logical=True)
             physical = psutil.cpu_count(logical=False)
