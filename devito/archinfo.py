@@ -77,14 +77,17 @@ def get_cpu_info():
         cpu_info['brand'] = cpuinfo.get_cpu_info().get('brand')
 
     # Detect number of logical cores
-    if 'arm' in cpu_info['brand']:
-        # In some ARM processors psutils fail to detect physical cores correctly
-        # so we use lscpu()
-        logical = psutil.cpu_count(logical=True)
-        physical = (lscpu()['Core(s) per socket'] * lscpu()['Socket(s)'])
-        cpu_info['logical'] = logical
-        cpu_info['physical'] = physical
-        return cpu_info
+    try:
+        if 'arm' in cpu_info['brand']:
+            # In some ARM processors psutils fail to detect physical cores correctly
+            # so we use lscpu()
+            logical = psutil.cpu_count(logical=True)
+            physical = (lscpu()['Core(s) per socket'] * lscpu()['Socket(s)'])
+            cpu_info['logical'] = logical
+            cpu_info['physical'] = physical
+            return cpu_info
+    except:
+        pass
 
     logical = psutil.cpu_count(logical=True)
     if not logical:
