@@ -44,7 +44,7 @@ def get_cpu_info():
                                               or i.startswith('flags'))][0]
                 return flags.split(':')[1].strip().split()
             except:
-                return None
+                pass
 
         def get_cpu_brand():
             try:
