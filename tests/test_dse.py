@@ -695,6 +695,7 @@ class TestAliases(object):
         op1(time_M=1, u=u1)
         assert np.all(u.data == u1.data)
 
+    @skipif('arm')
     def test_min_storage_in_isolation(self):
         """
         Test that if running with ``opt=(..., opt=('cire-sops', {'min-storage': True})``,
@@ -1161,7 +1162,8 @@ class TestAliases(object):
         op1(time_M=1, u=u1, v=v1)
         assert np.all(u.data == u1.data)
         assert np.all(v.data == v1.data)
-
+    
+    @skipif('arm')
     @pytest.mark.parametrize('rotate', [False, True])
     @switchconfig(autopadding=True, platform='knl7210')  # Platform is to fix pad value
     def test_minimize_remainders_due_to_autopadding(self, rotate):
@@ -1336,6 +1338,7 @@ class TestAliases(object):
         assert len(arrays) == 2
         assert all(i._mem_heap and not i._mem_external for i in arrays)
 
+    @skipif('arm')
     def test_full_shape_big_temporaries(self):
         """
         Test that if running with ``opt=advanced-fsg``, then the compiler uses

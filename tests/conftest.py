@@ -28,7 +28,7 @@ def skipif(items, whole_module=False):
     # multiple GPU languages (openmp, openacc, cuda, ...)
     accepted.add('device')
     accepted.update({'no%s' % i for i in configuration._accepted['backend']})
-    accepted.update({'nompi', 'nodevice'})
+    accepted.update({'nompi', 'nodevice', 'arm'})
     unknown = sorted(set(items) - accepted)
     if unknown:
         raise ValueError("Illegal skipif argument(s) `%s`" % unknown)
@@ -52,6 +52,12 @@ def skipif(items, whole_module=False):
                     break
         except ValueError:
             pass
+        
+        # Skip if not meant for ARM
+        if i == 'arm':
+            skipit = "device `%s` unsupported" % configuration['platform'].name
+            break
+
         # Skip if won't run on GPUs
         if i == 'device' and isinstance(configuration['platform'], Device):
             skipit = "device `%s` unsupported" % configuration['platform'].name
