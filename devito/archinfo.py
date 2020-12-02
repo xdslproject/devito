@@ -76,20 +76,22 @@ def get_cpu_info():
     if not cpu_info.get('brand'):
         cpu_info['brand'] = cpuinfo.get_cpu_info().get('brand')
 
-    # Detect number of logical cores
+    if not cpu_info.get('brand'):
+        cpu_info['brand'] = cpuinfo.get_cpu_info().get('brand')
+
+    # Special case: in some ARM processors psutils fail to detect physical cores
+    # correctly so we use lscpu()
     try:
-        if cpu_info['brand'] == 'aarch64':
-            # In some ARM processors psutils and lscpu fail to detect cores correctly
+        if 'arm' in cpu_info['brand']:
             logical = psutil.cpu_count(logical=True)
-            physical = psutil.cpu_count(logical=False)
-            if physical != (lscpu()['Core(s) per socket'] * lscpu()['Socket(s)']):
-                physical = (lscpu()['Core(s) per socket'] * lscpu()['Socket(s)'])
+            physical = (lscpu()['Core(s) per socket'] * lscpu()['Socket(s)'])
             cpu_info['logical'] = logical
             cpu_info['physical'] = physical
             return cpu_info
     except:
         pass
 
+    # Detect number of logical cores
     logical = psutil.cpu_count(logical=True)
     if not logical:
         # Never bumped into a platform that make us end up here, yet
@@ -135,7 +137,7 @@ def get_cpu_info():
         if not physical:
             # Fallback 2: we might end up here on more exotic platforms such as Power8
             try:
-                physical = (lscpu()['Core(s) per socket'] * lscpu()['Socket(s)'])
+                physical = lscpu()['Core(s) per socket'] * lscpu()['Socket(s)']
             except KeyError:
                 warning("Physical core count autodetection failed")
                 physical = 1
