@@ -68,10 +68,7 @@ class TestGradient(object):
         m = model.m
         geometry = setup_geometry(model, tn)
         dt = model.critical_dt
-        print(geometry.nt)
-        #geometry = geometry.resample(dt/4)
-        print(geometry.nt)
-        print(dt)
+        
         u = TimeFunction(name='u', grid=model.grid, time_order=2, space_order=space_order,
                          save=geometry.nt)
 
@@ -147,22 +144,20 @@ class TestGradient(object):
 
         # Add expression for receiver injection
         receivers2 = rec2.inject(field=v2.backward, expr=rec2 * s**2 / wave.model.m)
-        print("1")
+        
         # Substitute spacing terms to reduce flops
         grad_op_all = Operator(eqn2 + receivers2 + [guv, guu, guuv],
-                               subs=wave.model.spacing_map, name='Gradient3')
-        print("2")
-        print(eqn + receivers + [guv, guu, guuv])
+                               subs=wave.model.spacing_map, name='GradientCombined')
+        
         print("***This is op2")
         print(grad_op_all.arguments(dt=dt))
         grad_op_all.apply(dt=dt)
-        print("3")
+        
         assert(np.allclose(grad_u2.data, grad_u.data, atol=1e-12, rtol=1e-12))
         assert(np.allclose(grad_v2.data, grad_u2.data, atol=1e-12, rtol=1e-12))
         print("rec_data", np.linalg.norm(rec.data))
         print("grad_u", np.linalg.norm(grad_u.data), "grad_v", np.linalg.norm(grad_v.data), "grad_u2", np.linalg.norm(grad_u2.data), "grad_v2", np.linalg.norm(grad_v2.data),)
-        #from IPython import embed
-        #embed()
+        
         assert(np.allclose(grad_u.data, grad_v.data, atol=1e-12, rtol=1e-12))
 
 
