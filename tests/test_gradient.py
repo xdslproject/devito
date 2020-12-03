@@ -3,7 +3,7 @@ import numpy as np
 import pytest
 from numpy import linalg
 
-from devito import Function, info, TimeFunction, Operator, Inc
+from devito import Function, info, TimeFunction, Operator, Inc, Eq
 from examples.seismic.acoustic.acoustic_example import smooth, acoustic_setup as setup
 from examples.seismic.acoustic.operators import iso_stencil
 from examples.seismic import Receiver, demo_model, setup_geometry
@@ -55,19 +55,23 @@ class TestGradient(object):
 
     @pytest.mark.parametrize('space_order', [4])
     @pytest.mark.parametrize('kernel', ['OT2'])
-    @pytest.mark.parametrize('shape', [(70, 80)])
+    @pytest.mark.parametrize('shape', [(101, 101)])
     def test_gradient_by_parts(self, shape, kernel, space_order):
         preset = 'layers-isotropic'
-        nbl = 10
-        dtype = np.float32
+        nbl = 40
+        dtype = np.float64
         spacing = (10, 10)
-        tn = 500.
+        tn = 750.
 
         model = demo_model(preset, space_order=space_order, shape=shape, nbl=nbl,
                            dtype=dtype, spacing=spacing)
         m = model.m
         geometry = setup_geometry(model, tn)
-        dt = geometry.dt
+        dt = model.critical_dt
+        print(geometry.nt)
+        #geometry = geometry.resample(dt/4)
+        print(geometry.nt)
+        print(dt)
         u = TimeFunction(name='u', grid=model.grid, time_order=2, space_order=space_order,
                          save=geometry.nt)
 
@@ -89,8 +93,8 @@ class TestGradient(object):
                           name='Forward')
 
         # Gradient symbol and wavefield symbols
-        grad_u = Function(name='grad', grid=model.grid)
-        grad_v = Function(name='grad', grid=model.grid)
+        grad_u = Function(name='gradu1', grid=model.grid)
+        grad_v = Function(name='gradv1', grid=model.grid)
 
         v = TimeFunction(name='v', grid=model.grid, save=None, time_order=2,
                          space_order=space_order)
@@ -98,25 +102,104 @@ class TestGradient(object):
         s = model.grid.stepping_dim.spacing
         eqn = iso_stencil(v, model, kernel, forward=False)
 
-        gradient_update_v = Inc(grad_v, - u * v.dt2)
+        gradient_update_v = Eq(grad_v, grad_v - u * v.dt2)
 
-        gradient_update_u = Inc(grad_u, - u.dt2 * v)
+        gradient_update_u = Eq(grad_u, grad_u - u.dt2 * v)
 
         # Add expression for receiver injection
         receivers = rec.inject(field=v.backward, expr=rec * s**2 / m)
 
         # Substitute spacing terms to reduce flops
         grad_op_v = Operator(eqn + receivers + [gradient_update_v],
-                             subs=model.spacing_map, name='Gradient')
+                             subs=model.spacing_map, name='GradientProblematic')
 
         grad_op_u = Operator(eqn + receivers + [gradient_update_u],
-                             subs=model.spacing_map, name='Gradient')
+                             subs=model.spacing_map, name='Gradient2')
 
         fwd_op.apply(dt=dt)
+
         grad_op_u.apply(dt=dt)
+        print("***This is op1")
+        print(grad_op_v.arguments(dt=dt))
         grad_op_v.apply(dt=dt)
 
-        assert(np.allclose(grad_u.data, grad_v.data, atol=1e-4, rtol=1e-4))
+        wave = setup(shape=shape, space_order=space_order, dtype=np.float64,
+                     spacing=(10, 10), nbl=40, tn=750)
+        rec2, u2, _ = wave.forward(save=True)
+        assert(np.allclose(rec.data, rec2.data))
+        assert(np.allclose(u.data, u2.data))
+
+
+        
+
+        # Gradient symbol and wavefield symbols
+        grad_u2 = Function(name='gradu2', grid=wave.model.grid)
+        grad_v2 = Function(name='gradv2', grid=wave.model.grid)
+        grad_uv2 = Function(name='graduv2', grid=wave.model.grid)
+        v2 = TimeFunction(name='v2', grid=wave.model.grid, save=None, time_order=2,
+                         space_order=space_order)
+        s2 = wave.model.grid.stepping_dim.spacing
+        eqn2 = iso_stencil(v2, wave.model, 'OT2', forward=False)
+
+        guv = Eq(grad_v2, grad_v2 - u2 * v2.dt2)
+        guu = Eq(grad_u2, grad_u2 - u2.dt2 * v2)
+        guuv = Eq(grad_uv2, grad_uv2 + u2.dt * v2.dt)
+
+        # Add expression for receiver injection
+        receivers2 = rec2.inject(field=v2.backward, expr=rec2 * s**2 / wave.model.m)
+        print("1")
+        # Substitute spacing terms to reduce flops
+        grad_op_all = Operator(eqn2 + receivers2 + [guv, guu, guuv],
+                               subs=wave.model.spacing_map, name='Gradient3')
+        print("2")
+        print(eqn + receivers + [guv, guu, guuv])
+        print("***This is op2")
+        print(grad_op_all.arguments(dt=dt))
+        grad_op_all.apply(dt=dt)
+        print("3")
+        assert(np.allclose(grad_u2.data, grad_u.data, atol=1e-12, rtol=1e-12))
+        assert(np.allclose(grad_v2.data, grad_u2.data, atol=1e-12, rtol=1e-12))
+        print("rec_data", np.linalg.norm(rec.data))
+        print("grad_u", np.linalg.norm(grad_u.data), "grad_v", np.linalg.norm(grad_v.data), "grad_u2", np.linalg.norm(grad_u2.data), "grad_v2", np.linalg.norm(grad_v2.data),)
+        #from IPython import embed
+        #embed()
+        assert(np.allclose(grad_u.data, grad_v.data, atol=1e-12, rtol=1e-12))
+
+
+    @pytest.mark.parametrize('space_order', [4])
+    @pytest.mark.parametrize('shape', [(101, 101)])
+    def test_gradient_equivalence(self, shape, space_order):
+        wave = setup(shape=shape, space_order=space_order, dtype=np.float64,
+                     spacing=(10, 10), nbl=40, tn=750)
+        rec, u, _ = wave.forward(save=True)
+        print("rec", np.linalg.norm(rec.data))
+        
+        # Gradient symbol and wavefield symbols
+        grad_u = Function(name='gradu', grid=wave.model.grid)
+        grad_v = Function(name='gradv', grid=wave.model.grid)
+        grad_uv = Function(name='graduv', grid=wave.model.grid)
+
+        v = TimeFunction(name='v', grid=wave.model.grid, save=None, time_order=2,
+                         space_order=space_order)
+        s = wave.model.grid.stepping_dim.spacing
+        eqn = iso_stencil(v, wave.model, 'OT2', forward=False)
+
+        guv = Eq(grad_v, grad_v - u * v.dt2)
+        guu = Eq(grad_u, grad_u - u.dt2 * v)
+        guuv = Eq(grad_uv, grad_uv + u.dt * v.dt)
+
+        # Add expression for receiver injection
+        receivers = rec.inject(field=v.backward, expr=rec * s**2 / wave.model.m)
+
+        # Substitute spacing terms to reduce flops
+        grad_op_v = Operator(eqn + receivers + [guv, guu, guuv],
+                             subs=wave.model.spacing_map, name='GradientFunctional')
+        print(eqn + receivers + [guv, guu, guuv])
+        print(grad_op_v.arguments(dt=wave.model.critical_dt))
+        grad_op_v.apply(dt=wave.model.critical_dt)
+
+        assert(np.allclose(grad_u.data, grad_v.data, atol=1e-12, rtol=1e-12))
+        assert(np.allclose(grad_u.data, grad_uv.data, atol=1e-12, rtol=1e-12))
 
     @pytest.mark.parametrize('space_order', [4])
     @pytest.mark.parametrize('kernel', ['OT2'])
