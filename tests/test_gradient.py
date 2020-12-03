@@ -99,25 +99,29 @@ class TestGradient(object):
         s = model.grid.stepping_dim.spacing
         eqn = iso_stencil(v, model, kernel, forward=False)
 
-        gradient_update_v = Eq(grad_v, grad_v - u * v.dt2)
+        
 
         gradient_update_u = Eq(grad_u, grad_u - u.dt2 * v)
 
         # Add expression for receiver injection
         receivers = rec.inject(field=v.backward, expr=rec * s**2 / m)
 
+        grad_op_u = Operator(eqn + receivers + [gradient_update_u],
+                             subs=model.spacing_map, name='Gradient2')
+        fwd_op.apply(dt=dt)
+        v.data[:] = 0.
+        grad_op_u.apply(dt=dt)                     
+
+        receivers = rec.inject(field=v.backward, expr=rec * s**2 / m)
+        gradient_update_v = Eq(grad_v, grad_v - u * v.dt2)
         # Substitute spacing terms to reduce flops
         grad_op_v = Operator(eqn + receivers + [gradient_update_v],
                              subs=model.spacing_map, name='GradientProblematic')
 
-        grad_op_u = Operator(eqn + receivers + [gradient_update_u],
-                             subs=model.spacing_map, name='Gradient2')
-
-        fwd_op.apply(dt=dt)
-
-        grad_op_u.apply(dt=dt)
         print("***This is op1")
         print(grad_op_v.arguments(dt=dt))
+        #import pdb;pdb.set_trace()
+        v.data[:] = 0.
         grad_op_v.apply(dt=dt)
 
         wave = setup(shape=shape, space_order=space_order, dtype=np.float64,
