@@ -82,7 +82,7 @@ jobs:
         python examples/misc/linalg.py mat-mat-sum --optimize
         python examples/misc/linalg.py mat-mat --optimize
         python examples/misc/linalg.py mat-vec --optimize
-        python examples/misc/linalg.py transpose mat-vec --optimize
+        python examples/misc/linalg.py transpose-mat-vec --optimize
 
     - name: CFD examples
       shell: bash -l {0}
