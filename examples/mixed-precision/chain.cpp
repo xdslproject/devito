@@ -108,6 +108,14 @@ static float half_to_float(half hf)
 
 extern "C" int Kernel(struct dataobj *restrict A_vec, struct dataobj *restrict B_vec, struct dataobj *restrict C_vec, struct dataobj *restrict D_vec, struct dataobj *restrict E_vec, struct dataobj *restrict F_vec, const int i_M, const int i_m, const int j_M, const int j_m, const int k_M, const int k_m, const int l_M, const int l_m, struct profiler * timers);
 
+// dynamically allocate 2D array 
+half** Make2DhalfArray(int arraySizeX, int arraySizeY) {
+    half** theArray;
+    theArray = (half**) malloc(arraySizeX*sizeof(half*));
+    for (int i = 0; i < arraySizeX; i++)
+        theArray[i] = (half*) malloc(arraySizeY*sizeof(half));
+    return theArray;
+} 
 
 int Kernel(struct dataobj *restrict A_vec, struct dataobj *restrict B_vec, struct dataobj *restrict C_vec, struct dataobj *restrict D_vec, struct dataobj *restrict E_vec, struct dataobj *restrict F_vec, const int i_M, const int i_m, const int j_M, const int j_m, const int k_M, const int k_m, const int l_M, const int l_m, struct profiler * timers)
 {
@@ -125,7 +133,15 @@ int Kernel(struct dataobj *restrict A_vec, struct dataobj *restrict B_vec, struc
   #pragma acc enter data copyin(C[0:C_vec->size[0]][0:C_vec->size[1]])
   #pragma acc enter data copyin(E[0:E_vec->size[0]][0:E_vec->size[1]])
 
-  const int n = 10000;
+  //const int n = 10000;
+  half **a16 = Make2DhalfArray(A_vec->size[1], A_vec->size[1]);
+  half **b16 = Make2DhalfArray(A_vec->size[1], A_vec->size[1]);
+  half **c16 = Make2DhalfArray(A_vec->size[1], A_vec->size[1]);
+  half **d16 = Make2DhalfArray(A_vec->size[1], A_vec->size[1]);  
+  half **e16 = Make2DhalfArray(A_vec->size[1], A_vec->size[1]);
+  half **f16 = Make2DhalfArray(A_vec->size[1], A_vec->size[1]);
+
+//y = (half*)malloc( sizeof(half)*n );  
 
   const half a = approx_float_to_half(2.0f);
 
@@ -178,3 +194,10 @@ int Kernel(struct dataobj *restrict A_vec, struct dataobj *restrict B_vec, struc
 /* Backdoor edit at Mon Dec  7 16:05:34 2020*/ 
 /* Backdoor edit at Mon Dec  7 16:07:35 2020*/ 
 /* Backdoor edit at Mon Dec  7 16:09:38 2020*/ 
+/* Backdoor edit at Mon Dec  7 16:26:50 2020*/ 
+/* Backdoor edit at Mon Dec  7 16:29:09 2020*/ 
+/* Backdoor edit at Mon Dec  7 16:32:28 2020*/ 
+/* Backdoor edit at Mon Dec  7 16:33:04 2020*/ 
+/* Backdoor edit at Mon Dec  7 16:33:33 2020*/ 
+/* Backdoor edit at Mon Dec  7 16:34:13 2020*/ 
+/* Backdoor edit at Mon Dec  7 16:35:41 2020*/ 
