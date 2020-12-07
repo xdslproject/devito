@@ -53,6 +53,7 @@ class DeviceOpenACCIteration(DeviceOpenMPIteration):
         return clauses
 
 
+
 class DeviceAccizer(DeviceOmpizer):
 
     lang = dict(DeviceOmpizer.__base__.lang)
