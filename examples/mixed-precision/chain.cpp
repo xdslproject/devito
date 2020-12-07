@@ -133,18 +133,42 @@ int Kernel(struct dataobj *restrict A_vec, struct dataobj *restrict B_vec, struc
   #pragma acc enter data copyin(C[0:C_vec->size[0]][0:C_vec->size[1]])
   #pragma acc enter data copyin(E[0:E_vec->size[0]][0:E_vec->size[1]])
 
-  //const int n = 10000;
   half **a16 = Make2DhalfArray(A_vec->size[1], A_vec->size[1]);
   half **b16 = Make2DhalfArray(A_vec->size[1], A_vec->size[1]);
   half **c16 = Make2DhalfArray(A_vec->size[1], A_vec->size[1]);
   half **d16 = Make2DhalfArray(A_vec->size[1], A_vec->size[1]);  
   half **e16 = Make2DhalfArray(A_vec->size[1], A_vec->size[1]);
   half **f16 = Make2DhalfArray(A_vec->size[1], A_vec->size[1]);
+  
+  #pragma acc enter data create(d16[0:D_vec->size[0]][0:D_vec->size[1]])
+  #pragma acc enter data create(f16[0:F_vec->size[0]][0:F_vec->size[1]])
+  #pragma acc enter data create(a16[0:A_vec->size[0]][0:A_vec->size[1]])
+  #pragma acc enter data create(b16[0:B_vec->size[0]][0:B_vec->size[1]])
+  #pragma acc enter data create(c16[0:C_vec->size[0]][0:C_vec->size[1]])
+  #pragma acc enter data create(e16[0:E_vec->size[0]][0:E_vec->size[1]])
 
-//y = (half*)malloc( sizeof(half)*n );  
 
-  const half a = approx_float_to_half(2.0f);
-
+  //#pragma acc enter data copyin(d16[0:D_vec->size[0]][0:D_vec->size[1]])
+  //#pragma acc enter data copyin(f16[0:F_vec->size[0]][0:F_vec->size[1]])
+  //#pragma acc enter data copyin(a16[0:A_vec->size[0]][0:A_vec->size[1]])
+  //#pragma acc enter data copyin(b16[0:B_vec->size[0]][0:B_vec->size[1]])
+  //#pragma acc enter data copyin(c16[0:C_vec->size[0]][0:C_vec->size[1]])
+  //#pragma acc enter data copyin(e16[0:E_vec->size[0]][0:E_vec->size[1]])
+ 
+  //#pragma acc parallel loop collapse(2)
+  for (int i = i_m; i <= i_M; i += 1)
+  {
+    for (int j = j_m; j <= j_M; j += 1)
+    {
+      a16[i][j] = approx_float_to_half( A[i][j]);
+      b16[i][j] = approx_float_to_half( B[i][j]);
+      c16[i][j] = approx_float_to_half( C[i][j]);
+      d16[i][j] = approx_float_to_half( D[i][j]);
+      e16[i][j] = approx_float_to_half( E[i][j]); 
+      f16[i][j] = approx_float_to_half( F[i][j]);
+    }
+  }
+ 
   struct timeval start_section0, end_section0;
   gettimeofday(&start_section0, NULL);
   /* Begin section0 */
@@ -155,14 +179,16 @@ int Kernel(struct dataobj *restrict A_vec, struct dataobj *restrict B_vec, struc
     {
       for (int k = k_m; k <= k_M; k += 1)
       {
-        D[i][k] += A[i][j]*B[j][k] + A[i][j]*C[j][k];
-      }
+        //D[i][k] += A[i][j]*B[j][k] + A[i][j]*C[j][k];
+        d16[i][k] += approx_float_to_half(a16[i][j]*b16[j][k] + a16[i][j]*c16[j][k]);
+       }
     }
     for (int k = k_m; k <= k_M; k += 1)
     {
       for (int l = l_m; l <= l_M; l += 1)
       {
-        F[i][l] += D[i][k]*E[k][l];
+       // F[i][l] += D[i][k]*E[k][l];
+       f16[i][l] += d16[i][k]*e16[k][l];
       }
     }
   }
@@ -201,3 +227,18 @@ int Kernel(struct dataobj *restrict A_vec, struct dataobj *restrict B_vec, struc
 /* Backdoor edit at Mon Dec  7 16:33:33 2020*/ 
 /* Backdoor edit at Mon Dec  7 16:34:13 2020*/ 
 /* Backdoor edit at Mon Dec  7 16:35:41 2020*/ 
+/* Backdoor edit at Mon Dec  7 16:52:31 2020*/ 
+/* Backdoor edit at Mon Dec  7 17:00:16 2020*/ 
+/* Backdoor edit at Mon Dec  7 17:03:37 2020*/ 
+/* Backdoor edit at Mon Dec  7 17:03:55 2020*/ 
+/* Backdoor edit at Mon Dec  7 17:04:12 2020*/ 
+/* Backdoor edit at Mon Dec  7 17:09:33 2020*/ 
+/* Backdoor edit at Mon Dec  7 17:14:22 2020*/ 
+/* Backdoor edit at Mon Dec  7 17:14:54 2020*/ 
+/* Backdoor edit at Mon Dec  7 17:15:04 2020*/ 
+/* Backdoor edit at Mon Dec  7 17:15:33 2020*/ 
+/* Backdoor edit at Mon Dec  7 17:16:09 2020*/ 
+/* Backdoor edit at Mon Dec  7 17:17:22 2020*/ 
+/* Backdoor edit at Mon Dec  7 17:18:41 2020*/ 
+/* Backdoor edit at Mon Dec  7 17:20:07 2020*/ 
+/* Backdoor edit at Mon Dec  7 17:22:21 2020*/ 
