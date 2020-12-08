@@ -460,11 +460,11 @@ class PGICompiler(Compiler):
         self.cflags.remove('-std=c99')
         self.cflags.remove('-O3')
         self.cflags.remove('-Wall')
-        self.cflags += ['-std=c++11', '-acc', '-mp']
+        self.cflags += ['-std=c++11', '-acc', '-mp', '-Minfo=accel']
         if not configuration['safe-math']:
             self.cflags.append('-fast')
         # Default PGI compile for a target is GPU and single threaded host.
-        # self.cflags += ['-ta=tesla,host']
+        self.cflags += ['-ta=tesla:ccall']
 
     def __lookup_cmds__(self):
         # NOTE: using `pgc++` instead of `pgcc` because of issue #1219
