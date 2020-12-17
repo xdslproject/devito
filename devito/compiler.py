@@ -7,6 +7,7 @@ import platform
 import warnings
 import sys
 import time
+import os
 
 import numpy.ctypeslib as npct
 from codepy.jit import compile_from_string
@@ -278,8 +279,14 @@ class Compiler(GCCToolchain):
         code : str
             The source code to be JIT compiled.
         """
+
+        tile_sizes = [str(i) for i in os.environ['TILE_SIZE'].split(',')]
+        tile_clause = ("tile("+ (','.join(tile_sizes))+")")
+        code = code.replace("collapse(3)", tile_clause)
+        # import pdb;pdb.set_trace()
+
         target = str(self.get_jit_dir().joinpath(soname))
-        src_file = "%s.%s" % (target, self.src_ext)
+        src_file = "%s.%s.%s" % (target, tile_clause, self.src_ext)
 
         cache_dir = self.get_codepy_dir().joinpath(soname[:7])
         if configuration['jit-backdoor'] is False:
@@ -460,11 +467,11 @@ class PGICompiler(Compiler):
         self.cflags.remove('-std=c99')
         self.cflags.remove('-O3')
         self.cflags.remove('-Wall')
-        self.cflags += ['-std=c++11', '-acc', '-mp']
+        self.cflags += ['-std=c++11', '-acc', '-mp', '-Minfo=all']
         if not configuration['safe-math']:
             self.cflags.append('-fast')
         # Default PGI compile for a target is GPU and single threaded host.
-        # self.cflags += ['-ta=tesla,host']
+        # self.cflags += ['-ta=tesla,managed']
 
     def __lookup_cmds__(self):
         # NOTE: using `pgc++` instead of `pgcc` because of issue #1219

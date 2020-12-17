@@ -1,6 +1,6 @@
 import numpy as np
 import pytest
-
+import os
 from devito.logger import info
 from devito import Constant, Function, smooth, norm
 from examples.seismic.acoustic import AcousticWaveSolver
@@ -36,6 +36,12 @@ def run(shape=(50, 50, 50), spacing=(20.0, 20.0, 20.0), tn=1000.0,
     # with 'save=True' if we compute the gradient without checkpointing, if we use
     # checkpointing, PyRevolve will take care of the time history
     save = full_run and not checkpointing
+    
+    # Set environment variables
+
+    # os.environ['TILE_SIZE'] = str(str(xb)+","+ str(yb)+","+ str(zb))
+    print(os.environ['TILE_SIZE'])
+    # import pdb;pdb.set_trace()
     # Define receiver geometry (spread across x, just below surface)
     rec, u, summary = solver.forward(save=save, autotune=autotune)
 

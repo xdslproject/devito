@@ -109,8 +109,16 @@ class AcousticWaveSolver(object):
         vp = vp or self.model.vp
 
         # Execute operator and return wavefield and receiver data
-        summary = self.op_fwd(save).apply(src=src, rec=rec, u=u, vp=vp,
-                                          dt=kwargs.pop('dt', self.dt), **kwargs)
+        acop = self.op_fwd(save)
+        strccode = str(acop.ccode)
+        strccode.replace('collapse(3)','tile(32,8,4)')
+	
+        # import pdb;pdb.set_trace()
+        summary = acop.apply(src=src, rec=rec, u=u, vp=vp,
+                             dt=kwargs.pop('dt', self.dt), **kwargs)
+
+        # summary = self.op_fwd(save).apply(src=src, rec=rec, u=u, vp=vp,
+        #                                  dt=kwargs.pop('dt', self.dt), **kwargs)
         return rec, u, summary
 
     def adjoint(self, rec, srca=None, v=None, vp=None, **kwargs):
