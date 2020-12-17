@@ -7,9 +7,9 @@ NZ=176
 ORDER=8
 
 # tests all tile shapes where BLOCK_X*BLOCK_Y*BLOCK_Z <= 1024 and multiple of 32
-for BLOCK_X in 2 4 8 16 32 64 128 256; do
-    for BLOCK_Y in 2 4 8 16 32 64 128 256; do
-        for BLOCK_Z in 2 4 8 16 32 64 128 256; do
+for BLOCK_X in 2 4 8 16 32 64; do
+    for BLOCK_Y in 2 4 8 16 32 64; do
+        for BLOCK_Z in 2 4 8 16 32 64; do
             PRODUCT=$(($BLOCK_X*$BLOCK_Y*$BLOCK_Z))
             if [ $PRODUCT -le 1024 ] && [ $(($PRODUCT%32)) -eq 0 ]
             then
