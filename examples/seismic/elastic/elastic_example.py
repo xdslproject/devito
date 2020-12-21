@@ -1,5 +1,6 @@
 import numpy as np
 import pytest
+import os
 from devito import norm
 from devito.logger import info
 from examples.seismic.elastic import ElasticWaveSolver
@@ -29,6 +30,11 @@ def run(shape=(50, 50), spacing=(20.0, 20.0), tn=1000.0,
     info("Applying Forward")
     # Define receiver geometry (spread across x, just below surface)
     rec1, rec2, v, tau, summary = solver.forward(autotune=autotune)
+
+    print(norm(rec1)); print(norm(rec2));print(norm(v[0]))
+    f = open('results_elastic.csv','a+')
+    f.write(os.getenv('TILE_SIZE') + ',' + str(summary.globals['fdlike'].gflopss) + ',' + str(summary.globals['fdlike'].gpointss) + ',' + str(summary.globals['fdlike'].time) + ',' + str(summary.__getitem__(('section0',None)).gflopss) + ',' + str(summary.__getitem__(('section0',None)).gpointss) + ',' + str(summary.__getitem__(('section0',None)).time) + '\n')
+    f.close()
     return (summary.gflopss, summary.oi, summary.timings,
             [rec1, rec2, v, tau])
 

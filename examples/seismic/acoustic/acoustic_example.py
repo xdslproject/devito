@@ -44,7 +44,8 @@ def run(shape=(50, 50, 50), spacing=(20.0, 20.0, 20.0), tn=1000.0,
     # import pdb;pdb.set_trace()
     # Define receiver geometry (spread across x, just below surface)
     rec, u, summary = solver.forward(save=save, autotune=autotune)
-    f = open('results.csv','a+')
+    print(norm(rec)); print(norm(u));
+    f = open('results_acoustic.csv','a+')
     f.write(os.getenv('TILE_SIZE') + ',' + str(summary.globals['fdlike'].gflopss) + ',' + str(summary.globals['fdlike'].gpointss) + ',' + str(summary.globals['fdlike'].time) + ',' + str(summary.__getitem__(('section0',None)).gflopss) + ',' + str(summary.__getitem__(('section0',None)).gpointss) + ',' + str(summary.__getitem__(('section0',None)).time) + '\n')
     f.close() 
 
