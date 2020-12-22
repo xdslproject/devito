@@ -1,0 +1,49 @@
+Allocating memory for n(1,)
+Allocating memory for damp(514, 514, 514)
+Operator `initdamp` generated in 0.25 s
+  * lowering.Clusters: 0.12 s (48.2 %)
+     * specializing.Clusters: 0.06 s (24.1 %)
+     * schedule: 0.05 s (20.1 %)
+  * lowering.IET: 0.08 s (32.1 %)
+     * specializing.IET: 0.05 s (20.1 %)
+  * lowering.Expressions: 0.05 s (20.1 %)
+Flops reduction after symbolic optimization: [102 --> 102]
+Operator `initdamp` fetched `/tmp/devito-jitcache-uid1000/f11a933ec794bf77d0b42ade2757d1daaccb8215.cpp` in 0.08 s from jit-cache
+Operator `initdamp` run in 0.56 s
+* section0<<512,512,512>,<40,512,512>,<40,512,512>,<512,40,512>,<512,40,512>,<512,512,40>,<512,512,40>> with OI=0.01 computed in 0.03 s [53.09 GFlops/s]
+Performance[mode=advanced] arguments: {}
+Allocating memory for vp(528, 528, 528)
+Operator `pad_vp` generated in 0.17 s
+  * lowering.IET: 0.08 s (48.8 %)
+     * specializing.IET: 0.05 s (30.5 %)
+  * lowering.Clusters: 0.06 s (36.6 %)
+Flops reduction after symbolic optimization: [0 --> 0]
+
+Operator `pad_vp` jit-compiled `/tmp/devito-jitcache-uid1000/64a9fbaca0dd124cf95c6861e3bd12ae670d89df.cpp` in 1.10 s with `PGICompiler`
+Operator `pad_vp` run in 0.39 s
+Performance[mode=advanced] arguments: {}
+Allocating memory for n(1,)
+Allocating memory for n(1,)
+Applying Forward
+Allocating memory for src_coords(1, 3)
+Allocating memory for src(239, 1)
+Allocating memory for rec_coords(186624, 3)
+Operator `Forward` generated in 1.37 s
+  * lowering.Expressions: 0.70 s (51.3 %)
+  * lowering.IET: 0.39 s (28.6 %)
+Flops reduction after symbolic optimization: [74 --> 47]
+Allocating memory for n(1,)
+Allocating memory for rec(239, 186624)
+Allocating memory for u(3, 528, 528, 528)
+
+Operator `Forward` jit-compiled `/tmp/devito-jitcache-uid1000/9b3d8fa802d940f13b1bdd98e53a6e54757d8eed.cpp` in 1.60 s with `PGICompiler`
+Operator `Forward` run in 17.94 s
+Global performance indicators
+  * Achieved 83.65 GFlops/s, 1.77 FD-GPts/s
+Local performance indicators
+  * section0<237,512,512,512> with OI=2.86 computed in 16.52 s [90.51 GFlops/s, 1.93 GPts/s]
+  * section1<<237,1>,<237,1>,<237,1>,<237,1>,<237,1>,<237,1>,<237,1>,<237,1>,<237,1>> with OI=9.44 computed in 0.01 s [0.01 GFlops/s, 0.01 GPts/s]
+  * section2<<237,186624>,<237,186624>,<237,186624>,<237,186624>,<237,186624>,<237,186624>,<237,186624>,<237,186624>,<237,186624>,<237,186624>> with OI=9.92 computed in 0.05 s [120.37 GFlops/s]
+Performance[mode=advanced] arguments: {}
+pgc++ -g -fPIC -std=c++11 -acc -mp -fast -shared /tmp/devito-jitcache-uid1000/64a9fbaca0dd124cf95c6861e3bd12ae670d89df.cpp -lm -o /tmp/devito-jitcache-uid1000/64a9fbaca0dd124cf95c6861e3bd12ae670d89df.so
+pgc++ -g -fPIC -std=c++11 -acc -mp -fast -shared /tmp/devito-jitcache-uid1000/9b3d8fa802d940f13b1bdd98e53a6e54757d8eed.cpp -lm -o /tmp/devito-jitcache-uid1000/9b3d8fa802d940f13b1bdd98e53a6e54757d8eed.so
