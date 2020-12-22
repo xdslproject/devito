@@ -4,18 +4,18 @@
 NX=600
 NY=600
 NZ=600
-ORDER=8
+ORDER=12
 
 # tests all tile shapes where BLOCK_X*BLOCK_Y*BLOCK_Z <= 1024 and multiple of 32
-for BLOCK_X in {4..64..4}; do
-    for BLOCK_Y in {4..64..4}; do
-        for BLOCK_Z in {16..64..16}; do
+for BLOCK_X in {16..64..8}; do
+    for BLOCK_Y in {2..64..2}; do
+        for BLOCK_Z in {2..64..2}; do
             PRODUCT=$(($BLOCK_X*$BLOCK_Y*$BLOCK_Z))
-            if [ $PRODUCT -le 1024 ] && [ $(($PRODUCT%32)) -eq 0 ]
+            if [ $PRODUCT -le 1024 ]
             then
                 echo "==========" $BLOCK_X $BLOCK_Y $BLOCK_Z
                 export TILE_SIZE=$BLOCK_X,$BLOCK_Y,$BLOCK_Z
-                DEVITO_PLATFORM=nvidiaX DEVITO_LANGUAGE=openacc DEVITO_ARCH=pgcc DEVITO_LOGGING=DEBUG python examples/seismic/elastic/elastic_example.py -so $ORDER -d $NX $NY $NZ --tn 600
+                DEVITO_PLATFORM=nvidiaX DEVITO_LANGUAGE=openacc DEVITO_ARCH=pgcc DEVITO_LOGGING=DEBUG python examples/seismic/elastic/elastic_example.py -so $ORDER -d $NX $NY $NZ --tn 100
             fi
         done
     done
