@@ -196,6 +196,7 @@ def dtype_to_ctype(dtype):
     return {np.int32: ctypes.c_int,
             np.float32: ctypes.c_float,
             np.int64: ctypes.c_int64,
+            np.float16: ctypes.c_float,
             np.float64: ctypes.c_double}[dtype]
 
 

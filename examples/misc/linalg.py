@@ -1,4 +1,5 @@
 import click
+import numpy as np
 
 from devito import Inc, Operator, Function, dimensions, info
 from devito.tools import as_tuple
@@ -90,12 +91,12 @@ def cli_mat_mat_sum(mat_shape, optimize, **kwargs):
 def cli_chain_contractions(mat_shape, optimize, **kwargs):
     """``AB + AC = D, DE = F``."""
     i, j, k, l = dimensions('i j k l')
-    A = Function(name='A', shape=mat_shape, dimensions=(i, j))
-    B = Function(name='B', shape=mat_shape, dimensions=(j, k))
-    C = Function(name='C', shape=mat_shape, dimensions=(j, k))
-    D = Function(name='D', shape=mat_shape, dimensions=(i, k))
-    E = Function(name='E', shape=mat_shape, dimensions=(k, l))
-    F = Function(name='F', shape=mat_shape, dimensions=(i, l))
+    A = Function(name='A', shape=mat_shape, dimensions=(i, j), dtype=np.float16)
+    B = Function(name='B', shape=mat_shape, dimensions=(j, k), dtype=np.float16)
+    C = Function(name='C', shape=mat_shape, dimensions=(j, k), dtype=np.float16)
+    D = Function(name='D', shape=mat_shape, dimensions=(i, k), dtype=np.float16)
+    E = Function(name='E', shape=mat_shape, dimensions=(k, l), dtype=np.float16)
+    F = Function(name='F', shape=mat_shape, dimensions=(i, l), dtype=np.float16)
     chain_contractions(A, B, C, D, E, F, optimize)
 
 
@@ -131,6 +132,12 @@ def mat_mat_sum(A, B, C, D, optimize):
 def chain_contractions(A, B, C, D, E, F, optimize):
     """``AB + AC = D, DE = F``."""
     op = Operator([Inc(D, A*B + A*C), Inc(F, D*E)], opt=optimize)
+    A.data[:,:] = 1.0
+    B.data[:,:] = 1.0
+    C.data[:,:] = 1.0
+    D.data[:,:] = 1.0
+    E.data[:,:] = 1.0
+    F.data[:,:] = 0.1
     op.apply()
     info('Executed `AB + AC = D, DE = F`')
 
