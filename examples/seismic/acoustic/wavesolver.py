@@ -164,9 +164,7 @@ class AcousticWaveSolver(object):
         source_id.data[nzinds[0], nzinds[1], nzinds[2]] = tuple(np.arange(len(nzinds[0])))
 
         source_mask.data[nzinds[0], nzinds[1], nzinds[2]] = 1
-        # plot3d(source_mask.data, model)
-        # import pdb; pdb.set_trace()
-        # import pdb;pdb.set_trace()
+
         print("Number of unique affected points is:", len(nzinds[0]))
 
         # Assert that first and last index are as expected
@@ -210,7 +208,6 @@ class AcousticWaveSolver(object):
         print("Injecting to empty grids finished")
         sp_zi = Dimension(name='sp_zi')
 
-        #import pdb;pdb.set_trace()
 
         sp_source_id = Function(name='sp_source_id', shape=(list(sparse_shape)),
                                   dimensions=(x, y, sp_zi), space_order=0, dtype=np.int32)
@@ -221,7 +218,7 @@ class AcousticWaveSolver(object):
         assert(np.count_nonzero(sp_source_id.data) == len(nzinds[0]))
         assert(len(sp_source_id.dimensions) == 3)
 
-        import pdb;pdb.set_trace()
+        # import pdb;pdb.set_trace()
 
         zind = Scalar(name='zind', dtype=np.int32)
         xb_size = Scalar(name='xb_size', dtype=np.int32)
@@ -257,15 +254,15 @@ class AcousticWaveSolver(object):
         performance_map = np.array([[0, 0, 0, 0, 0]])
 
         bxstart = 4
-        bxend = 8
+        bxend = 9
         bystart = 4
-        byend = 8
+        byend = 9
         bstep = 4
 
         txstart = 32
-        txend = 33
+        txend = 65
         tystart = 32
-        tyend = 33
+        tyend = 65
 
         tstep = 32
         # Temporal autotuning
