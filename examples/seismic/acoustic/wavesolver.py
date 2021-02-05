@@ -156,6 +156,7 @@ class AcousticWaveSolver(object):
         t = self.model.grid.stepping_dim
 
         source_mask = Function(name='source_mask', shape=self.model.grid.shape, dimensions=(x, y, z), space_order=0, dtype=np.int32)
+
         source_id = Function(name='source_id', shape=shape, dimensions=(x, y, z), space_order=0, dtype=np.int32)
         print("source_id data indexes start from 0 now !!!")
 
@@ -165,7 +166,7 @@ class AcousticWaveSolver(object):
         source_mask.data[nzinds[0], nzinds[1], nzinds[2]] = 1
         # plot3d(source_mask.data, model)
         # import pdb; pdb.set_trace()
-
+        # import pdb;pdb.set_trace()
         print("Number of unique affected points is:", len(nzinds[0]))
 
         # Assert that first and last index are as expected
@@ -211,16 +212,16 @@ class AcousticWaveSolver(object):
 
         #import pdb;pdb.set_trace()
 
-        sp_source_mask = Function(name='sp_source_mask', shape=(list(sparse_shape)),
+        sp_source_id = Function(name='sp_source_id', shape=(list(sparse_shape)),
                                   dimensions=(x, y, sp_zi), space_order=0, dtype=np.int32)
 
         # Now holds IDs
-        sp_source_mask.data[inds[0], inds[1], :] = tuple(inds[-1][:len(np.unique(inds[-1]))])
+        sp_source_id.data[inds[0], inds[1], :] = tuple(inds[-1][:len(np.unique(inds[-1]))])
 
-        assert(np.count_nonzero(sp_source_mask.data) == len(nzinds[0]))
-        assert(len(sp_source_mask.dimensions) == 3)
+        assert(np.count_nonzero(sp_source_id.data) == len(nzinds[0]))
+        assert(len(sp_source_id.dimensions) == 3)
 
-        # import pdb;pdb.set_trace()
+        import pdb;pdb.set_trace()
 
         zind = Scalar(name='zind', dtype=np.int32)
         xb_size = Scalar(name='xb_size', dtype=np.int32)
@@ -241,10 +242,12 @@ class AcousticWaveSolver(object):
 
         eq0 = Eq(sp_zi.symbolic_max, nnz_sp_source_mask[x, y] - 1,
                  implicit_dims=(time, x, y))
-        # eq1 = Eq(zind, sp_source_mask[x, sp_zi], implicit_dims=(time, x, sp_zi))
-        eq1 = Eq(zind, sp_source_mask[x, y, sp_zi], implicit_dims=(time, x, y, sp_zi))
 
-        inj_u = source_mask[x, y, zind] * save_src_u[time, source_id[x, y, zind]]
+        eq1 = Eq(zind, sp_source_id[x, y, sp_zi], implicit_dims=(time, x, y, sp_zi))
+
+        # inj_u = source_mask[x, y, zind] * save_src_u[time, source_id[x, y, zind]]
+        # Is source_mask needed /
+        inj_u = save_src_u[time, source_id[x, y, zind]]
 
         eq_u = Inc(u.forward[t+1, x, y, zind], inj_u, implicit_dims=(time, x, y, sp_zi))
 

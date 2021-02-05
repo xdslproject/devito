@@ -32,16 +32,15 @@ struct profiler
   double section1;
 };
 
-void bf0(struct dataobj *restrict damp_vec, const float dt, struct dataobj *restrict u_vec, struct dataobj *restrict vp_vec, struct dataobj *restrict nnz_sp_source_mask_vec, struct dataobj *restrict sp_source_mask_vec, struct dataobj *restrict save_src_u_vec, struct dataobj *restrict source_id_vec, struct dataobj *restrict source_mask_vec, const int t0, const int t1, const int t2, const int x0_blk0_size, const int x_M, const int x_m, const int y0_blk0_size, const int y_M, const int y_m, const int z_M, const int z_m, const int sp_zi_m, const int nthreads, const int xb, const int yb, const int xb_size, const int yb_size, const int time, const int tw);
+void bf0(struct dataobj *restrict damp_vec, const float dt, struct dataobj *restrict u_vec, struct dataobj *restrict vp_vec, struct dataobj *restrict nnz_sp_source_mask_vec, struct dataobj *restrict sp_source_mask_vec, struct dataobj *restrict save_src_u_vec, struct dataobj *restrict source_id_vec, const int t0, const int t1, const int t2, const int x0_blk0_size, const int x_M, const int x_m, const int y0_blk0_size, const int y_M, const int y_m, const int z_M, const int z_m, const int sp_zi_m, const int nthreads, const int xb, const int yb, const int xb_size, const int yb_size, const int time, const int tw);
 
-int Kernel(struct dataobj *restrict block_sizes_vec, struct dataobj *restrict damp_vec, const float dt, struct dataobj *restrict nnz_sp_source_mask_vec, struct dataobj *restrict save_src_u_vec, struct dataobj *restrict source_id_vec, struct dataobj *restrict source_mask_vec, struct dataobj *restrict sp_source_mask_vec, struct dataobj *restrict u_vec, struct dataobj *restrict vp_vec, const int sp_zi_m, const int time_M, const int time_m, const int x_M, const int x_m, const int y_M, const int y_m, const int z_M, const int z_m, const int nthreads, const int nthreads_nonaffine, struct profiler *timers)
+int Kernel(struct dataobj *restrict block_sizes_vec, struct dataobj *restrict damp_vec, const float dt, struct dataobj *restrict nnz_sp_source_mask_vec, struct dataobj *restrict save_src_u_vec, struct dataobj *restrict source_id_vec, struct dataobj *restrict sp_source_id_vec, struct dataobj *restrict u_vec, struct dataobj *restrict vp_vec, const int sp_zi_m, const int time_M, const int time_m, const int x_M, const int x_m, const int y_M, const int y_m, const int z_M, const int z_m, const int nthreads, const int nthreads_nonaffine, struct profiler *timers)
 {
   int(*restrict block_sizes) __attribute__((aligned(64))) = (int(*))block_sizes_vec->data;
   int(*restrict nnz_sp_source_mask)[nnz_sp_source_mask_vec->size[1]] __attribute__((aligned(64))) = (int(*)[nnz_sp_source_mask_vec->size[1]])nnz_sp_source_mask_vec->data;
   float(*restrict save_src_u)[save_src_u_vec->size[1]] __attribute__((aligned(64))) = (float(*)[save_src_u_vec->size[1]])save_src_u_vec->data;
   int(*restrict source_id)[source_id_vec->size[1]][source_id_vec->size[2]] __attribute__((aligned(64))) = (int(*)[source_id_vec->size[1]][source_id_vec->size[2]])source_id_vec->data;
-  int(*restrict source_mask)[source_mask_vec->size[1]][source_mask_vec->size[2]] __attribute__((aligned(64))) = (int(*)[source_mask_vec->size[1]][source_mask_vec->size[2]])source_mask_vec->data;
-  int(*restrict sp_source_mask)[sp_source_mask_vec->size[1]][sp_source_mask_vec->size[2]] __attribute__((aligned(64))) = (int(*)[sp_source_mask_vec->size[1]][sp_source_mask_vec->size[2]])sp_source_mask_vec->data;
+  int(*restrict sp_source_id)[sp_source_id_vec->size[1]][sp_source_id_vec->size[2]] __attribute__((aligned(64))) = (int(*)[sp_source_id_vec->size[1]][sp_source_id_vec->size[2]])sp_source_id_vec->data;
   float(*restrict u)[u_vec->size[1]][u_vec->size[2]][u_vec->size[3]] __attribute__((aligned(64))) = (float(*)[u_vec->size[1]][u_vec->size[2]][u_vec->size[3]])u_vec->data;
 
   /* Flush denormal numbers to zero in hardware */
@@ -68,7 +67,7 @@ int Kernel(struct dataobj *restrict block_sizes_vec, struct dataobj *restrict da
         for (int time = t_blk, t0 = (time + 2) % (3), t1 = (time) % (3), t2 = (time + 1) % (3); time <= 1 + min(t_blk + t_blk_size - 1, sf * (time_M - time_m)); time += sf, t0 = (((time / sf) % (time_M - time_m + 1)) + 2) % (3), t1 = (((time / sf) % (time_M - time_m + 1))) % (3), t2 = (((time / sf) % (time_M - time_m + 1)) + 1) % (3))
         {
           int tw = ((time / sf) % (time_M - time_m + 1));
-          bf0(damp_vec, dt, u_vec, vp_vec, nnz_sp_source_mask_vec, sp_source_mask_vec, save_src_u_vec, source_id_vec, source_mask_vec, t0, t1, t2, x0_blk0_size, x_M - (x_M - x_m + 1) % (x0_blk0_size), x_m, y0_blk0_size, y_M - (y_M - y_m + 1) % (y0_blk0_size), y_m, z_M, z_m, sp_zi_m, nthreads, xb, yb, xb_size, yb_size, time, tw);
+          bf0(damp_vec, dt, u_vec, vp_vec, nnz_sp_source_mask_vec, sp_source_id_vec, save_src_u_vec, source_id_vec, t0, t1, t2, x0_blk0_size, x_M - (x_M - x_m + 1) % (x0_blk0_size), x_m, y0_blk0_size, y_M - (y_M - y_m + 1) % (y0_blk0_size), y_m, z_M, z_m, sp_zi_m, nthreads, xb, yb, xb_size, yb_size, time, tw);
 
           //bf0(damp_vec, dt, u_vec, vp_vec, t0, t1, t2, x0_blk0_size, x_M - (x_M - x_m + 1) % (x0_blk0_size), x_m, (y_M - y_m + 1) % (y0_blk0_size), y_M, y_M - (y_M - y_m + 1) % (y0_blk0_size) + 1, z_M, z_m, nthreads);
           //bf0(damp_vec, dt, u_vec, vp_vec, t0, t1, t2, (x_M - x_m + 1) % (x0_blk0_size), x_M, x_M - (x_M - x_m + 1) % (x0_blk0_size) + 1, y0_blk0_size, y_M - (y_M - y_m + 1) % (y0_blk0_size), y_m, z_M, z_m, nthreads);
@@ -92,7 +91,7 @@ int Kernel(struct dataobj *restrict block_sizes_vec, struct dataobj *restrict da
   return 0;
 }
 
-void bf0(struct dataobj *restrict damp_vec, const float dt, struct dataobj *restrict u_vec, struct dataobj *restrict vp_vec, struct dataobj *restrict nnz_sp_source_mask_vec, struct dataobj *restrict sp_source_mask_vec, struct dataobj *restrict save_src_u_vec, struct dataobj *restrict source_id_vec, struct dataobj *restrict source_mask_vec, const int t0, const int t1, const int t2, const int x0_blk0_size, const int x_M, const int x_m, const int y0_blk0_size, const int y_M, const int y_m, const int z_M, const int z_m, const int sp_zi_m, const int nthreads, const int xb, const int yb, const int xb_size, const int yb_size, const int time, const int tw)
+void bf0(struct dataobj *restrict damp_vec, const float dt, struct dataobj *restrict u_vec, struct dataobj *restrict vp_vec, struct dataobj *restrict nnz_sp_source_mask_vec, struct dataobj *restrict sp_source_id_vec, struct dataobj *restrict save_src_u_vec, struct dataobj *restrict source_id_vec, const int t0, const int t1, const int t2, const int x0_blk0_size, const int x_M, const int x_m, const int y0_blk0_size, const int y_M, const int y_m, const int z_M, const int z_m, const int sp_zi_m, const int nthreads, const int xb, const int yb, const int xb_size, const int yb_size, const int time, const int tw)
 {
   float(*restrict damp)[damp_vec->size[1]][damp_vec->size[2]] __attribute__((aligned(64))) = (float(*)[damp_vec->size[1]][damp_vec->size[2]])damp_vec->data;
   float(*restrict u)[u_vec->size[1]][u_vec->size[2]][u_vec->size[3]] __attribute__((aligned(64))) = (float(*)[u_vec->size[1]][u_vec->size[2]][u_vec->size[3]])u_vec->data;
@@ -101,8 +100,7 @@ void bf0(struct dataobj *restrict damp_vec, const float dt, struct dataobj *rest
   int(*restrict nnz_sp_source_mask)[nnz_sp_source_mask_vec->size[1]] __attribute__((aligned(64))) = (int(*)[nnz_sp_source_mask_vec->size[1]])nnz_sp_source_mask_vec->data;
   float(*restrict save_src_u)[save_src_u_vec->size[1]] __attribute__((aligned(64))) = (float(*)[save_src_u_vec->size[1]])save_src_u_vec->data;
   int(*restrict source_id)[source_id_vec->size[1]][source_id_vec->size[2]] __attribute__((aligned(64))) = (int(*)[source_id_vec->size[1]][source_id_vec->size[2]])source_id_vec->data;
-  int(*restrict source_mask)[source_mask_vec->size[1]][source_mask_vec->size[2]] __attribute__((aligned(64))) = (int(*)[source_mask_vec->size[1]][source_mask_vec->size[2]])source_mask_vec->data;
-  int(*restrict sp_source_mask)[sp_source_mask_vec->size[1]][sp_source_mask_vec->size[2]] __attribute__((aligned(64))) = (int(*)[sp_source_mask_vec->size[1]][sp_source_mask_vec->size[2]])sp_source_mask_vec->data;
+  int(*restrict sp_source_id)[sp_source_id_vec->size[1]][sp_source_id_vec->size[2]] __attribute__((aligned(64))) = (int(*)[sp_source_id_vec->size[1]][sp_source_id_vec->size[2]])sp_source_id_vec->data;
 
   if (x0_blk0_size == 0 || y0_blk0_size == 0)
   {
@@ -122,15 +120,15 @@ void bf0(struct dataobj *restrict damp_vec, const float dt, struct dataobj *rest
 #pragma omp simd aligned(damp, u, vp : 32)
             for (int z = z_m; z <= z_M; z += 1)
             {
-              float r8 = 1.0/dt;
-              float r7 = 1.0/(dt*dt);
-              float r6 = 1.0/(vp[x - time + 4][y - time + 4][z + 4]*vp[x - time + 4][y - time + 4][z + 4]);
-              u[t2][x - time + 4][y - time + 4][z + 4] = (r6*(-r7*(u[t0][x - time + 4][y - time + 4][z + 4] - 2.0F*u[t1][x - time + 4][y - time + 4][z + 4])) + r8*(damp[x - time + 1][y - time + 1][z + 1]*u[t1][x - time + 4][y - time + 4][z + 4]) - 3.70370379e-4F*(u[t1][x - time + 2][y - time + 4][z + 4] + u[t1][x - time + 4][y - time + 2][z + 4] + u[t1][x - time + 4][y - time + 4][z + 2] + u[t1][x - time + 4][y - time + 4][z + 6] + u[t1][x - time + 4][y - time + 6][z + 4] + u[t1][x - time + 6][y - time + 4][z + 4]) + 5.92592607e-3F*(u[t1][x - time + 3][y - time + 4][z + 4] + u[t1][x - time + 4][y - time + 3][z + 4] + u[t1][x - time + 4][y - time + 4][z + 3] + u[t1][x - time + 4][y - time + 4][z + 5] + u[t1][x - time + 4][y - time + 5][z + 4] + u[t1][x - time + 5][y - time + 4][z + 4]) - 3.33333341e-2F*u[t1][x - time + 4][y - time + 4][z + 4])/(r6*r7 + r8*damp[x - time + 1][y - time + 1][z + 1]);
+              float r8 = 1.0 / dt;
+              float r7 = 1.0 / (dt * dt);
+              float r6 = 1.0 / (vp[x - time + 4][y - time + 4][z + 4] * vp[x - time + 4][y - time + 4][z + 4]);
+              u[t2][x - time + 4][y - time + 4][z + 4] = (r6 * (-r7 * (u[t0][x - time + 4][y - time + 4][z + 4] - 2.0F * u[t1][x - time + 4][y - time + 4][z + 4])) + r8 * (damp[x - time + 1][y - time + 1][z + 1] * u[t1][x - time + 4][y - time + 4][z + 4]) - 3.70370379e-4F * (u[t1][x - time + 2][y - time + 4][z + 4] + u[t1][x - time + 4][y - time + 2][z + 4] + u[t1][x - time + 4][y - time + 4][z + 2] + u[t1][x - time + 4][y - time + 4][z + 6] + u[t1][x - time + 4][y - time + 6][z + 4] + u[t1][x - time + 6][y - time + 4][z + 4]) + 5.92592607e-3F * (u[t1][x - time + 3][y - time + 4][z + 4] + u[t1][x - time + 4][y - time + 3][z + 4] + u[t1][x - time + 4][y - time + 4][z + 3] + u[t1][x - time + 4][y - time + 4][z + 5] + u[t1][x - time + 4][y - time + 5][z + 4] + u[t1][x - time + 5][y - time + 4][z + 4]) - 3.33333341e-2F * u[t1][x - time + 4][y - time + 4][z + 4]) / (r6 * r7 + r8 * damp[x - time + 1][y - time + 1][z + 1]);
             }
 #pragma omp simd aligned(damp, u, vp : 32)
             for (int sp_zi = sp_zi_m; sp_zi <= nnz_sp_source_mask[x - time][y - time] - 1; sp_zi += 1)
             {
-              int zind = sp_source_mask[x - time][y - time][sp_zi];
+              int zind = sp_source_id[x - time][y - time][sp_zi];
               float r0 = save_src_u[tw][source_id[x - time][y - time][zind]];
               // * source_mask[x - time][y - time][zind];
               u[t2][x - time + 4][y - time + 4][zind + 4] += r0;
