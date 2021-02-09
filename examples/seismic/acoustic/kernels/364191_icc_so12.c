@@ -54,7 +54,7 @@ int Kernel(struct dataobj *restrict block_sizes_vec, struct dataobj *restrict da
 
   //for (int time = time_m, t0 = (time + 2)%(3), t1 = (time)%(3), t2 = (time + 1)%(3); time <= time_M; time += 1, t0 = (time + 2)%(3), t1 = (time)%(3), t2 = (time + 1)%(3))
   //{
-  int sf = 4;
+  int sf = 6;
   int t_blk_size = 2 * sf * (time_M - time_m);
 
   START_TIMER(section0)
@@ -122,15 +122,15 @@ void bf0(struct dataobj *restrict damp_vec, const float dt, struct dataobj *rest
             {
               float r8 = 1.0/dt;
               float r7 = 1.0/(dt*dt);
-              float r6 = 1.0/(vp[x - time + 8][y - time + 8][z + 8]*vp[x - time + 8][y - time + 8][z + 8]);
-              u[t2][x - time + 8][y - time + 8][z + 8] = (r6*(-r7*(-2.0F*u[t0][x - time + 8][y - time + 8][z + 8] + u[t1][x - time + 8][y - time + 8][z + 8])) + r8*(damp[x - time + 1][y - time + 1][z + 1]*u[t0][x - time + 8][y - time + 8][z + 8]) - 7.93650813e-6F*(u[t0][x - time + 4][y - time + 8][z + 8] + u[t0][x - time + 8][y - time + 4][z + 8] + u[t0][x - time + 8][y - time + 8][z + 4] + u[t0][x - time + 8][y - time + 8][z + 12] + u[t0][x - time + 8][y - time + 12][z + 8] + u[t0][x - time + 12][y - time + 8][z + 8]) + 1.12874782e-4F*(u[t0][x - time + 5][y - time + 8][z + 8] + u[t0][x - time + 8][y - time + 5][z + 8] + u[t0][x - time + 8][y - time + 8][z + 5] + u[t0][x - time + 8][y - time + 8][z + 11] + u[t0][x - time + 8][y - time + 11][z + 8] + u[t0][x - time + 11][y - time + 8][z + 8]) - 8.8888891e-4F*(u[t0][x - time + 6][y - time + 8][z + 8] + u[t0][x - time + 8][y - time + 6][z + 8] + u[t0][x - time + 8][y - time + 8][z + 6] + u[t0][x - time + 8][y - time + 8][z + 10] + u[t0][x - time + 8][y - time + 10][z + 8] + u[t0][x - time + 10][y - time + 8][z + 8]) + 7.11111128e-3F*(u[t0][x - time + 7][y - time + 8][z + 8] + u[t0][x - time + 8][y - time + 7][z + 8] + u[t0][x - time + 8][y - time + 8][z + 7] + u[t0][x - time + 8][y - time + 8][z + 9] + u[t0][x - time + 8][y - time + 9][z + 8] + u[t0][x - time + 9][y - time + 8][z + 8]) - 3.79629639e-2F*u[t0][x - time + 8][y - time + 8][z + 8])/(r6*r7 + r8*damp[x - time + 1][y - time + 1][z + 1]);
+              float r6 = 1.0/(vp[x - time + 12][y - time + 12][z + 12]*vp[x - time + 12][y - time + 12][z + 12]);
+              u[t2][x - time + 12][y - time + 12][z + 12] = (r6*(-r7*(-2.0F*u[t0][x - time + 12][y - time + 12][z + 12] + u[t1][x - time + 12][y - time + 12][z + 12])) + r8*(damp[x - time + 1][y - time + 1][z + 1]*u[t0][x - time + 12][y - time + 12][z + 12]) - 2.67222496e-7F*(u[t0][x - time + 6][y - time + 12][z + 12] + u[t0][x - time + 12][y - time + 6][z + 12] + u[t0][x - time + 12][y - time + 12][z + 6] + u[t0][x - time + 12][y - time + 12][z + 18] + u[t0][x - time + 12][y - time + 18][z + 12] + u[t0][x - time + 18][y - time + 12][z + 12]) + 4.61760473e-6F*(u[t0][x - time + 7][y - time + 12][z + 12] + u[t0][x - time + 12][y - time + 7][z + 12] + u[t0][x - time + 12][y - time + 12][z + 7] + u[t0][x - time + 12][y - time + 12][z + 17] + u[t0][x - time + 12][y - time + 17][z + 12] + u[t0][x - time + 17][y - time + 12][z + 12]) - 3.96825406e-5F*(u[t0][x - time + 8][y - time + 12][z + 12] + u[t0][x - time + 12][y - time + 8][z + 12] + u[t0][x - time + 12][y - time + 12][z + 8] + u[t0][x - time + 12][y - time + 12][z + 16] + u[t0][x - time + 12][y - time + 16][z + 12] + u[t0][x - time + 16][y - time + 12][z + 12]) + 2.35155796e-4F*(u[t0][x - time + 9][y - time + 12][z + 12] + u[t0][x - time + 12][y - time + 9][z + 12] + u[t0][x - time + 12][y - time + 12][z + 9] + u[t0][x - time + 12][y - time + 12][z + 15] + u[t0][x - time + 12][y - time + 15][z + 12] + u[t0][x - time + 15][y - time + 12][z + 12]) - 1.19047622e-3F*(u[t0][x - time + 10][y - time + 12][z + 12] + u[t0][x - time + 12][y - time + 10][z + 12] + u[t0][x - time + 12][y - time + 12][z + 10] + u[t0][x - time + 12][y - time + 12][z + 14] + u[t0][x - time + 12][y - time + 14][z + 12] + u[t0][x - time + 14][y - time + 12][z + 12]) + 7.6190478e-3F*(u[t0][x - time + 11][y - time + 12][z + 12] + u[t0][x - time + 12][y - time + 11][z + 12] + u[t0][x - time + 12][y - time + 12][z + 11] + u[t0][x - time + 12][y - time + 12][z + 13] + u[t0][x - time + 12][y - time + 13][z + 12] + u[t0][x - time + 13][y - time + 12][z + 12]) - 3.97703713e-2F*u[t0][x - time + 12][y - time + 12][z + 12])/(r6*r7 + r8*damp[x - time + 1][y - time + 1][z + 1]);
             }
 #pragma omp simd aligned(damp, u, vp : 32)
             for (int sp_zi = sp_zi_m; sp_zi <= nnz_sp_source_mask[x - time][y - time] - 1; sp_zi += 1)
             {
               int zind = sp_source_id[x - time][y - time][sp_zi];
               float r0 = save_src_u[tw][source_id[x - time][y - time][zind]];
-              u[t2][x - time + 8][y - time + 8][zind + 8] += r0;
+              u[t2][x - time + 12][y - time + 12][zind + 12] += r0;
             }
           }
         }
@@ -138,6 +138,10 @@ void bf0(struct dataobj *restrict damp_vec, const float dt, struct dataobj *rest
     }
   }
 }
+
+
+
+
 
 
 
