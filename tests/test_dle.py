@@ -196,7 +196,8 @@ def test_cache_blocking_time_loop(shape, time_order, blockshape, blockinner):
     wo_blocking, _ = _new_operator2(shape, time_order, opt='noop')
     w_blocking, _ = _new_operator2(shape, time_order, blockshape,
                                    opt=('blocking', {'blockinner': blockinner}))
-
+    
+    # import pdb;pdb.set_trace()
     assert np.equal(wo_blocking.data, w_blocking.data).all()
 
 

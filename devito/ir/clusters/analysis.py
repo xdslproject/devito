@@ -18,7 +18,7 @@ def analyze(clusters):
 
     # Reconstruct Clusters attaching the discovered properties
     processed = [c.rebuild(properties=state.properties.get(c)) for c in clusters]
-
+    # # import pdb;pdb.set_trace()
     return processed
 
 
@@ -177,18 +177,22 @@ class Tiling(Detector):
         # TILABLE a Dimension that is not embedded in at least one
         # SEQUENTIAL Dimension. This is to rule out tiling when the
         # computation is not expected to be expensive
-        if not any(SEQUENTIAL in properties[i.dim] for i in prefix[:-1]):
-            return
+        #if not any(SEQUENTIAL in properties[i.dim] for i in prefix[:-1]):
+           # import pdb;pdb.set_trace()
+        #    return
 
         # Likewise, it won't be marked TILABLE if there's at least one
         # local SubDimension in all Clusters
         if all(any(i.dim.is_Sub and i.dim.local for i in c.itintervals)
                for c in clusters):
+            #import pdb;pdb.set_trace()
             return
 
         # If it induces dynamic bounds, then it's ruled out too
         scope = self._fetch_scope(clusters)
         if any(i.is_lex_non_stmt for i in scope.d_all_gen()):
+            #import pdb;pdb.set_trace()
             return
 
+        # import pdb;pdb.set_trace()
         return TILABLE

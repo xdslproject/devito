@@ -30,12 +30,24 @@ class Blocking(Queue):
         # maximize vectorization
         processed = []
         for c in clusters:
+            # import pdb;pdb.set_trace()
             ntilable = len([i for i in c.properties.values() if TILABLE in i])
             ntilable -= int(not self.inner)
-            if ntilable <= 1:
+
+            #if ntilable == 1: # and not self.inner:
+            #    properties = {k: v for k, v in c.properties.items()}
+            #    processed.append(c.rebuild(properties=properties))
+            if ntilable < 1:
                 properties = {k: v - {TILABLE} for k, v in c.properties.items()}
                 processed.append(c.rebuild(properties=properties))
             elif not self.inner:
+                #import pdb;pdb.set_trace()
+                d = c.itintervals[-1].dim
+                properties = dict(c.properties)
+                properties[d] = properties[d] - {TILABLE}
+                processed.append(c.rebuild(properties=properties))
+            elif ntilable==1 and self.inner:
+                #import pdb;pdb.set_trace()
                 d = c.itintervals[-1].dim
                 properties = dict(c.properties)
                 properties[d] = properties[d] - {TILABLE}
@@ -64,7 +76,6 @@ class Blocking(Queue):
             return clusters
 
         d = prefix[-1].dim
-
         # Create the block Dimensions (in total `self.levels` Dimensions)
         name = self.template % (d.name, self.nblocked[d], '%d')
 
@@ -81,6 +92,7 @@ class Blocking(Queue):
 
         processed = []
         for c in clusters:
+            # import pdb;pdb.set_trace()
             if TILABLE in c.properties[d]:
                 ispace = decompose(c.ispace, d, block_dims)
 
@@ -108,6 +120,7 @@ def decompose(ispace, d, block_dims):
     Create a new IterationSpace in which the `d` Interval is decomposed
     into a hierarchy of Intervals over ``block_dims``.
     """
+    # import pdb;pdb.set_trace()
     # Create the new Intervals
     intervals = []
     for i in ispace:
