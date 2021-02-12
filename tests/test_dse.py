@@ -230,8 +230,8 @@ def test_makeit_ssa(exprs, exp_u, exp_v):
     assert np.all(v.data == exp_v)
 
 
-@pytest.mark.parametrize('opt', ['noop', 'advanced'])
-def test_time_dependent_split(opt):
+@pytest.mark.parametrize('opt, expected', (['noop', 2], ['advanced', 0]))
+def test_time_dependent_split(opt, expected):
     grid = Grid(shape=(10, 10))
     u = TimeFunction(name='u', grid=grid, time_order=2, space_order=2, save=3)
     v = TimeFunction(name='v', grid=grid, time_order=2, space_order=0, save=3)
@@ -243,9 +243,7 @@ def test_time_dependent_split(opt):
     op = Operator(eq, opt=opt)
 
     trees = retrieve_iteration_tree(op)
-    #import pdb;pdb.set_trace()
-    #assert len(trees) == 2
-
+    assert len(trees) == expected
     op()
 
     
@@ -1297,7 +1295,8 @@ class TestAliases(object):
                                               'cire-mincost-inv': 28}))
 
         trees = retrieve_iteration_tree(op)
-        assert len(trees) == 3
+        #import pdb;
+        assert len(trees) == 2
         arrays = [i for i in FindSymbols().visit(trees[0].root) if i.is_Array]
         assert len(arrays) == 2
         assert all(i._mem_heap and not i._mem_external for i in arrays)

@@ -197,7 +197,7 @@ def test_cache_blocking_time_loop(shape, time_order, blockshape, blockinner):
     w_blocking, _ = _new_operator2(shape, time_order, blockshape,
                                    opt=('blocking', {'blockinner': blockinner}))
     
-    # import pdb;pdb.set_trace()
+    
     assert np.equal(wo_blocking.data, w_blocking.data).all()
 
 
@@ -566,7 +566,7 @@ class TestNodeParallelism(object):
         u = TimeFunction(name='u', grid=grid)
 
         op = Operator(Inc(f, u + 1), opt=('openmp', {'par-collapse-ncores': 1}))
-
+        
         iterations = FindNodes(Iteration).visit(op)
         assert "reduction(+:f[0:f_vec->size[0]])" in iterations[1].pragmas[0].value
 

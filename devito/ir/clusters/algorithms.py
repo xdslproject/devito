@@ -33,6 +33,7 @@ def clusterize(exprs):
     clusters = guard(clusters)
 
     # Determine relevant computational properties (e.g., parallelism)
+
     clusters = analyze(clusters)
 
     return ClusterGroup(clusters)
