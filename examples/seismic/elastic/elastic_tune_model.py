@@ -293,6 +293,7 @@ tystart = 32
 tyend = 65
 
 tstep = 32
+
 # Temporal autotuning
 for tx in range(txstart, txend, tstep):
     # import pdb; pdb.set_trace()
@@ -339,6 +340,7 @@ for tx in range(txstart, txend, tstep):
                 print("===========")
                 print("===========")
                 performance_map = np.append(performance_map, [[tx, ty, bx, by, summary.globals['fdlike'].gpointss]], 0)
+
 
 
         print(performance_map)
