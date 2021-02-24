@@ -189,8 +189,6 @@ class Tiling(Detector):
         # If it induces dynamic bounds, then it's ruled out too
         scope = self._fetch_scope(clusters)
         if any(i.is_lex_non_stmt for i in scope.d_all_gen()):
-            import pdb;pdb.set_trace()
             return
 
-        
         return TILABLE

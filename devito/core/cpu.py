@@ -91,6 +91,8 @@ class Cpu64OperatorMixin(object):
         o['blockinner'] = oo.pop('blockinner', False)
         o['blocklevels'] = oo.pop('blocklevels', cls.BLOCK_LEVELS)
 
+        o['skewing'] = oo.pop('skewing', False)
+
         # CIRE
         o['min-storage'] = oo.pop('min-storage', False)
         o['cire-rotate'] = oo.pop('cire-rotate', False)
@@ -195,10 +197,9 @@ class Cpu64AdvOperator(Cpu64OperatorMixin, CoreOperator):
         # Reduce flops (no arithmetic alterations)
         clusters = cse(clusters, sregistry)
 
-
         # Apply skewing after blocking
         print(clusters[0].properties)
-        clusters = skewing(clusters)
+        # clusters = skewing(clusters)
         print(clusters[0].properties)
         return clusters
 
@@ -329,7 +330,8 @@ class Cpu64CustomOperator(Cpu64OperatorMixin, CustomOperator):
             'cire-divs': lambda i: cire(i, 'divs', sregistry, options, platform),
             'cse': lambda i: cse(i, sregistry),
             'opt-pows': optimize_pows,
-            'topofuse': lambda i: fuse(i, toposort=True)
+            'topofuse': lambda i: fuse(i, toposort=True),
+            'skewing' : skewing
         }
 
     @classmethod
@@ -359,7 +361,7 @@ class Cpu64CustomOperator(Cpu64OperatorMixin, CustomOperator):
         'buffering',
         # Clusters
         'blocking', 'topofuse', 'fuse', 'factorize', 'cire-sops', 'cire-divs',
-        'cse', 'lift', 'opt-pows',
+        'cse', 'lift', 'opt-pows', 'skewing',
         # IET
         'denormals', 'optcomms', 'openmp', 'mpi', 'simd', 'prodders',
     )

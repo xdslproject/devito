@@ -1,10 +1,14 @@
 from collections import Counter
 
 from devito.ir.clusters import Queue
-from devito.ir.support import TILABLE, IntervalGroup, IterationSpace
-from devito.symbolics import uxreplace
+from devito.ir.support import SEQUENTIAL, TILABLE, IntervalGroup, IterationSpace
+from devito.ir.support.space import Interval
+from devito.ir.clusters.cluster import Cluster
+from devito.symbolics import uxreplace, xreplace_indices
 from devito.tools import timed_pass
 from devito.types import IncrDimension
+from devito.logger import warning
+
 
 __all__ = ['Blocking']
 
@@ -30,10 +34,8 @@ class Blocking(Queue):
         # maximize vectorization
         processed = []
         for c in clusters:
-            
             ntilable = len([i for i in c.properties.values() if TILABLE in i])
             ntilable -= int(not self.inner)
-
             if ntilable <= 1:
                 properties = {k: v - {TILABLE} for k, v in c.properties.items()}
                 processed.append(c.rebuild(properties=properties))
@@ -42,7 +44,6 @@ class Blocking(Queue):
                 properties = dict(c.properties)
                 properties[d] = properties[d] - {TILABLE}
                 processed.append(c.rebuild(properties=properties))
-
             else:
                 processed.append(c)
 

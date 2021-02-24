@@ -38,6 +38,8 @@ def run(shape=(50, 50, 50), spacing=(20.0, 20.0, 20.0), tn=1000.0,
     save = full_run and not checkpointing
     # Define receiver geometry (spread across x, just below surface)
     rec, u, summary = solver.forward(save=save, autotune=autotune)
+    print(norm(rec))
+    print(norm(u))
 
     if preset == 'constant':
         # With  a new m as Constant
@@ -46,8 +48,10 @@ def run(shape=(50, 50, 50), spacing=(20.0, 20.0, 20.0), tn=1000.0,
         # With a new vp as a scalar value
         solver.forward(save=save, vp=2.0)
 
+    
     if not full_run:
         return summary.gflopss, summary.oi, summary.timings, [rec, u.data]
+
 
     # Smooth velocity
     initial_vp = Function(name='v0', grid=solver.model.grid, space_order=space_order)

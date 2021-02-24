@@ -109,7 +109,6 @@ def test_blocking_only():
     assert len(op._state['autotuning'][0]['tuned']) == 2
     assert 'nthreads' not in op._state['autotuning'][0]['tuned']
 
-
 def test_mixed_blocking_nthreads():
     grid = Grid(shape=(96, 96, 96))
     f = TimeFunction(name='f', grid=grid)
@@ -122,6 +121,23 @@ def test_mixed_blocking_nthreads():
     assert len(op._state['autotuning'][0]['tuned']) == 3
     assert 'nthreads' in op._state['autotuning'][0]['tuned']
 
+
+@pytest.mark.parametrize('openmp, exp1', [
+    (False, 2), (True, 3)
+])
+def test_mixed_blocking_w_skewing(openmp, exp1):
+    grid = Grid(shape=(96, 96, 96))
+    f = TimeFunction(name='f', grid=grid)
+
+    op = Operator(Eq(f.forward, f + 1.), opt=('blocking','skewing', {'openmp': openmp}))
+    op.apply(time=0, autotune=True)
+    assert op._state['autotuning'][0]['runs'] == 6
+    assert op._state['autotuning'][0]['tpr'] == options['squeezer'] + 1
+    assert len(op._state['autotuning'][0]['tuned']) == exp1
+    if openmp:
+        assert 'nthreads' in op._state['autotuning'][0]['tuned']
+    else:
+        assert 'nthreads' not in op._state['autotuning'][0]['tuned']
 
 def test_tti_aggressive():
     from test_dse import TestTTI
