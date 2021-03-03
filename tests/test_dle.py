@@ -195,7 +195,7 @@ def test_cache_blocking_structure_multiple_efuncs():
 def test_cache_blocking_time_loop(shape, time_order, blockshape, blockinner):
     wo_blocking, _ = _new_operator2(shape, time_order, opt='noop')
     w_blocking, _ = _new_operator2(shape, time_order, blockshape,
-                                   opt=('blocking', {'blockinner': blockinner}))
+                                   opt=('blocking', 'skewing', {'blockinner': blockinner}))
     
     
     assert np.equal(wo_blocking.data, w_blocking.data).all()

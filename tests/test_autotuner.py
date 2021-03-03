@@ -122,10 +122,10 @@ def test_mixed_blocking_nthreads():
     assert 'nthreads' in op._state['autotuning'][0]['tuned']
 
 
-@pytest.mark.parametrize('openmp, exp1', [
+@pytest.mark.parametrize('openmp, expected', [
     (False, 2), (True, 3)
 ])
-def test_mixed_blocking_w_skewing(openmp, exp1):
+def test_mixed_blocking_w_skewing(openmp, expected):
     grid = Grid(shape=(96, 96, 96))
     f = TimeFunction(name='f', grid=grid)
 
@@ -133,7 +133,7 @@ def test_mixed_blocking_w_skewing(openmp, exp1):
     op.apply(time=0, autotune=True)
     assert op._state['autotuning'][0]['runs'] == 6
     assert op._state['autotuning'][0]['tpr'] == options['squeezer'] + 1
-    assert len(op._state['autotuning'][0]['tuned']) == exp1
+    assert len(op._state['autotuning'][0]['tuned']) == expected
     if openmp:
         assert 'nthreads' in op._state['autotuning'][0]['tuned']
     else:

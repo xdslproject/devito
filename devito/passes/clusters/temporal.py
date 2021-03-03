@@ -18,7 +18,7 @@ __all__ = ['skewing']
 def skewing(cluster, *args):
 
     """
-    Skew the accesses along the time Dimension.
+    Skew the accesses along a SEQUENTIAL Dimension.
     Example:
     
     Transform
@@ -38,18 +38,16 @@ def skewing(cluster, *args):
     end for
     """
     processed = []
-    # What dimensions so we target?
-    # 0) all sequential Dimensions
+    # What dimensions do we target?
+    # a) SEQUENTIAL Dimensions
     skew_dims = [] 
     for i in cluster.ispace:
         if SEQUENTIAL in cluster.properties[i.dim]:
             skew_dims.append(i.dim)
             
-    
     root_names = {i.dim.root.name for i in cluster.ispace.intervals if not i.dim in skew_dims}
 
     # Remove candidates
-    
     mapper, intervals = {}, []
     passed = []
 
@@ -79,11 +77,9 @@ def skewing(cluster, *args):
         processed = xreplace_indices(cluster.exprs, mapper)
 
     ispace = IterationSpace(intervals, cluster.ispace.sub_iterators, cluster.ispace.directions)
-    cluster = Cluster(processed, ispace, cluster.dspace, guards=cluster.guards, properties=cluster.properties)
-
-    print(ispace)    
-
-    print(mapper)    
-    return cluster # .rebuild(processed)
+    #cluster = Cluster(processed, ispace, cluster.dspace, guards=cluster.guards, properties=cluster.properties)
+    rebuilt_cluster = cluster.rebuild(exprs=processed, ispace=ispace)
+    
+    return rebuilt_cluster
 
 

@@ -18,7 +18,7 @@ def analyze(clusters):
 
     # Reconstruct Clusters attaching the discovered properties
     processed = [c.rebuild(properties=state.properties.get(c)) for c in clusters]
-    # 
+
     return processed
 
 

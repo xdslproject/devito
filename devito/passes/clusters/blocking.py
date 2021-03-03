@@ -112,7 +112,6 @@ def decompose(ispace, d, block_dims):
     Create a new IterationSpace in which the `d` Interval is decomposed
     into a hierarchy of Intervals over ``block_dims``.
     """
-    
     # Create the new Intervals
     intervals = []
     for i in ispace:
