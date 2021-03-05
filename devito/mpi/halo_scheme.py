@@ -443,7 +443,6 @@ def compute_local_indices(f, dims, ispace, scope):
     while in the last case it should be inserted at `t+1`.
     """
     loc_indices = {}
-
     for d in dims:
         try:
             func = Max if ispace.is_forward(d.root) else Min

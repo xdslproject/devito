@@ -246,7 +246,6 @@ def test_time_dependent_split(opt, expected):
     assert len(trees) == expected
     op()
 
-    
     assert np.allclose(u.data[2, :, :], 3.0)
     assert np.allclose(v.data[1, 1:-1, 1:-1], 1.0)
 
@@ -485,7 +484,6 @@ class TestAliases(object):
         op1 = Operator(eqn, opt=('advanced', {'openmp': True, 'cire-mincost-sops': 1,
                                               'cire-rotate': rotate}))
 
-
         # Check code generation
         xs, ys, zs = self.get_params(op1, 'x0_blk0_size', 'y0_blk0_size', 'z_size')
         arrays = [i for i in FindSymbols().visit(op1._func_table['bf0']) if i.is_Array]
@@ -498,7 +496,6 @@ class TestAliases(object):
         op1(time_M=1, u=u1)
 
         assert np.all(u.data == u1.data)
-
 
     @pytest.mark.parametrize('rotate', [False, True])
     def test_contracted_shape(self, rotate):
@@ -1298,7 +1295,7 @@ class TestAliases(object):
                                               'cire-mincost-inv': 28}))
 
         trees = retrieve_iteration_tree(op)
-        assert len(trees) == 2
+        assert len(trees) == 3
         arrays = [i for i in FindSymbols().visit(trees[0].root) if i.is_Array]
         assert len(arrays) == 2
         assert all(i._mem_heap and not i._mem_external for i in arrays)

@@ -1,13 +1,10 @@
 from collections import Counter
 
 from devito.ir.clusters import Queue
-from devito.ir.support import SEQUENTIAL, TILABLE, IntervalGroup, IterationSpace
-from devito.ir.support.space import Interval
-from devito.ir.clusters.cluster import Cluster
-from devito.symbolics import uxreplace, xreplace_indices
+from devito.ir.support import TILABLE, IntervalGroup, IterationSpace
+from devito.symbolics import uxreplace
 from devito.tools import timed_pass
 from devito.types import IncrDimension
-from devito.logger import warning
 
 
 __all__ = ['Blocking']
@@ -84,7 +81,7 @@ class Blocking(Queue):
 
         processed = []
         for c in clusters:
-            
+
             if TILABLE in c.properties[d]:
                 ispace = decompose(c.ispace, d, block_dims)
 

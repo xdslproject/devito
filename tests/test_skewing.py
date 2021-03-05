@@ -6,30 +6,21 @@ from operator import mul
 from sympy import Add, cos, sin, sqrt  # noqa
 import numpy as np
 
-from conftest import skipif
 from devito import Grid, TimeFunction, Eq, Operator, configuration, switchconfig, Le, Lt, Ge, Gt  # noqa
 
-from devito.data import LEFT
 from devito.core.autotuning import options  # noqa
 from devito import (NODE, Eq, Inc, Constant, Function, TimeFunction, SparseTimeFunction,  # noqa
                     Dimension, SubDimension, Grid, Operator, norm, grad, div, dimensions,
                     switchconfig, configuration, centered, first_derivative, solve,
                     transpose)
-from devito.exceptions import InvalidOperator
-from devito.finite_differences.differentiable import diffify
-from devito.ir import (DummyEq, Expression, Iteration, FindNodes, FindSymbols,
-                       ParallelIteration, retrieve_iteration_tree, Call, Conditional)
-from devito.ir.equations.algorithms import lower_exprs
-from devito.ir.iet import (Callable, Conditional, Expression, Iteration, TimedList,
-                           FindNodes, IsPerfectIteration, retrieve_iteration_tree)
-from devito.passes.iet.parpragma import VExpanded
-from devito.symbolics import ListInitializer, indexify, retrieve_indexed
-from devito.tools import as_tuple, timed_region, flatten, powerset
+from devito.ir import (Expression, Iteration, FindNodes,
+                       retrieve_iteration_tree, Call, Conditional)
+from devito.tools import as_tuple
 
 
 def get_blocksizes(op, opt, grid, blockshape, level=0):
     blocksizes = {'%s0_blk%d_size' % (d, level): v
-                for d, v in zip(grid.dimensions, blockshape)}
+                  for d, v in zip(grid.dimensions, blockshape)}
     blocksizes = {k: v for k, v in blocksizes.items() if k in op._known_arguments}
     # Sanity check
     if grid.dim == 1 or len(blockshape) == 0:
@@ -56,7 +47,7 @@ def _new_operator2(shape, time_order, blockshape=None, opt=None):
     outfield = TimeFunction(name='outfield', grid=grid, time_order=time_order)
 
     stencil = Eq(outfield.forward.indexify(),
-                outfield.indexify() + infield.indexify()*3.0)
+                 outfield.indexify() + infield.indexify()*3.0)
     op = Operator(stencil, opt=opt)
 
     blocksizes = get_blocksizes(op, opt, grid, blockshape)
@@ -106,7 +97,8 @@ class TestAutotuningWithSkewing(object):
         f = TimeFunction(name='f', grid=grid)
 
         eqn = Eq(f.forward, f + 1)
-        op = Operator(eqn, opt=('blocking', 'skewing', {'openmp': False, 'blockinner': True}))
+        op = Operator(eqn, opt=('blocking', 'skewing', {'openmp': False,
+                                                        'blockinner': True}))
 
         # Run with whatever `configuration` says (by default, basic+preemptive)
         op(time_M=0, autotune=True)
@@ -130,14 +122,14 @@ class TestAutotuningWithSkewing(object):
         assert op._state['autotuning'][-1]['runs'] == expected
         assert op._state['autotuning'][-1]['tpr'] == options['squeezer'] + 1
 
-
     @switchconfig(profiling='advanced')
     def test_mode_runtime_forward_w_skewing(self):
         """Test autotuning in runtime mode."""
         grid = Grid(shape=(96, 96, 96))
         f = TimeFunction(name='f', grid=grid)
 
-        op = Operator(Eq(f.forward, f + 1.), opt=('blocking', 'skewing', {'openmp': False}))
+        op = Operator(Eq(f.forward, f + 1.), opt=('blocking', 'skewing',
+                                                  {'openmp': False}))
         summary = op.apply(time=100, autotune=('basic', 'runtime'))
 
         # AT is expected to have attempted 6 block shapes
@@ -148,7 +140,6 @@ class TestAutotuningWithSkewing(object):
         assert np.all(f.data[0] == 100)
         assert np.all(f.data[1] == 101)
 
-
     @pytest.mark.parametrize('openmp, expected', [
         (False, 2), (True, 3)
     ])
@@ -156,7 +147,8 @@ class TestAutotuningWithSkewing(object):
         grid = Grid(shape=(96, 96, 96))
         f = TimeFunction(name='f', grid=grid)
 
-        op = Operator(Eq(f.forward, f + 1.), opt=('blocking','skewing', {'openmp': openmp}))
+        op = Operator(Eq(f.forward, f + 1.), opt=('blocking', 'skewing',
+                                                  {'openmp': openmp}))
         op.apply(time=0, autotune=True)
         assert op._state['autotuning'][0]['runs'] == 6
         assert op._state['autotuning'][0]['tpr'] == options['squeezer'] + 1
@@ -168,11 +160,10 @@ class TestAutotuningWithSkewing(object):
 
     def test_skewed_tti_aggressive(self):
         from test_dse import TestTTI
-        wave_solver = TestTTI().tti_operator(opt=('blocking','skewing'))
+        wave_solver = TestTTI().tti_operator(opt=('blocking', 'skewing'))
         op = wave_solver.op_fwd(kernel='centered')
         op.apply(time=0, autotune='aggressive')
         assert op._state['autotuning'][0]['runs'] == 30
-
 
     def test_multiple_skewed_blocking(self):
         """
@@ -189,7 +180,7 @@ class TestAutotuningWithSkewing(object):
         v = TimeFunction(name='v', grid=grid)
 
         op = Operator([Eq(u.forward, u + 1), Eq(v.forward, u.forward.dx2 + v + 1)],
-                    opt=('blocking', 'skewing', {'openmp': False}))
+                      opt=('blocking', 'skewing', {'openmp': False}))
 
         # First of all, make sure there are indeed two different loop nests
         assert 'bf0' in op._func_table
@@ -210,20 +201,19 @@ class TestAutotuningWithSkewing(object):
         # With OpenMP, we tune over one more argument (`nthreads`), though the AT
         # will only attempt one value
         op = Operator([Eq(u.forward, u + 1), Eq(v.forward, u.forward.dx2 + v + 1)],
-                    opt=('blocking', 'skewing', {'openmp': True}))
+                      opt=('blocking', 'skewing', {'openmp': True}))
         op.apply(time_M=0, autotune='basic')
         assert op._state['autotuning'][0]['runs'] == 12
         assert op._state['autotuning'][0]['tpr'] == options['squeezer'] + 1
         assert len(op._state['autotuning'][0]['tuned']) == 5
-
 
     def test_hierarchical_skewed_blocking(self):
         grid = Grid(shape=(64, 64, 64))
 
         u = TimeFunction(name='u', grid=grid, space_order=2)
 
-        op = Operator(Eq(u.forward, u + 1), opt=('blocking','skewing',
-                    {'openmp': False, 'blocklevels': 2}))
+        op = Operator(Eq(u.forward, u + 1), opt=('blocking', 'skewing',
+                      {'openmp': False, 'blocklevels': 2}))
 
         # 'basic' mode
         op.apply(time_M=0, autotune='basic')
@@ -236,7 +226,6 @@ class TestAutotuningWithSkewing(object):
         assert op._state['autotuning'][1]['runs'] == 38
         assert op._state['autotuning'][1]['tpr'] == options['squeezer'] + 1
         assert len(op._state['autotuning'][1]['tuned']) == 4
-
 
     @switchconfig(platform='cpu64-dummy')  # To fix the core count
     def test_multiple_threads_w_skewing(self):
@@ -269,23 +258,22 @@ class TestDseWithSkewing(object):
         # The second equation needs a full loop over x/y for u then
         # a full one over x.y for v
         eq = [Eq(u.forward, 2 + grid.time_dim),
-            Eq(v.forward, u.forward.dx + u.forward.dy + 1)]
+              Eq(v.forward, u.forward.dx + u.forward.dy + 1)]
         op = Operator(eq, opt=opt)
 
         trees = retrieve_iteration_tree(op)
         assert len(trees) == expected
         op()
 
-        
         assert np.allclose(u.data[2, :, :], 3.0)
         assert np.allclose(v.data[1, 1:-1, 1:-1], 1.0)
+
 
 class TestDleWithSkewing(object):
     """
     This class contains tests mainly inherited from test_dle.py
     Aims to test interoperability for skewing and prior DLE passes
     """
-
 
     @pytest.mark.parametrize("blockinner,exp_calls,exp_iters", [
         (False, 4, 5),
@@ -294,8 +282,8 @@ class TestDleWithSkewing(object):
     def test_cache_blocking_structure(self, blockinner, exp_calls, exp_iters):
         # Check code structure
         _, op = _new_operator2((10, 31, 45), time_order=2,
-                            opt=('blocking', 'skewing', {'blockinner': blockinner,
-                                                'par-collapse-ncores': 1}))
+                               opt=('blocking', 'skewing', {'blockinner': blockinner,
+                                    'par-collapse-ncores': 1}))
         calls = FindNodes(Call).visit(op)
         assert len(calls) == exp_calls
         trees = retrieve_iteration_tree(op._func_table['bf0'].root)
@@ -310,9 +298,8 @@ class TestDleWithSkewing(object):
 
         # Check presence of openmp pragmas at the right place
         _, op = _new_operator2((10, 31, 45), time_order=2,
-                            opt=('blocking', 'skewing', {'openmp': True,
-                                                'blockinner': blockinner,
-                                                'par-collapse-ncores': 1}))
+                               opt=('blocking', 'skewing', {'openmp': True,
+                                    'blockinner': blockinner, 'par-collapse-ncores': 1}))
         trees = retrieve_iteration_tree(op._func_table['bf0'].root)
         assert len(trees) == 1
         tree = trees[0]
@@ -328,39 +315,43 @@ class TestDleWithSkewing(object):
         assert len(conds) == len(expected_guarded)
         assert all(i.lhs == j.step for i, j in zip(conds, expected_guarded))
 
-    @pytest.mark.parametrize("shape", [(10,), (10, 45), (20, 33), (10, 31, 45), (45, 31, 45)])
+    @pytest.mark.parametrize("shape", [(10,), (10, 45), (20, 33), (10, 31, 45),
+                                       (45, 31, 45)])
     @pytest.mark.parametrize("time_order", [2])
     @pytest.mark.parametrize("blockshape", [2, (3, 3), (9, 20), (2, 9, 11), (7, 15, 23)])
     @pytest.mark.parametrize("blockinner", [False, True])
-    def test_cache_blocking_time_loop_skewed(self, shape, time_order, blockshape, blockinner):
+    def test_cache_blocking_time_loop_skewed(self, shape, time_order, blockshape,
+                                             blockinner):
         wo_blocking, wo_op = _new_operator2(shape, time_order, opt='noop')
-        
+
         w_blocking, w_op = _new_operator2(shape, time_order, blockshape,
-                                       opt=(('blocking', 'skewing'), {'blockinner': blockinner}))
-    
+                                          opt=(('blocking', 'skewing'),
+                                               {'blockinner': blockinner}))
+
         assert np.equal(wo_blocking.data, w_blocking.data).all()
 
-
     @pytest.mark.parametrize("shape,blockshape", [
-    ((25, 25, 46), (25, 25, 46)),
-    ((25, 25, 46), (7, 25, 46)),
-    ((25, 25, 46), (25, 25, 7)),
-    ((25, 25, 46), (25, 7, 46)),
-    ((25, 25, 46), (5, 25, 7)),
-    ((25, 25, 46), (10, 3, 46)),
-    ((25, 25, 46), (25, 7, 11)),
-    ((25, 25, 46), (8, 2, 4)),
-    ((25, 25, 46), (2, 4, 8)),
-    ((25, 25, 46), (4, 8, 2)),
-    ((25, 46), (25, 7)),
-    ((25, 46), (7, 46))
+                            ((25, 25, 46), (25, 25, 46)),
+                            ((25, 25, 46), (7, 25, 46)),
+                            ((25, 25, 46), (25, 25, 7)),
+                            ((25, 25, 46), (25, 7, 46)),
+                            ((25, 25, 46), (5, 25, 7)),
+                            ((25, 25, 46), (10, 3, 46)),
+                            ((25, 25, 46), (25, 7, 11)),
+                            ((25, 25, 46), (8, 2, 4)),
+                            ((25, 25, 46), (2, 4, 8)),
+                            ((25, 25, 46), (4, 8, 2)),
+                            ((25, 46), (25, 7)),
+                            ((25, 46), (7, 46))
     ])
     def test_cache_blocking_edge_cases(self, shape, blockshape):
         time_order = 2
         wo_blocking, _ = _new_operator2(shape, time_order, opt='noop')
         w_blocking, _ = _new_operator2(shape, time_order, blockshape,
-                                       opt=(('blocking', 'skewing'), {'blockinner': True}))
+                                       opt=(('blocking', 'skewing'),
+                                            {'blockinner': True}))
         assert np.equal(wo_blocking.data, w_blocking.data).all()
+
 
 class TestCodeGenSkew(object):
 
@@ -369,11 +360,11 @@ class TestCodeGenSkew(object):
     '''
     @pytest.mark.parametrize('expr, expected', [
         (['Eq(u.forward, u + 1)',
-        'Eq(u[t1,x-time+1,y-time+1,z-time+1],u[t0,x-time+1,y-time+1,z-time+1]+1)']),
-        (['Eq(u.forward, u + v + 1)',
-        'Eq(u[t1,x-time+1,y-time+1,z-time+1],u[t0,x-time+1,y-time+1,z-time+1]+v[t0,x-time+1,y-time+1,z-time+1]+1)']),
+          'Eq(u[t1,x-time+1,y-time+1,z-time+1],u[t0,x-time+1,y-time+1,z-time+1]+1)']),
+        (['Eq(u.forward, v + 1)',
+          'Eq(u[t1,x-time+1,y-time+1,z-time+1],v[t0,x-time+1,y-time+1,z-time+1]+1)']),
         (['Eq(u, v + 1)',
-        'Eq(u[t0,x-time+1,y-time+1,z-time+1],v[t0,x-time+1,y-time+1,z-time+1]+1)']),
+          'Eq(u[t0,x-time+1,y-time+1,z-time+1],v[t0,x-time+1,y-time+1,z-time+1]+1)']),
     ])
     def test_skewed_bounds(self, expr, expected):
         """Tests code generation on skewed indices."""

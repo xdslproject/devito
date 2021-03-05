@@ -550,8 +550,8 @@ class TestDependenceAnalysis(object):
         """
         grid = Grid(shape=(4, 4, 4))
         x, y, z = grid.dimensions  # noqa
-        time = grid.time_dim
-        
+        time = grid.time_dim  # noqa
+
         sx = SubDimension.middle('sx', x, 1, 1)  # noqa
 
         u = Function(name='u', grid=grid)  # noqa
