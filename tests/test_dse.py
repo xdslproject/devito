@@ -230,8 +230,8 @@ def test_makeit_ssa(exprs, exp_u, exp_v):
     assert np.all(v.data == exp_v)
 
 
-@pytest.mark.parametrize('opt, expected', (['noop', 2], ['advanced', 2]))
-def test_time_dependent_split(opt, expected):
+@pytest.mark.parametrize('opt', ['noop', 'advanced'])
+def test_time_dependent_split(opt):
     grid = Grid(shape=(10, 10))
     u = TimeFunction(name='u', grid=grid, time_order=2, space_order=2, save=3)
     v = TimeFunction(name='v', grid=grid, time_order=2, space_order=0, save=3)
@@ -243,7 +243,8 @@ def test_time_dependent_split(opt, expected):
     op = Operator(eq, opt=opt)
 
     trees = retrieve_iteration_tree(op)
-    assert len(trees) == expected
+    assert len(trees) == 2
+
     op()
 
     assert np.allclose(u.data[2, :, :], 3.0)
@@ -494,7 +495,6 @@ class TestAliases(object):
         # Check numerical output
         op0(time_M=1)
         op1(time_M=1, u=u1)
-
         assert np.all(u.data == u1.data)
 
     @pytest.mark.parametrize('rotate', [False, True])

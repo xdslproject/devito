@@ -6,7 +6,6 @@ from devito.symbolics import uxreplace
 from devito.tools import timed_pass
 from devito.types import IncrDimension
 
-
 __all__ = ['Blocking']
 
 
@@ -65,6 +64,7 @@ class Blocking(Queue):
             return clusters
 
         d = prefix[-1].dim
+
         # Create the block Dimensions (in total `self.levels` Dimensions)
         name = self.template % (d.name, self.nblocked[d], '%d')
 
@@ -81,7 +81,6 @@ class Blocking(Queue):
 
         processed = []
         for c in clusters:
-
             if TILABLE in c.properties[d]:
                 ispace = decompose(c.ispace, d, block_dims)
 
