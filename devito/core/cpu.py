@@ -90,7 +90,6 @@ class Cpu64OperatorMixin(object):
         # Blocking
         o['blockinner'] = oo.pop('blockinner', False)
         o['blocklevels'] = oo.pop('blocklevels', cls.BLOCK_LEVELS)
-
         o['skewing'] = oo.pop('skewing', False)
 
         # CIRE

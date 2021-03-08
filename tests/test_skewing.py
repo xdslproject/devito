@@ -244,7 +244,7 @@ class TestAutotuningWithSkewing(object):
         assert len(op._state['autotuning'][0]['tuned']) == 3
 
 
-class TestDseWithSkewing(object):
+class TestDSEWithSkewing(object):
     """
     This class contains tests mainly inherited from test_dse.py
     Aims to test interoperability for skewing and prior dse passes
@@ -269,7 +269,7 @@ class TestDseWithSkewing(object):
         assert np.allclose(v.data[1, 1:-1, 1:-1], 1.0)
 
 
-class TestDleWithSkewing(object):
+class TestDLEWithSkewing(object):
     """
     This class contains tests mainly inherited from test_dle.py
     Aims to test interoperability for skewing and prior DLE passes
