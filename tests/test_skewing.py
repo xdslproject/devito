@@ -2,11 +2,8 @@ import pytest
 from functools import reduce
 from operator import mul
 
-
 from sympy import Add, cos, sin, sqrt  # noqa
 import numpy as np
-
-from devito import Grid, TimeFunction, Eq, Operator, configuration, switchconfig, Le, Lt, Ge, Gt  # noqa
 
 from devito.core.autotuning import options  # noqa
 from devito import (NODE, Eq, Inc, Constant, Function, TimeFunction, SparseTimeFunction,  # noqa

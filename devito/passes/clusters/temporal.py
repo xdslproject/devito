@@ -58,7 +58,7 @@ def skewing(cluster, *args):
     # Skew dim will not be none here:
     # Initializing a default skewed dim index position in loop
     skew_index = 0
-    skew_dim = skew_dims[skew_index]  # Skew first one
+    skew_dim = skew_dims.pop()  # Skew first one
 
     mapper, intervals, processed = {}, [], []
 
@@ -73,6 +73,8 @@ def skewing(cluster, *args):
             intervals.append(i)
 
         processed = xreplace_indices(cluster.exprs, mapper)
+
+    assert len(skewable) == 0
 
     ispace = IterationSpace(intervals, cluster.ispace.sub_iterators,
                             cluster.ispace.directions)
