@@ -7,7 +7,6 @@ from devito.tools import timed_pass
 from devito.types import IncrDimension
 
 from devito.ir.support import SEQUENTIAL, PARALLEL, Interval
-from devito.logger import warning
 from devito.symbolics import xreplace_indices
 
 __all__ = ['Blocking', 'Skewing']
@@ -233,38 +232,34 @@ def skew(ispace, exprs, properties, d):
     # Iterate over the iteration space and assign dimensions to skew or skewable
     # depending on their properties
 
-    skew_dims, skewable = [], []
-    skewable.append(d)
-
-    for dim in ispace.intervals.dimensions:
-        if SEQUENTIAL in properties[dim] and not dim.symbolic_incr.is_Symbol:
-            skew_dims.append(dim)
-
-    if len(skew_dims) > 1:
-        raise warning("More than 1 dimensions that can be skewed.\
-                    Skewing the first in the list")
-    elif len(skew_dims) == 0:
-        # No dimensions to skew against -> nothing to do, return
-        return ispace, exprs
-
     # Skew dim will not be none here:
     # Initializing a default skewed dim index position in loop
-    skew_dim = skew_dims.pop()  # Skew first one
 
     mapper, intervals, processed = {}, [], []
 
-    for i in ispace.intervals:
-        # Skew a dim if nested under skew_dim and is prefix:
-        if ispace.intervals.index(skew_dim) < ispace.intervals.index(i) and i.dim == d:
-            mapper[i.dim] = i.dim - skew_dim
-            intervals.append(Interval(i.dim, skew_dim, skew_dim))
-        # Do not touch otherwise
-        else:
-            intervals.append(i)
+    # Identify a skew_dim and its position
+    skew_flag = False
+    for n, i in enumerate(ispace):
+        if SEQUENTIAL in properties[i.dim] and not i.dim.symbolic_incr.is_Symbol:
+            skew_dim = i.dim
+            skew_pos = n
+            skew_flag = True
+            break
+
+    if skew_flag:
+        for i in ispace.intervals:
+            # Skew a dim if nested under skew_dim and is prefix:
+            if skew_pos < ispace.intervals.index(i) and i.dim == d:
+                mapper[i.dim] = i.dim - skew_dim
+                intervals.append(Interval(i.dim, skew_dim, skew_dim))
+            # Do not touch otherwise
+            else:
+                intervals.append(i)
 
         processed = xreplace_indices(exprs, mapper)
-
-    ispace = IterationSpace(intervals, ispace.sub_iterators,
-                            ispace.directions)
+        ispace = IterationSpace(intervals, ispace.sub_iterators,
+                                ispace.directions)
+    else:
+        return ispace, exprs
 
     return ispace, processed
