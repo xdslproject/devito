@@ -169,7 +169,15 @@ class Tiling(Detector):
 
     def _callback(self, clusters, d, prefix):
         # A Dimension is TILABLE only if it's PARALLEL and AFFINE
+
+        # import pdb;pdb.set_trace()
+
         properties = self._fetch_properties(clusters, prefix)
+
+        if {SEQUENTIAL, AFFINE} <= properties[d]:
+            return TILABLE
+
+
         if not {PARALLEL, AFFINE} <= properties[d]:
             return
 

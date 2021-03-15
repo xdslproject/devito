@@ -696,8 +696,14 @@ class Operator(Callable):
         threshold = 20.
 
         def _emit_timings(timings, indent=''):
+            import pdb;pdb.set_trace()
             timings.pop('total', None)
-            entries = sorted(timings, key=lambda i: timings[i]['total'], reverse=True)
+            entries = []
+            try:
+                entries = sorted(timings, key=lambda i: timings[i]['total'], reverse=True)
+            except KeyError:
+                pass
+
             for i in entries[:max_hotspots]:
                 v = fround(timings[i]['total'])
                 perc = fround(v/tot*100, n=10)
