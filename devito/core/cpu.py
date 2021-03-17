@@ -355,7 +355,7 @@ class Cpu64CustomOperator(Cpu64OperatorMixin, CustomOperator):
         'buffering',
         # Clusters
         'blocking', 'skewing', 'topofuse', 'fuse', 'factorize', 'cire-sops', 'cire-divs',
-        'cse', 'lift', 'opt-pows'
+        'cse', 'lift', 'opt-pows',
         # IET
         'denormals', 'optcomms', 'openmp', 'mpi', 'simd', 'prodders',
     )
