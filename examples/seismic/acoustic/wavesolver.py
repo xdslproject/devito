@@ -5,7 +5,7 @@ from examples.seismic.acoustic.operators import (
 )
 from examples.checkpointing.checkpoint import DevitoCheckpoint, CheckpointOperator
 from pyrevolve import Revolver
-import pyvista as pv
+# import pyvista as pv
 import matplotlib.pyplot as plt
 import numpy as np
 from devito.types.basic import Scalar
@@ -253,18 +253,18 @@ class AcousticWaveSolver(object):
 
         performance_map = np.array([[0, 0, 0, 0, 0]])
 
-        bxstart = 4
-        bxend = 9
-        bystart = 4
-        byend = 9
-        bstep = 4
+        bxstart = 16 
+        bxend = 18 
+        bystart = 16
+        byend = 18
+        bstep = 17
 
-        txstart = 32
-        txend = 65
-        tystart = 32
-        tyend = 65
+        txstart = 128
+        txend = 129
+        tystart = 128
+        tyend = 129
 
-        tstep = 32
+        tstep = 140
         # Temporal autotuning
         for tx in range(txstart, txend, tstep):
             # import pdb; pdb.set_trace()
@@ -335,7 +335,7 @@ class AcousticWaveSolver(object):
                 plt.savefig(str(shape[0]) + str(np.int32(tx)) + str(np.int32(ty)) + ".pdf")
 
 
-        if 1:
+        if 0:
             cmap = plt.cm.get_cmap("viridis")
             values = u.data[0, :, :, :]
             vistagrid = pv.UniformGrid()
