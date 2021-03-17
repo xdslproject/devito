@@ -166,15 +166,11 @@ class Skewing(Queue):
 
     def __init__(self, options):
 
-        self.nskewed = Counter()
-
         super(Skewing, self).__init__()
 
     @timed_pass(name='skewing')
     def process(self, clusters):
-        processed = super(Skewing, self).process(clusters)
-
-        return processed
+        return super(Skewing, self).process(clusters)
 
     def _process_fdta(self, clusters, level, prefix=None):
 

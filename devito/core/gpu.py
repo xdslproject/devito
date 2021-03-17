@@ -293,8 +293,8 @@ class DeviceCustomOperator(DeviceOperatorMixin, CustomOperator):
         # Expressions
         'buffering',
         # Clusters
-        'blocking', 'tasking', 'streaming', 'factorize', 'fuse', 'lift',
-        'cire-sops', 'cire-divs', 'cse', 'opt-pows', 'topofuse', 'skewing',
+        'blocking', 'skewing', 'tasking', 'streaming', 'factorize', 'fuse',
+        'lift', 'cire-sops', 'cire-divs', 'cse', 'opt-pows', 'topofuse',
         # IET
         'optcomms', 'orchestrate', 'parallel', 'mpi', 'prodders', 'gpu-direct'
     )

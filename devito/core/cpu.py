@@ -3,8 +3,8 @@ from functools import partial
 from devito.core.operator import CoreOperator, CustomOperator
 from devito.exceptions import InvalidOperator
 from devito.passes.equations import buffering, collect_derivatives
-from devito.passes.clusters import (Blocking, Lift, cire, cse, eliminate_arrays, fuse,
-                                    extract_increments, factorize, optimize_pows, Skewing)
+from devito.passes.clusters import (Blocking, Skewing, Lift, cire, cse, eliminate_arrays,
+                                    fuse, extract_increments, factorize, optimize_pows)
 from devito.passes.iet import (CTarget, OmpTarget, avoid_denormals, mpiize,
                                optimize_halospots, hoist_prodders, relax_incr_dimensions)
 from devito.tools import timed_pass
@@ -325,7 +325,7 @@ class Cpu64CustomOperator(Cpu64OperatorMixin, CustomOperator):
             'cire-divs': lambda i: cire(i, 'divs', sregistry, options, platform),
             'cse': lambda i: cse(i, sregistry),
             'opt-pows': optimize_pows,
-            'topofuse': lambda i: fuse(i, toposort=True),
+            'topofuse': lambda i: fuse(i, toposort=True)
         }
 
     @classmethod
@@ -354,8 +354,8 @@ class Cpu64CustomOperator(Cpu64OperatorMixin, CustomOperator):
         # Expressions
         'buffering',
         # Clusters
-        'blocking', 'topofuse', 'fuse', 'factorize', 'cire-sops', 'cire-divs',
-        'cse', 'lift', 'opt-pows', 'skewing',
+        'blocking', 'skewing', 'topofuse', 'fuse', 'factorize', 'cire-sops', 'cire-divs',
+        'cse', 'lift', 'opt-pows'
         # IET
         'denormals', 'optcomms', 'openmp', 'mpi', 'simd', 'prodders',
     )
