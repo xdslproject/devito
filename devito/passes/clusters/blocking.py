@@ -164,38 +164,6 @@ def decompose(ispace, d, block_dims):
 
 class Skewing(Queue):
 
-    def __init__(self, options):
-
-        super(Skewing, self).__init__()
-
-    @timed_pass(name='skewing')
-    def process(self, clusters):
-        return super(Skewing, self).process(clusters)
-
-    def _process_fdta(self, clusters, level, prefix=None):
-
-        return super(Skewing, self)._process_fdta(clusters, level, prefix)
-
-    def callback(self, clusters, prefix):
-        if not prefix:
-            return clusters
-
-        d = prefix[-1].dim
-
-        processed = []
-        for c in clusters:
-            if PARALLEL in c.properties[d] and not d.symbolic_incr.is_Symbol:
-                ispace, exprs = skew(c.ispace, c.exprs, c.properties, d)
-                processed.append(c.rebuild(exprs=exprs, ispace=ispace,
-                                           properties=c.properties))
-            else:
-                processed.append(c)
-
-        return processed
-
-
-def skew(ispace, exprs, properties, d):
-
     """
     Create a new IterationSpace and skew expressions
     Skew the accesses along a SEQUENTIAL Dimension.
@@ -220,42 +188,43 @@ def skew(ispace, exprs, properties, d):
     end for
     """
 
-    # What dimensions should we skew against?
-    # e.g. SEQUENTIAL Dimensions (Usually time in FD solvers, but not only limited
-    # to this)
-    # What dimensions should be skewed?
-    # e.g. PARALLEL dimensions (x, y, z) but not blocking ones (x_blk0, y_blk0)
-    # Iterate over the iteration space and assign dimensions to skew or skewable
-    # depending on their properties
+    def callback(self, clusters, prefix):
+        if not prefix:
+            return clusters
 
-    # Skew dim will not be none here:
-    # Initializing a default skewed dim index position in loop
+        d = prefix[-1].dim
 
-    mapper, intervals, processed = {}, [], []
+        processed_clusters = []
+        for c in clusters:
+            # Explore skewing possibilities only in case prefix is parallel and
+            # is not block-incrementing
+            if PARALLEL in c.properties[d] and not d.symbolic_incr.is_Symbol:
+                mapper, intervals = {}, []
+                skew_dim = None
+                # Traverse cluster's iteration space
+                for n, i in enumerate(c.ispace):
+                    # Identify a skew_dim and its position
+                    if (SEQUENTIAL in c.properties[i.dim]
+                       and not i.dim.symbolic_incr.is_Symbol):
+                        skew_dim = i.dim
+                        intervals.append(i)
+                    # Since we are here, prefix is skewable and nested under a
+                    # SEQUENTIAL loop. Do not skew innermost loop
+                    elif (i.dim == d and not i.dim == c.ispace[-1].dim and
+                          skew_dim is not None):
+                        mapper[i.dim] = i.dim - skew_dim
+                        intervals.append(Interval(i.dim, skew_dim, skew_dim))
+                    # End-up here if dimensions is neither skewable or skewed against
+                    else:
+                        intervals.append(i)
 
-    # Identify a skew_dim and its position
-    skew_flag = False
-    for n, i in enumerate(ispace):
-        if SEQUENTIAL in properties[i.dim] and not i.dim.symbolic_incr.is_Symbol:
-            skew_dim = i.dim
-            skew_pos = n
-            skew_flag = True
-            break
-
-    if skew_flag:
-        for i in ispace.intervals:
-            # Skew a dim if nested under skew_dim and is prefix:
-            if skew_pos < ispace.intervals.index(i) and i.dim == d:
-                mapper[i.dim] = i.dim - skew_dim
-                intervals.append(Interval(i.dim, skew_dim, skew_dim))
-            # Do not touch otherwise
+                processed_exprs = xreplace_indices(c.exprs, mapper)
+                ispace = IterationSpace(intervals, c.ispace.sub_iterators,
+                                        c.ispace.directions)
+                processed_clusters.append(c.rebuild(exprs=processed_exprs, ispace=ispace,
+                                                    properties=c.properties))
+            # No skewing is happening, pass
             else:
-                intervals.append(i)
+                processed_clusters.append(c)
 
-        processed = xreplace_indices(exprs, mapper)
-        ispace = IterationSpace(intervals, ispace.sub_iterators,
-                                ispace.directions)
-    else:
-        return ispace, exprs
-
-    return ispace, processed
+        return processed_clusters

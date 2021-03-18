@@ -316,7 +316,7 @@ class Cpu64CustomOperator(Cpu64OperatorMixin, CustomOperator):
 
         return {
             'blocking': Blocking(options).process,
-            'skewing': Skewing(options).process,
+            'skewing': Skewing().process,
             'factorize': factorize,
             'fuse': fuse,
             'lift': lambda i: Lift().process(cire(i, 'invariants', sregistry,
