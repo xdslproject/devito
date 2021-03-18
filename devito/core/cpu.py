@@ -84,6 +84,8 @@ class Cpu64OperatorMixin(object):
         o['blocklevels'] = oo.pop('blocklevels', cls.BLOCK_LEVELS)
         o['skewing'] = oo.pop('skewing', False)
 
+        o['skewing'] = oo.pop('skewing', False)
+
         # CIRE
         o['min-storage'] = oo.pop('min-storage', False)
         o['cire-rotate'] = oo.pop('cire-rotate', False)

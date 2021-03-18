@@ -7,7 +7,7 @@ from devito.exceptions import InvalidOperator
 from devito.passes.equations import collect_derivatives, buffering
 from devito.passes.clusters import (Lift, Streaming, Tasker, blocking, cire, cse,
                                     eliminate_arrays, extract_increments, factorize,
-                                    fuse, optimize_pows)
+                                    fuse, optimize_pows, Skewing)
 from devito.passes.iet import (DeviceOmpTarget, DeviceAccTarget, optimize_halospots,
                                mpiize, hoist_prodders, is_on_device)
 from devito.tools import as_tuple, timed_pass
@@ -64,6 +64,7 @@ class DeviceOperatorMixin(object):
         # Blocking
         o['blockinner'] = oo.pop('blockinner', True)
         o['blocklevels'] = oo.pop('blocklevels', cls.BLOCK_LEVELS)
+        o['skewing'] = oo.pop('skewing', False)
 
         # CIRE
         o['min-storage'] = False

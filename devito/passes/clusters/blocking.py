@@ -6,6 +6,7 @@ from devito.ir.support import (SEQUENTIAL, SKEWABLE, TILABLE, Interval, Interval
 from devito.symbolics import uxreplace
 from devito.types import IncrDimension
 
+
 from devito.symbolics import xreplace_indices
 
 __all__ = ['blocking']
