@@ -225,8 +225,6 @@ def decompose_sequential(ispace, d, block_dims):
 
     intervals = IntervalGroup(intervals, relations=relations)
 
-
-
     sub_iterators = dict(ispace.sub_iterators)
     sub_iterators.pop(d, None)
     # sub_iterators.update({d: ispace.sub_iterators.get(d, [])})

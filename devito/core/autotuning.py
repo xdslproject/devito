@@ -70,6 +70,7 @@ def autotune(operator, args, level, mode):
 
     # Detect the time-stepping Iteration; shrink its iteration range so that
     # each autotuning run only takes a few iterations
+    import pdb;pdb.set_trace()
     steppers = {i for i in flatten(trees) if i.dim.is_Time}
     if len(steppers) == 0:
         stepper = None

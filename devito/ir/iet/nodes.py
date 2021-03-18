@@ -753,7 +753,7 @@ class TimedList(List):
     def __init__(self, timer, lname, body):
         self._name = lname
         self._timer = timer
-
+        import pdb;pdb.set_trace()
         super().__init__(header=c.Line('START_TIMER(%s)' % lname),
                          body=body,
                          footer=c.Line('STOP_TIMER(%s,%s)' % (lname, timer.name)))

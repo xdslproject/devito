@@ -14,7 +14,7 @@ def instrument(graph, **kwargs):
     # Construct a fresh Timer object
     profiler = kwargs['profiler']
     timer = Timer(profiler.name, list(profiler.all_sections))
-
+    import pdb;pdb.set_trace()
     instrument_sections(graph, timer=timer, **kwargs)
 
 
@@ -62,7 +62,6 @@ def instrument_sections(iet, **kwargs):
     """
     profiler = kwargs['profiler']
     timer = kwargs['timer']
-
     piet = profiler.instrument(iet, timer)
 
     if piet is iet:
@@ -70,4 +69,5 @@ def instrument_sections(iet, **kwargs):
 
     headers = [TimedList._start_timer_header(), TimedList._stop_timer_header()]
 
+    import pdb;pdb.set_trace()
     return piet, {'args': timer, 'headers': headers}

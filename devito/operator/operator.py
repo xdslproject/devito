@@ -696,7 +696,6 @@ class Operator(Callable):
         threshold = 20.
 
         def _emit_timings(timings, indent=''):
-            import pdb;pdb.set_trace()
             timings.pop('total', None)
             entries = []
             try:
