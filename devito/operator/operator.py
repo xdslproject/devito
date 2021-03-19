@@ -186,8 +186,12 @@ class Operator(Callable):
         # Lower Clusters to a ScheduleTree
         stree = cls._lower_stree(clusters, **kwargs)
 
+
         # Lower ScheduleTree to an Iteration/Expression Tree
         iet, byproduct = cls._lower_iet(stree, profiler, **kwargs)
+
+        print(iet)
+        import pdb;pdb.set_trace()
 
         # Make it an actual Operator
         op = Callable.__new__(cls, **iet.args)
@@ -374,7 +378,9 @@ class Operator(Callable):
         # Build an IET from a ScheduleTree
         iet = iet_build(stree)
 
+        print(iet)
         # Analyze the IET Sections for C-level profiling
+        import pdb;pdb.set_trace()
         profiler.analyze(iet)
 
         # Wrap the IET with an EntryFunction (a special Callable representing

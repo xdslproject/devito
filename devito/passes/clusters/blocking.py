@@ -125,6 +125,7 @@ class Blocking(Queue):
                 print(properties)
                 processed.append(c.rebuild(exprs=exprs, ispace=ispace,
                                            properties=properties))
+                self.nblocked[d] += 1
             else:
                 processed.append(c)
 
@@ -205,9 +206,21 @@ def decompose(ispace, d, block_dims):
 
     intervals = IntervalGroup(intervals, relations=relations)
 
-    sub_iterators = dict(ispace.sub_iterators)
-    sub_iterators.pop(d, None)
-    sub_iterators.update({bd: ispace.sub_iterators.get(d, []) for bd in block_dims})
+    #import pdb;pdb.set_trace()
+    if not d.is_Time:
+        sub_iterators = dict(ispace.sub_iterators)
+        sub_iterators.pop(d, None)
+        sub_iterators.update({bd: ispace.sub_iterators.get(d, []) for bd in block_dims})
+    else:
+        sub_iterators = dict(ispace.sub_iterators)
+        sub_iterators.pop(d, None)
+        for bd in block_dims:
+            if bd.symbolic_incr.is_Symbol:
+                sub_iterators.update({bd: ()})
+            else:
+                sub_iterators.update({bd: ispace.sub_iterators.get(d, [])})
+
+    #import pdb;pdb.set_trace()
 
     directions = dict(ispace.directions)
     directions.pop(d)
