@@ -12,7 +12,6 @@ def iet_build(stree):
     """
     Construct an Iteration/Expression tree(IET) from a ScheduleTree.
     """
-    import pdb;pdb.set_trace()
     nsections = 0
     queues = OrderedDict()
     for i in stree.visit():

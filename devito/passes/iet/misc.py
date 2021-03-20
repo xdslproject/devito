@@ -62,10 +62,13 @@ def relax_incr_dimensions(iet, **kwargs):
     ElementalCalls to iterate over the "main" and "remainder" regions induced
     by the IncrDimensions.
     """
+
     sregistry = kwargs['sregistry']
     import pdb;pdb.set_trace()
     efuncs = []
     mapper = {}
+    return iet, {'efuncs': efuncs}
+
     for tree in retrieve_iteration_tree(iet):
         import pdb;pdb.set_trace()
 
