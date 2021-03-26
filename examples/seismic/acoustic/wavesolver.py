@@ -1,4 +1,4 @@
-from devito import Function, TimeFunction, norm, Operator, Dimension, Scalar, Eq, Inc, configuration
+from devito import Function, TimeFunction, norm, Operator, Dimension, Eq, Inc, configuration
 from devito.tools import memoized_meth
 from examples.seismic.acoustic.operators import (
     ForwardOperator, AdjointOperator, GradientOperator, BornOperator
