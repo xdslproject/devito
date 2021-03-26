@@ -21,11 +21,9 @@
     * `cire-rotate` (boolean, False): smaller working set size, fewer parallel dimensions
     * `cire-maxpar` (boolean, False): bigger working set size, more parallelism
     * `cire-maxalias` (boolean, False): bigger working set size, better flop count
-    * `cire-repeats-sops` (int, 5): control detection of sum-of-products
+    * `cire-ftemps` (boolean, False): give user control over the allocated temporaries
     * `cire-mincost-sops` (int, 10): minimum cost of a sum-of-product candidate
-    * `cire-repeats-inv` (int, 1): control detection of dimension-invariants
     * `cire-mincost-inv` (int, 50): minimum cost of a dimension-invariant candidate
-    * `cire-onstack` (boolean, False): control scope of temporary arrays (on the heap by default)
   * Device-specific:
     * `gpu-fit` (boolean, False): list of saved TimeFunctions that fit in the device memory
     * `gpu-direct` (boolean, False): generate code for optimized GPU-aware MPI
@@ -56,15 +54,13 @@
 
 |                     |        CPU          |         GPU        |
 |---------------------|---------------------|--------------------|
-| minstorage          | :heavy_check_mark:  |         :x:        |
+| min-storage         | :heavy_check_mark:  |         :x:        |
 | cire-rotate         | :heavy_check_mark:  |         :x:        |
 | cire-maxpar         | :heavy_check_mark:  | :heavy_check_mark: |
 | cire-maxalias       | :heavy_check_mark:  | :heavy_check_mark: |
-| cire-repeats-sops   | :heavy_check_mark:  | :heavy_check_mark: |
+| cire-ftemps         | :heavy_check_mark:  | :heavy_check_mark: |
 | cire-mincost-sops   | :heavy_check_mark:  | :heavy_check_mark: |
-| cire-repeats-inv    | :heavy_check_mark:  | :heavy_check_mark: |
 | cire-mincost-inv    | :heavy_check_mark:  | :heavy_check_mark: |
-| cire-onstack        | :heavy_check_mark:  |         :x:        |
 
 * Device-specific
 

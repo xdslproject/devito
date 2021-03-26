@@ -69,13 +69,14 @@ class Blocking(Queue):
         name = self.template % (d.name, self.nblocked[d], '%d')
 
         bd = IncrDimension(name % 0, d, d.symbolic_min, d.symbolic_max)
+        size = bd.step
         block_dims = [bd]
 
         for i in range(1, self.levels):
-            bd = IncrDimension(name % i, bd, bd, bd + bd.step - 1)
+            bd = IncrDimension(name % i, bd, bd, bd + bd.step - 1, size=size)
             block_dims.append(bd)
 
-        bd = IncrDimension(d.name, bd, bd, bd + bd.step - 1, 1)
+        bd = IncrDimension(d.name, bd, bd, bd + bd.step - 1, 1, size=size)
         block_dims.append(bd)
 
         processed = []
@@ -141,9 +142,13 @@ def decompose(ispace, d, block_dims):
                 else:
                     relations.append([i.dim, bd])
         elif n > ispace.intervals.index(d):
-            # All other non-Incr, subsequent Dimensions must follow the block Dimensions
+            # The non-Incr subsequent Dimensions must follow the block Dimensions
             for bd in block_dims:
                 relations.append([bd, i.dim])
+        else:
+            # All other Dimensions must precede the block Dimensions
+            for bd in block_dims:
+                relations.append([i.dim, bd])
 
     intervals = IntervalGroup(intervals, relations=relations)
 

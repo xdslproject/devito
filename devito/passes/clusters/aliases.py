@@ -5,22 +5,22 @@ from itertools import groupby
 from cached_property import cached_property
 import numpy as np
 
-from devito.ir import (SEQUENTIAL, PARALLEL, ROUNDABLE, DataSpace, Forward,
-                       IterationInstance, IterationSpace, Interval, IntervalGroup,
-                       LabeledVector, Scope, detect_accesses, build_intervals,
-                       normalize_properties)
-from devito.passes.clusters.utils import cluster_pass, make_is_time_invariant
-from devito.symbolics import (compare_ops, estimate_cost, q_constant, q_terminalop,
-                              retrieve_indexed, search, uxreplace)
-from devito.tools import flatten, split
-from devito.types import (Array, Eq, Scalar, ModuloDimension, ShiftedDimension,
-                          CustomDimension)
+from devito.ir import (SEQUENTIAL, PARALLEL, PARALLEL_IF_PVT, ROUNDABLE, DataSpace,
+                       Forward, IterationInstance, IterationSpace, Interval,
+                       IntervalGroup, LabeledVector, Context, detect_accesses,
+                       build_intervals, normalize_properties)
+from devito.passes.clusters.utils import timed_pass
+from devito.symbolics import (Uxmapper, compare_ops, estimate_cost, q_constant,
+                              q_leaf, retrieve_indexed, search, uxreplace)
+from devito.tools import as_tuple, flatten, split
+from devito.types import (Array, TempFunction, Eq, Scalar, ModuloDimension,
+                          CustomDimension, IncrDimension)
 
 __all__ = ['cire']
 
 
-@cluster_pass
-def cire(cluster, mode, sregistry, options, platform):
+@timed_pass(name='cire')
+def cire(clusters, mode, sregistry, options, platform):
     """
     Cross-iteration redundancies elimination.
 
@@ -81,173 +81,209 @@ def cire(cluster, mode, sregistry, options, platform):
     t0 = 2.0*t2[x,y,z]
     t1 = 3.0*t2[x,y,z+1]
     """
-    # Relevant options
-    repeats = options['cire-repeats']
+    if mode == 'invariants':
+        space = ('inv-basic', 'inv-compound')
+    elif mode in ('sops',):
+        space = (mode,)
+    else:
+        assert False, "Unknown CIRE mode `%s`" % mode
 
-    # Sanity checks
-    assert mode in list(callbacks_mapper)
-    assert all(i >= 0 for i in repeats.values())
-
-    # The main CIRE loop
     processed = []
-    context = cluster.exprs
-    for n in reversed(range(repeats[mode])):
-        # Get the callbacks
-        extract, ignore_collected, in_writeto, selector =\
-            callbacks_mapper[mode](context, n, options)
-
-        # Extract potentially aliasing expressions
-        exprs, extracted = extract(cluster, sregistry)
-        if not extracted:
-            # Do not waste time
+    for c in clusters:
+        # We don't care about sparse Clusters. Their computational cost is
+        # negligible and processing all of them would only increase compilation
+        # time and potentially make the generated code more chaotic
+        if not c.is_dense:
+            processed.append(c)
             continue
 
-        # There can't be Dimension-dependent data dependences with any of
-        # the `processed` Clusters, otherwise we would risk either OOB accesses
-        # or reading from garbage uncomputed halo
-        scope = Scope(exprs=flatten(c.exprs for c in processed) + extracted)
-        if not all(i.is_indep() for i in scope.d_all_gen()):
-            break
+        # Some of the CIRE transformers need to look inside all scopes
+        # surrounding `c` to perform data dependencies analysis
+        context = Context(c).process(clusters)
 
-        # Search aliasing expressions
-        aliases = collect(extracted, ignore_collected, options)
+        # Applying CIRE may change `c` as well as creating one or more new Clusters
+        transformed = _cire(c, context, space, sregistry, options, platform)
 
-        # Rule out aliasing expressions with a bad flops/memory trade-off
-        aliases, chosen, others = choose(exprs, aliases, selector)
-        if not chosen:
-            # Do not waste time
-            continue
-
-        # AliasMapper -> Schedule -> [Clusters]
-        schedule = make_schedule(cluster, aliases, in_writeto, options)
-        schedule = optimize_schedule(cluster, schedule, platform, sregistry, options)
-        clusters, subs = lower_schedule(cluster, schedule, chosen, sregistry, options)
-
-        # The [Clusters] must be ordered so as to reuse as many of the `cluster`'s
-        # IterationIntervals as possible in order to honor the write-to region. This
-        # also guarantees that fusion is maximum
-        processed.extend(clusters)
-        processed.sort(key=partial(cit, cluster))
-
-        # Rebuild `cluster` so as to use the newly created aliases
-        cluster = rebuild(cluster, others, schedule, subs)
-
-        # Prepare for the next round
-        context = flatten(c.exprs for c in processed) + list(cluster.exprs)
-
-    processed.append(cluster)
+        processed.extend(transformed)
 
     return processed
 
 
-class Callbacks(object):
+def _cire(cluster, context, space, sregistry, options, platform):
+    # Construct the space of variants
+    variants = [modes[mode](sregistry, options).make_schedule(cluster, context)
+                for mode in space]
+    if not any(i.schedule for i in variants):
+        return [cluster]
+
+    # Pick the variant with the highest score, that is the variant with the best
+    # trade-off between operation count reduction and working set size increase
+    schedule, exprs = pick_best(variants)
+
+    # Schedule -> [Clusters]
+    schedule = optimize_schedule(cluster, schedule, platform, sregistry, options)
+    clusters, subs = lower_schedule(cluster, schedule, sregistry, options)
+    clusters.append(rebuild(cluster, exprs, subs, schedule))
+
+    return clusters
+
+
+class Cire(object):
 
     """
-    Interface for the callbacks needed by the CIRE loop. Each CIRE mode needs
-    to provide an implementation of these callbackes in a suitable subclass.
+    Base class for CIRE transformers.
     """
 
+    optname = None
     mode = None
 
-    def __new__(cls, context, n, options):
-        min_cost = options['cire-mincost']
-        max_par = options['cire-maxpar']
-        max_alias = options['cire-maxalias']
+    def __init__(self, sregistry, options):
+        self.sregistry = sregistry
 
-        min_cost = min_cost[cls.mode]
-        if callable(min_cost):
-            min_cost = min_cost(n)
+        self._opt_minstorage = options['min-storage']
+        self._opt_mincost = options['cire-mincost'][self.optname]
+        self._opt_maxpar = options['cire-maxpar']
+        self._opt_maxalias = options['cire-maxalias']
 
-        return (partial(cls.extract, n, context, min_cost, max_alias),
-                cls.ignore_collected,
-                partial(cls.in_writeto, max_par),
-                partial(cls.selector, min_cost))
+    def make_schedule(self, cluster, context):
+        # Capture aliases within `exprs`
+        aliases = AliasMapper()
+        score = 0
+        exprs = cluster.exprs
+        ispace = cluster.ispace
+        for n in range(self._nrepeats(cluster)):
+            # Extract potentially aliasing expressions
+            mapper = self._extract(exprs, context, n)
 
-    @classmethod
-    def extract(cls, n, context, min_cost, max_alias, cluster, sregistry):
+            # Search aliasing expressions
+            found = collect(mapper.extracted, ispace, self._opt_minstorage)
+
+            # Choose the aliasing expressions with a good flops/memory trade-off
+            exprs, chosen, pscore = choose(found, exprs, mapper, self._selector)
+            aliases.update(chosen)
+            score += pscore
+
+        # AliasMapper -> Schedule
+        schedule = lower_aliases(cluster, aliases, self._in_writeto, self._opt_maxpar)
+
+        # The actual score is a 2-tuple <flop-reduction-score, workin-set-score>
+        score = (score, len(aliases))
+
+        return SpacePoint(schedule, exprs, score)
+
+    def _make_symbol(self):
+        return Scalar(name=self.sregistry.make_name('dummy'))
+
+    def _nrepeats(self, cluster):
         raise NotImplementedError
 
-    @classmethod
-    def ignore_collected(cls, group):
-        return False
-
-    @classmethod
-    def in_writeto(cls, max_par, dim, cluster):
+    def _extract(self, exprs, context, n):
         raise NotImplementedError
 
-    @classmethod
-    def selector(cls, min_cost, cost, naliases):
+    def _in_writeto(self, dim, cluster):
+        raise NotImplementedError
+
+    def _selector(self, e, naliases):
         raise NotImplementedError
 
 
-class CallbacksInvariants(Callbacks):
+class CireInvariants(Cire):
 
-    mode = 'invariants'
+    optname = 'invariants'
 
-    @classmethod
-    def extract(cls, n, context, min_cost, max_alias, cluster, sregistry):
-        make = lambda: Scalar(name=sregistry.make_name(), dtype=cluster.dtype).indexify()
+    def _nrepeats(self, cluster):
+        return 1
 
-        exclude = {i.source.indexed for i in cluster.scope.d_flow.independent()}
-        rule0 = lambda e: not e.free_symbols & exclude
-        rule1 = make_is_time_invariant(context)
-        rule2 = lambda e: estimate_cost(e, True) >= min_cost
-        rule = lambda e: rule0(e) and rule1(e) and rule2(e)
+    def _rule(self, e):
+        return (e.is_Function or
+                (e.is_Pow and e.exp.is_Number and e.exp < 1))
 
-        extracted = []
-        mapper = OrderedDict()
-        for e in cluster.exprs:
-            for i in search(e, rule, 'all', 'dfs_first_hit'):
-                if i not in mapper:
-                    symbol = make()
-                    mapper[i] = symbol
-                    extracted.append(e.func(symbol, i))
+    def _extract(self, exprs, context, n):
+        mapper = Uxmapper()
+        for prefix, clusters in context.items():
+            if not prefix:
+                continue
 
-        processed = [uxreplace(e, mapper) for e in cluster.exprs]
+            exclude = set().union(*[c.scope.writes for c in clusters])
+            exclude.add(prefix[-1].dim)
 
-        return extracted + processed, extracted
+            for e in exprs:
+                for i in search(e, self._rule, 'all', 'bfs_first_hit'):
+                    if {a.function for a in i.free_symbols} & exclude:
+                        continue
+                    mapper.add(i, self._make_symbol)
 
-    @classmethod
-    def in_writeto(cls, max_par, dim, cluster):
+        return mapper
+
+    def _in_writeto(self, dim, cluster):
         return PARALLEL in cluster.properties[dim]
 
-    @classmethod
-    def selector(cls, min_cost, cost, naliases):
-        return cost >= min_cost and naliases >= 1
+    def _selector(self, e, naliases):
+        if all(i.function.is_Symbol for i in e.free_symbols):
+            # E.g., `dt**(-2)`
+            mincost = self._opt_mincost['scalar']
+        else:
+            mincost = self._opt_mincost['tensor']
+        return estimate_cost(e, True)*naliases // mincost
 
 
-class CallbacksSOPS(Callbacks):
+class CireInvariantsBasic(CireInvariants):
 
+    mode = 'inv-basic'
+
+
+class CireInvariantsCompound(CireInvariants):
+
+    mode = 'inv-compound'
+
+    def _extract(self, exprs, context, n):
+        extracted = super()._extract(exprs, context, n).extracted
+
+        rule = lambda e: any(a in extracted for a in e.args)
+
+        mapper = Uxmapper()
+        for e in exprs:
+            for i in search(e, rule, 'all', 'dfs'):
+                if not i.is_commutative:
+                    continue
+
+                key = lambda a: a in extracted
+                terms, others = split(i.args, key)
+
+                mapper.add(i, self._make_symbol, terms)
+
+        return mapper
+
+
+class CireSOPS(Cire):
+
+    optname = 'sops'
     mode = 'sops'
 
-    @classmethod
-    def extract(cls, n, context, min_cost, max_alias, cluster, sregistry):
-        make = lambda: Scalar(name=sregistry.make_name(), dtype=cluster.dtype).indexify()
+    def _nrepeats(self, cluster):
+        # The `nrepeats` is calculated such that we analyze all potential derivatives
+        # in `cluster`
+        return potential_max_deriv_order(cluster.exprs)
 
-        # The `depth` determines "how big" the extracted sum-of-products will be.
-        # We observe that in typical FD codes:
-        #   add(mul, mul, ...) -> stems from first order derivative
-        #   add(mul(add(mul, mul, ...), ...), ...) -> stems from second order derivative
-        # To search the muls in the former case, we need `depth=0`; to search the outer
-        # muls in the latter case, we need `depth=2`
-        depth = n
+    def _extract(self, exprs, context, n):
+        # Forbid CIRE involving Dimension-independent dependencies, e.g.:
+        # r0 = ...
+        # u[x, y] = ... r0*a[x, y] ...
+        # NOTE: if one uses the DSL in a conventional way and sticks to the default
+        # compilation pipelines where CSE always happens after CIRE, then `exclude`
+        # will always be empty
+        exclude = {i.source.indexed for i in context[None].scope.d_flow.independent()}
 
-        exclude = {i.source.indexed for i in cluster.scope.d_flow.independent()}
-        rule0 = lambda e: not e.free_symbols & exclude
-        rule1 = lambda e: e.is_Mul and q_terminalop(e, depth)
-        rule = lambda e: rule0(e) and rule1(e)
-
-        extracted = OrderedDict()
-        mapper = {}
-        for e in cluster.exprs:
-            for i in search(e, rule, 'all', 'bfs_first_hit'):
-                if i in mapper:
+        mapper = Uxmapper()
+        for e in exprs:
+            for i in search_potential_deriv(e, n):
+                if i.free_symbols & exclude:
                     continue
 
                 key = lambda a: a.is_Add
-                terms, others = split(list(i.args), key)
+                terms, others = split(i.args, key)
 
-                if max_alias:
+                if self._opt_maxalias:
                     # Treat `e` as an FD expression and pull out the derivative
                     # coefficient from `i`
                     # Note: typically derivative coefficients are numbers, but
@@ -259,43 +295,30 @@ class CallbacksSOPS(Callbacks):
                     if e.grid is not None and terms:
                         key = partial(maybe_coeff_key, e.grid)
                         others, more_terms = split(others, key)
-                        terms.extend(more_terms)
+                        terms += more_terms
 
-                if terms:
-                    k = i.func(*terms)
-                    try:
-                        symbol, _ = extracted[k]
-                    except KeyError:
-                        symbol, _ = extracted.setdefault(k, (make(), e))
-                    mapper[i] = i.func(symbol, *others)
+                mapper.add(i, self._make_symbol, terms)
 
-        if mapper:
-            extracted = [e.func(v, k) for k, (v, e) in extracted.items()]
-            processed = [uxreplace(e, mapper) for e in cluster.exprs]
-            return extracted + processed, extracted
+        return mapper
+
+    def _in_writeto(self, dim, cluster):
+        return self._opt_maxpar and PARALLEL in cluster.properties[dim]
+
+    def _selector(self, e, naliases):
+        if naliases <= 1:
+            return 0
         else:
-            return cluster.exprs, []
-
-    @classmethod
-    def ignore_collected(cls, group):
-        return len(group) <= 1
-
-    @classmethod
-    def in_writeto(cls, max_par, dim, cluster):
-        return max_par and PARALLEL in cluster.properties[dim]
-
-    @classmethod
-    def selector(cls, min_cost, cost, naliases):
-        return cost >= min_cost and naliases > 1
+            return estimate_cost(e, True)*naliases // self._opt_mincost
 
 
-callbacks_mapper = {
-    CallbacksInvariants.mode: CallbacksInvariants,
-    CallbacksSOPS.mode: CallbacksSOPS
+modes = {
+    CireInvariantsBasic.mode: CireInvariantsBasic,
+    CireInvariantsCompound.mode: CireInvariantsCompound,
+    CireSOPS.mode: CireSOPS
 }
 
 
-def collect(exprs, ignore_collected, options):
+def collect(extracted, ispace, min_storage):
     """
     Find groups of aliasing expressions.
 
@@ -337,15 +360,12 @@ def collect(exprs, ignore_collected, options):
         * a[i+2] - b[i+2] : because at least one operation differs
         * a[i+2] + b[i] : because the distances along ``i`` differ (+2 and +0)
     """
-    min_storage = options['min-storage']
-
     # Find the potential aliases
     found = []
-    for expr in exprs:
-        if expr.lhs.is_Indexed or expr.is_Increment:
-            continue
+    for expr in extracted:
+        assert not expr.is_Equality
 
-        indexeds = retrieve_indexed(expr.rhs)
+        indexeds = retrieve_indexed(expr)
 
         bases = []
         offsets = []
@@ -365,8 +385,8 @@ def collect(exprs, ignore_collected, options):
             bases.append(tuple(base))
             offsets.append(LabeledVector(offset))
 
-        if indexeds and len(bases) == len(indexeds):
-            found.append(Candidate(expr, indexeds, bases, offsets))
+        if not indexeds or len(bases) == len(indexeds):
+            found.append(Candidate(expr, ispace, indexeds, bases, offsets))
 
     # Create groups of aliasing expressions
     mapper = OrderedDict()
@@ -386,10 +406,6 @@ def collect(exprs, ignore_collected, options):
             group.append(u)
             unseen.remove(u)
         group = Group(group)
-
-        # Apply callback to heuristically discard groups
-        if ignore_collected(group):
-            continue
 
         if min_storage:
             k = group.dimensions_translated
@@ -440,11 +456,13 @@ def collect(exprs, ignore_collected, options):
             groups, remainder = split(groups, lambda g: len(g) > smallest)
             if groups:
                 queue.append(remainder)
-            else:
+            elif len(remainder) > 1:
                 # No luck with the heuristic, e.g. there are two groups
                 # and both have same `len`
                 queue.append(fallback[1:])
                 groups = [fallback.pop(0)]
+            else:
+                break
 
         for g in groups:
             c = g.pivot
@@ -458,7 +476,7 @@ def collect(exprs, ignore_collected, options):
             alias = uxreplace(c.expr, subs)
 
             # All aliased expressions
-            aliaseds = [i.expr for i in g]
+            aliaseds = [extracted[i.expr] for i in g]
 
             # Distance of each aliased expression from the basis alias
             distances = []
@@ -472,32 +490,65 @@ def collect(exprs, ignore_collected, options):
     return aliases
 
 
-def choose(exprs, aliases, selector):
+def choose(aliases, exprs, mapper, selector):
     """
-    Use a cost model to select the aliases that are worth optimizing.
+    Analyze the detected aliases and, after applying a cost model to rule out
+    the aliases with a bad flops/memory trade-off, inject them into the original
+    expressions.
     """
-    retained = AliasMapper(aliases)
+    tot = 0
+    retained = AliasMapper()
+
+    # Pass 1: a set of aliasing expressions is retained only if its cost
+    # exceeds the mode's threshold
+    candidates = OrderedDict()
+    aliaseds = []
     others = []
-    chosen = OrderedDict()
-    for e in exprs:
-        aliaseds = aliases.get(e.rhs)
-        naliases = len(aliaseds)
-        cost = estimate_cost(e, True)*naliases
-        if selector(cost, naliases):
-            chosen[e.rhs] = e.lhs
+    for e, v in aliases.items():
+        score = selector(e, len(v.aliaseds))
+        if score > 0:
+            candidates[e] = score
+            aliaseds.extend(v.aliaseds)
         else:
             others.append(e)
-            retained.remove(e.rhs)
 
-    return retained, chosen, others
+    # Do not waste time if unneccesary
+    if not candidates:
+        return exprs, retained, tot
+
+    # Project the candidate aliases into exprs to determine what the new
+    # working set would be
+    mapper = {k: v for k, v in mapper.items() if v.free_symbols & set(aliaseds)}
+    templated = [uxreplace(e, mapper) for e in exprs]
+
+    # Pass 2: a set of aliasing expressions is retained only if the tradeoff
+    # between operation count reduction and working set increase is favorable
+    owset = wset(others + templated)
+    for e, v in aliases.items():
+        try:
+            score = candidates[e]
+        except KeyError:
+            score = 0
+        if score > 1 or \
+           score == 1 and max(len(wset(e)), 1) > len(wset(e) & owset):
+            retained[e] = v
+            tot += score
+
+    # Do not waste time if unneccesary
+    if not retained:
+        return exprs, retained, tot
+
+    # Substitute the chosen aliasing sub-expressions
+    mapper = {k: v for k, v in mapper.items() if v.free_symbols & set(retained.aliaseds)}
+    exprs = [uxreplace(e, mapper) for e in exprs]
+
+    return exprs, retained, tot
 
 
-def make_schedule(cluster, aliases, in_writeto, options):
+def lower_aliases(cluster, aliases, in_writeto, maxpar):
     """
     Create a Schedule from an AliasMapper.
     """
-    max_par = options['cire-maxpar']
-
     dmapper = {}
     processed = []
     for alias, v in aliases.items():
@@ -533,19 +584,31 @@ def make_schedule(cluster, aliases, in_writeto, options):
 
             # We further bump the interval stamp if we were requested to trade
             # fusion for more collapse-parallelism
-            interval = interval.lift(interval.stamp + int(max_par))
+            interval = interval.lift(interval.stamp + int(maxpar))
 
             writeto.append(interval)
             intervals.append(interval)
 
             if i.dim.is_Incr:
-                # Suitable ShiftedDimensions must be used to avoid OOB accesses.
-                # E.g., r[xs][ys][z] => both `xs` and `ys` must start at 0,
-                # not at `x0_blk0`
+                # Suitable IncrDimensions must be used to avoid OOB accesses.
+                # E.g., r[xs][ys][z] => both `xs` and `ys` must be initialized such
+                # that all accesses are within bounds. This requires traversing the
+                # hierarchy of IncrDimensions to set `xs` (`ys`) in a way that
+                # consecutive blocks access consecutive regions in `r` (e.g.,
+                # `xs=x0_blk1-x0_blk0` with `blocklevels=2`; `xs=0` with
+                # `blocklevels=1`, that is it degenerates in this case)
                 try:
                     d = dmapper[i.dim]
                 except KeyError:
-                    d = dmapper[i.dim] = ShiftedDimension(i.dim, name="%ss" % i.dim.name)
+                    dd = i.dim.parent
+                    assert dd.is_Incr
+                    if dd.parent.is_Incr:
+                        # An IncrDimension in between IncrDimensions
+                        m = i.dim.symbolic_min - i.dim.parent.symbolic_min
+                    else:
+                        m = 0
+                    d = dmapper[i.dim] = IncrDimension("%ss" % i.dim.name, i.dim, m,
+                                                       dd.symbolic_size, 1, dd.step)
                 sub_iterators[i.dim] = d
             else:
                 d = i.dim
@@ -564,8 +627,11 @@ def make_schedule(cluster, aliases, in_writeto, options):
 
         processed.append(ScheduledAlias(alias, writeto, ispace, v.aliaseds, indicess))
 
-    # Sort by write-to region for deterministic code generation
-    processed = sorted(processed, key=lambda i: i.writeto)
+    # The [ScheduledAliases] must be ordered so as to reuse as many of the
+    # `cluster`'s IterationIntervals as possible in order to honor the
+    # write-to region. Another fundamental reason for ordering is to ensure
+    # deterministic code generation
+    processed = sorted(processed, key=lambda i: cit(cluster.ispace, i.ispace))
 
     return Schedule(*processed, dmapper=dmapper)
 
@@ -679,67 +745,70 @@ def _optimize_schedule_padding(cluster, schedule, platform):
     return Schedule(*processed, dmapper=schedule.dmapper, rmapper=schedule.rmapper)
 
 
-def lower_schedule(cluster, schedule, chosen, sregistry, options):
+def lower_schedule(cluster, schedule, sregistry, options):
     """
     Turn a Schedule into a sequence of Clusters.
     """
-    onstack = options['cire-onstack']
+    ftemps = options['cire-ftemps']
+
+    if ftemps:
+        make = TempFunction
+    else:
+        # Typical case -- the user does *not* "see" the CIRE-created temporaries
+        make = Array
 
     clusters = []
     subs = {}
     for alias, writeto, ispace, aliaseds, indicess in schedule:
-        if all(i not in chosen for i in aliaseds):
-            continue
+        # Basic info to create the temporary that will hold the alias
+        name = sregistry.make_name()
+        dtype = cluster.dtype
 
-        # The Dimensions defining the shape of Array
-        # Note: with SubDimensions, we may have the following situation:
-        #
-        # for zi = z_m + zi_ltkn; zi <= z_M - zi_rtkn; ...
-        #   r[zi] = ...
-        #
-        # Instead of `r[zi - z_m - zi_ltkn]` we have just `r[zi]`, so we'll need
-        # as much room as in `zi`'s parent to avoid going OOB
-        # Aside from ugly generated code, the reason we do not rather shift the
-        # indices is that it prevents future passes to transform the loop bounds
-        # (e.g., MPI's comp/comm overlap does that)
-        dimensions = [d.parent if d.is_Sub else d for d in writeto.itdimensions]
+        if writeto:
+            # The Dimensions defining the shape of Array
+            # Note: with SubDimensions, we may have the following situation:
+            #
+            # for zi = z_m + zi_ltkn; zi <= z_M - zi_rtkn; ...
+            #   r[zi] = ...
+            #
+            # Instead of `r[zi - z_m - zi_ltkn]` we have just `r[zi]`, so we'll need
+            # as much room as in `zi`'s parent to avoid going OOB
+            # Aside from ugly generated code, the reason we do not rather shift the
+            # indices is that it prevents future passes to transform the loop bounds
+            # (e.g., MPI's comp/comm overlap does that)
+            dimensions = [d.parent if d.is_Sub else d for d in writeto.itdimensions]
 
-        halo = [(abs(i.lower), abs(i.upper)) for i in writeto]
+            # The halo must be set according to the size of writeto space
+            halo = [(abs(i.lower), abs(i.upper)) for i in writeto]
 
-        # The data sharing mode of the Array. It can safely be `shared` only if
-        # all of the PARALLEL `cluster` Dimensions appear in `writeto`
-        parallel = [d for d, v in cluster.properties.items() if PARALLEL in v]
-        sharing = 'shared' if set(parallel) == set(writeto.itdimensions) else 'local'
+            # The indices used to write into the Array
+            indices = []
+            for i in writeto:
+                try:
+                    # E.g., `xs`
+                    sub_iterators = writeto.sub_iterators[i.dim]
+                    assert len(sub_iterators) == 1
+                    indices.append(sub_iterators[0])
+                except KeyError:
+                    # E.g., `z` -- a non-shifted Dimension
+                    indices.append(i.dim - i.lower)
 
-        # The memory region of the Array. On the heap, unless the user has
-        # explicitly requested allocation on the stack
-        scope = 'stack' if onstack else 'heap'
+            obj = make(name=name, dimensions=dimensions, halo=halo, dtype=dtype)
+            expression = Eq(obj[indices], alias)
 
-        array = Array(name=sregistry.make_name(), dimensions=dimensions, halo=halo,
-                      dtype=cluster.dtype, scope=scope, sharing=sharing)
+            callback = lambda idx: obj[idx]
+        else:
+            # Degenerate case: scalar expression
+            assert writeto.size == 0
 
-        indices = []
-        for i in writeto:
-            try:
-                # E.g., `xs`
-                sub_iterators = writeto.sub_iterators[i.dim]
-                assert len(sub_iterators) == 1
-                indices.append(sub_iterators[0])
-            except KeyError:
-                # E.g., `z` -- a non-shifted Dimension
-                indices.append(i.dim - i.lower)
+            obj = Scalar(name=name, dtype=dtype)
+            expression = Eq(obj, alias)
 
-        expression = Eq(array[indices], alias)
+            callback = lambda idx: obj
 
-        # Create the substitution rules so that we can use the newly created
-        # temporary in place of the aliasing expressions
-        for aliased, indices in zip(aliaseds, indicess):
-            subs[aliased] = array[indices]
-            if aliased in chosen:
-                subs[chosen[aliased]] = array[indices]
-            else:
-                # Perhaps part of a composite alias ?
-                pass
+        # Create the substitution rules for the aliasing expressions
+        subs.update({aliased: callback(indices)
+                     for aliased, indices in zip(aliaseds, indicess)})
 
         # Construct the `alias` DataSpace
         accesses = detect_accesses(expression)
@@ -747,11 +816,13 @@ def lower_schedule(cluster, schedule, chosen, sregistry, options):
                  for k, v in accesses.items() if k}
         dspace = DataSpace(cluster.dspace.intervals, parts)
 
-        # Drop parallelism if using ModuloDimensions (due to rotations)
+        # Drop or weaken parallelism if necessary
         properties = dict(cluster.properties)
         for d, v in cluster.properties.items():
             if any(i.is_Modulo for i in ispace.sub_iterators[d]):
                 properties[d] = normalize_properties(v, {SEQUENTIAL})
+            elif d not in writeto.dimensions:
+                properties[d] = normalize_properties(v, {PARALLEL_IF_PVT})
 
         # Finally, build the `alias` Cluster
         clusters.append(cluster.rebuild(exprs=expression, ispace=ispace,
@@ -760,12 +831,40 @@ def lower_schedule(cluster, schedule, chosen, sregistry, options):
     return clusters, subs
 
 
-def rebuild(cluster, others, schedule, subs):
+def pick_best(variants):
+    """
+    Use the variant score and heuristics to return the variant with the best
+    trade-off between operation count reduction and working set increase.
+    """
+    best = variants.pop(0)
+    for i in variants:
+        best_flop_score, best_ws_score = best.score
+        if best_flop_score == 0:
+            best = i
+            continue
+
+        i_flop_score, i_ws_score = i.score
+
+        # The current heustic is fairly basic: the one with smaller working
+        # set size increase wins, unless there's a massive reduction in operation
+        # count in the other one
+        delta = i_ws_score - best_ws_score
+        if (delta > 0 and i_flop_score / best_flop_score > 100) or \
+           (delta == 0 and i_flop_score > best_flop_score) or \
+           (delta < 0 and best_flop_score / i_flop_score <= 100):
+            best = i
+
+    schedule, exprs, _ = best
+
+    return schedule, exprs
+
+
+def rebuild(cluster, exprs, subs, schedule):
     """
     Plug the optimized aliases into the input Cluster. This leads to creating
     a new Cluster with suitable IterationSpace and DataSpace.
     """
-    exprs = [uxreplace(e, subs) for e in others]
+    exprs = [uxreplace(e, subs) for e in exprs]
 
     ispace = cluster.ispace.augment(schedule.dmapper)
     ispace = ispace.augment(schedule.rmapper)
@@ -783,9 +882,9 @@ def rebuild(cluster, others, schedule, subs):
 
 class Candidate(object):
 
-    def __init__(self, expr, indexeds, bases, offsets):
-        self.expr = expr.rhs
-        self.shifts = expr.ispace.intervals
+    def __init__(self, expr, ispace, indexeds, bases, offsets):
+        self.expr = expr
+        self.shifts = ispace.intervals
         self.indexeds = indexeds
         self.bases = bases
         self.offsets = offsets
@@ -988,6 +1087,8 @@ AliasedGroup = namedtuple('AliasedGroup', 'intervals aliaseds distances')
 ScheduledAlias = namedtuple('ScheduledAlias', 'alias writeto ispace aliaseds indicess')
 ScheduledAlias.__new__.__defaults__ = (None,) * len(ScheduledAlias._fields)
 
+SpacePoint = namedtuple('SpacePoint', 'schedule exprs score')
+
 
 class Schedule(tuple):
 
@@ -1000,28 +1101,24 @@ class Schedule(tuple):
 
 class AliasMapper(OrderedDict):
 
-    """
-    A mapper between aliases and collections of aliased expressions.
-    """
-
     def add(self, alias, intervals, aliaseds, distances):
         assert len(aliaseds) == len(distances)
         self[alias] = AliasedGroup(intervals, aliaseds, distances)
 
-    def get(self, key):
-        ret = super(AliasMapper, self).get(key)
-        if ret is not None:
-            return ret.aliaseds
-        for i in self.values():
-            if key in i.aliaseds:
-                return i.aliaseds
-        return []
+    def update(self, aliases):
+        for k, v in aliases.items():
+            try:
+                v0 = self[k]
+                if v0.intervals != v.intervals:
+                    raise ValueError
+                v0.aliaseds.extend(v.aliaseds)
+                v0.distances.extend(v.distances)
+            except KeyError:
+                self[k] = v
 
-    def remove(self, key):
-        for k, v in list(self.items()):
-            if key in v.aliaseds:
-                self.pop(k)
-                return
+    @property
+    def aliaseds(self):
+        return flatten(i.aliaseds for i in self.values())
 
 
 def make_rotations_table(d, v):
@@ -1040,12 +1137,12 @@ def make_rotations_table(d, v):
     return m
 
 
-def cit(c0, c1):
+def cit(ispace0, ispace1):
     """
-    The Common IterationIntervals of two given Clusters.
+    The Common IterationIntervals of two IterationSpaces.
     """
     found = []
-    for it0, it1 in zip(c0.itintervals, c1.itintervals):
+    for it0, it1 in zip(ispace0.itintervals, ispace1.itintervals):
         if it0 == it1:
             found.append(it0)
         else:
@@ -1061,3 +1158,43 @@ def maybe_coeff_key(grid, expr):
         return True
     indexeds = [i for i in expr.free_symbols if i.is_Indexed]
     return any(not set(grid.dimensions) <= set(i.function.dimensions) for i in indexeds)
+
+
+def wset(exprs):
+    """
+    Extract the working set out of a set of equations.
+    """
+    return {i.function for i in flatten([e.free_symbols for e in as_tuple(exprs)])
+            if i.function.is_AbstractFunction}
+
+
+def potential_max_deriv_order(exprs):
+    """
+    The maximum FD derivative order in a list of expressions.
+    """
+    # NOTE: e might propagate the Derivative(...) information down from the
+    # symbolic language, but users may do crazy things and write their own custom
+    # expansions "by hand" (i.e., not resorting to Derivative(...)), hence instead
+    # of looking for Derivative(...) we use the following heuristic:
+    #   add(mul, mul, ...) -> stems from first order derivative
+    #   add(mul(add(mul, mul, ...), ...), ...) -> stems from second order derivative
+    #   ...
+    nadds = lambda e: (int(e.is_Add) +
+                       max([nadds(a) for a in e.args], default=0) if not q_leaf(e) else 0)
+    return max([nadds(e) for e in exprs], default=0)
+
+
+def search_potential_deriv(expr, n, c=0):
+    """
+    Retrieve the expressions at depth `n` that potentially stem from FD derivatives.
+    """
+    assert n >= c >= 0
+    if q_leaf(expr) or expr.is_Pow:
+        return []
+    elif expr.is_Mul:
+        if c == n:
+            return [expr]
+        else:
+            return flatten([search_potential_deriv(a, n, c+1) for a in expr.args])
+    else:
+        return flatten([search_potential_deriv(a, n, c) for a in expr.args])

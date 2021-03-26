@@ -218,14 +218,14 @@ class CGen(Visitor):
                                                 f._C_field_data)
             else:
                 rvalue = '(%s (*)%s) %s' % (f._C_typedata, shape, obj)
-            lvalue = c.AlignedAttribute(f._data_alignment,
-                                        c.Value(f._C_typedata,
-                                                '(*restrict %s)%s' % (f.name, shape)))
+            lvalue = c.Value(f._C_typedata, '(*restrict %s)%s' % (f.name, shape))
+            if o.alignment:
+                lvalue = c.AlignedAttribute(f._data_alignment, lvalue)
         return c.Initializer(lvalue, rvalue)
 
     def visit_Dereference(self, o):
         a0, a1 = o.functions
-        if a1.is_PointerArray:
+        if a1.is_PointerArray or a1.is_TempFunction:
             shape = ''.join("[%s]" % ccode(i) for i in a0.symbolic_shape[1:])
             rvalue = '(%s (*)%s) %s[%s]' % (a1._C_typedata, shape, a1.name, a1.dim.name)
             lvalue = c.AlignedAttribute(a0._data_alignment,
@@ -722,6 +722,14 @@ class IsPerfectIteration(Visitor):
             return False
         nomore = nomore or len(o.children) > 1
         return all(self._visit(i, found=found, nomore=nomore) for i in o.children)
+
+    def visit_While(self, o, **kwargs):
+        return False
+
+    def visit_HaloSpot(self, o, found=False, **kwargs):
+        if not found:
+            return False
+        return all(self._visit(i, found=found, nomore=True) for i in o.children)
 
     def visit_List(self, o, found=False, nomore=False):
         nomore = nomore or (found and (len(o.children) > 1) or o.header or o.footer)

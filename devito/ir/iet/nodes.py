@@ -11,8 +11,9 @@ import cgen as c
 
 from devito.data import FULL
 from devito.ir.equations import ClusterizedEq, DummyEq
-from devito.ir.support import (SEQUENTIAL, PARALLEL, PARALLEL_IF_ATOMIC, VECTORIZED,
-                               AFFINE, COLLAPSED, Property, Forward, detect_io)
+from devito.ir.support import (SEQUENTIAL, PARALLEL, PARALLEL_IF_ATOMIC,
+                               PARALLEL_IF_PVT, VECTORIZED, AFFINE, COLLAPSED,
+                               Property, Forward, detect_io)
 from devito.symbolics import ListInitializer, FunctionFromPointer, as_symbol, ccode
 from devito.tools import (Signer, as_tuple, filter_ordered, filter_sorted, flatten,
                           validate_type)
@@ -65,10 +66,15 @@ class Node(Signer):
 
     def __new__(cls, *args, **kwargs):
         obj = super(Node, cls).__new__(cls)
-        argnames = inspect.getfullargspec(cls.__init__).args
+        argnames, _, _, defaultvalues, _, _, _ = inspect.getfullargspec(cls.__init__)
+        try:
+            defaults = dict(zip(argnames[-len(defaultvalues):], defaultvalues))
+        except TypeError:
+            # No default kwarg values
+            defaults = {}
         obj._args = {k: v for k, v in zip(argnames[1:], args)}
         obj._args.update(kwargs.items())
-        obj._args.update({k: None for k in argnames[1:] if k not in obj._args})
+        obj._args.update({k: defaults.get(k) for k in argnames[1:] if k not in obj._args})
         return obj
 
     def _rebuild(self, *args, **kwargs):
@@ -508,8 +514,12 @@ class Iteration(Node):
         return PARALLEL_IF_ATOMIC in self.properties
 
     @property
+    def is_ParallelPrivate(self):
+        return PARALLEL_IF_PVT in self.properties
+
+    @property
     def is_ParallelRelaxed(self):
-        return self.is_Parallel or self.is_ParallelAtomic
+        return any([self.is_Parallel, self.is_ParallelAtomic, self.is_ParallelPrivate])
 
     @property
     def is_Vectorized(self):
@@ -784,9 +794,10 @@ class PointerCast(ExprStmt, Node):
 
     is_PointerCast = True
 
-    def __init__(self, function, obj=None):
+    def __init__(self, function, obj=None, alignment=True):
         self.function = function
         self.obj = obj
+        self.alignment = alignment
 
     def __repr__(self):
         return "<PointerCast(%s)>" % self.function
@@ -827,41 +838,36 @@ class PointerCast(ExprStmt, Node):
 class Dereference(ExprStmt, Node):
 
     """
-    A node encapsulating a dereference from an object `parray` to another object
-    `array`. Two possibilities are supported:
+    A node encapsulating a dereference from a `pointer` to a `pointee`.
+    The following cases are supported:
 
-        * `parray` is a PointerArray and `array` is an Array (default case)
-        * `parray` is an ArrayObject representing a pointer to a C struct while
-          `array` is a field in `parray`.
+        * `pointer` is a PointerArray and `pointee` is an Array (typical case).
+        * `pointer` is an ArrayObject representing a pointer to a C struct while
+          `pointee` is a field in `pointer`.
     """
 
     is_Dereference = True
 
-    def __init__(self, array, parray):
-        self.array = array
-        self.parray = parray
+    def __init__(self, pointee, pointer):
+        self.pointee = pointee
+        self.pointer = pointer
 
     def __repr__(self):
-        return "<Dereference(%s,%s)>" % (self.array, self.parray)
+        return "<Dereference(%s,%s)>" % (self.pointee, self.pointer)
 
     @property
     def functions(self):
-        return (self.array, self.parray)
+        return (self.pointee, self.pointer)
 
     @property
     def free_symbols(self):
-        """
-        The symbols required by the PointerCast.
-
-        This may include DiscreteFunctions as well as Dimensions.
-        """
-        return ((self.array.indexed.label, self.parray.indexed.label) +
-                tuple(flatten(i.free_symbols for i in self.array.symbolic_shape[1:])) +
-                tuple(self.parray.free_symbols))
+        return ((self.pointee.indexed.label, self.pointer.indexed.label) +
+                tuple(flatten(i.free_symbols for i in self.pointee.symbolic_shape[1:])) +
+                tuple(self.pointer.free_symbols))
 
     @property
     def defines(self):
-        return (self.array,)
+        return (self.pointee,)
 
 
 class LocalExpression(Expression):
@@ -1122,14 +1128,13 @@ class ParallelIteration(Iteration):
 
         return kwargs
 
-
-class ParallelBlock(Block):
-
-    """
-    A sequence of Nodes, wrapped in a parallel block {...}.
-    """
-
-    is_ParallelBlock = True
+    @cached_property
+    def collapsed(self):
+        ret = [self]
+        for i in range(self.ncollapsed - 1):
+            ret.append(ret[i].nodes[0])
+        assert all(i.is_Iteration for i in ret)
+        return tuple(ret)
 
 
 class ParallelTree(List):
@@ -1175,6 +1180,54 @@ class ParallelTree(List):
     @property
     def root(self):
         return self.body[0]
+
+
+class ParallelBlock(Block):
+
+    """
+    A sequence of Nodes, wrapped in a parallel block {...}.
+    """
+
+    is_ParallelBlock = True
+
+    def __init__(self, body, private=None):
+        # Normalize and sanity-check input. A bit ugly, but it makes everything
+        # much simpler to manage and reconstruct
+        body = as_tuple(body)
+        assert len(body) == 1
+        body = body[0]
+        assert body.is_List
+        if isinstance(body, ParallelTree):
+            partree = body
+        elif body.is_List:
+            assert len(body.body) == 1 and isinstance(body.body[0], ParallelTree)
+            assert len(body.footer) == 0
+            partree = body.body[0]
+            partree = partree._rebuild(prefix=(List(header=body.header,
+                                                    body=partree.prefix)))
+
+        header = self._make_header(partree.nthreads, private)
+        super().__init__(header=header, body=partree)
+
+    @classmethod
+    def _make_header(cls, nthreads, private=None):
+        return None
+
+    @property
+    def partree(self):
+        return self.body[0]
+
+    @property
+    def root(self):
+        return self.partree.root
+
+    @property
+    def nthreads(self):
+        return self.partree.nthreads
+
+    @property
+    def collapsed(self):
+        return self.partree.collapsed
 
 
 class SyncSpot(List):

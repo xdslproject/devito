@@ -13,8 +13,9 @@ from devito.passes.iet import (DeviceOmpTarget, DeviceAccTarget, optimize_halosp
 from devito.tools import as_tuple, timed_pass
 
 __all__ = ['DeviceNoopOperator', 'DeviceAdvOperator', 'DeviceCustomOperator',
-           'DeviceNoopOmpOperator', 'DeviceAdvOmpOperator', 'DeviceCustomOmpOperator',
-           'DeviceNoopAccOperator', 'DeviceAdvAccOperator', 'DeviceCustomAccOperator']
+           'DeviceNoopOmpOperator', 'DeviceAdvOmpOperator', 'DeviceFsgOmpOperator',
+           'DeviceCustomOmpOperator', 'DeviceNoopAccOperator', 'DeviceAdvAccOperator',
+           'DeviceFsgAccOperator', 'DeviceCustomAccOperator']
 
 
 class DeviceOperatorMixin(object):
@@ -23,16 +24,6 @@ class DeviceOperatorMixin(object):
     """
     Loop blocking depth. So, 1 => "blocks", 2 => "blocks" and "sub-blocks",
     3 => "blocks", "sub-blocks", and "sub-sub-blocks", ...
-    """
-
-    CIRE_REPEATS_INV = 2
-    """
-    Number of CIRE passes to detect and optimize away Dimension-invariant expressions.
-    """
-
-    CIRE_REPEATS_SOPS = 7
-    """
-    Number of CIRE passes to detect and optimize away redundant sum-of-products.
     """
 
     CIRE_MINCOST_INV = 50
@@ -72,15 +63,14 @@ class DeviceOperatorMixin(object):
         # CIRE
         o['min-storage'] = False
         o['cire-rotate'] = False
-        o['cire-onstack'] = False
         o['cire-maxpar'] = oo.pop('cire-maxpar', True)
         o['cire-maxalias'] = oo.pop('cire-maxalias', False)
-        o['cire-repeats'] = {
-            'invariants': oo.pop('cire-repeats-inv', cls.CIRE_REPEATS_INV),
-            'sops': oo.pop('cire-repeats-sops', cls.CIRE_REPEATS_SOPS)
-        }
+        o['cire-ftemps'] = oo.pop('cire-ftemps', False)
         o['cire-mincost'] = {
-            'invariants': oo.pop('cire-mincost-inv', cls.CIRE_MINCOST_INV),
+            'invariants': {
+                'scalar': 1,
+                'tensor': oo.pop('cire-mincost-inv', cls.CIRE_MINCOST_INV),
+            },
             'sops': oo.pop('cire-mincost-sops', cls.CIRE_MINCOST_SOPS)
         }
 
@@ -206,6 +196,17 @@ class DeviceAdvOperator(DeviceOperatorMixin, CoreOperator):
         return graph
 
 
+class DeviceFsgOperator(DeviceAdvOperator):
+
+    """
+    Operator with performance optimizations tailored "For small grids" ("Fsg").
+    """
+
+    # Note: currently mimics DeviceAdvOperator. Will see if this will change
+    # in the future
+    pass
+
+
 class DeviceCustomOperator(DeviceOperatorMixin, CustomOperator):
 
     @classmethod
@@ -313,6 +314,10 @@ class DeviceAdvOmpOperator(DeviceOmpOperatorMixin, DeviceAdvOperator):
     pass
 
 
+class DeviceFsgOmpOperator(DeviceOmpOperatorMixin, DeviceFsgOperator):
+    pass
+
+
 class DeviceCustomOmpOperator(DeviceOmpOperatorMixin, DeviceCustomOperator):
 
     _known_passes = DeviceCustomOperator._known_passes + ('openmp',)
@@ -347,6 +352,10 @@ class DeviceNoopAccOperator(DeviceAccOperatorMixin, DeviceNoopOperator):
 
 
 class DeviceAdvAccOperator(DeviceAccOperatorMixin, DeviceAdvOperator):
+    pass
+
+
+class DeviceFsgAccOperator(DeviceAccOperatorMixin, DeviceFsgOperator):
     pass
 
 

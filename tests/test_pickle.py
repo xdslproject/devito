@@ -6,14 +6,14 @@ import pickle
 from conftest import skipif
 from devito import (Constant, Eq, Function, TimeFunction, SparseFunction, Grid,
                     Dimension, SubDimension, ConditionalDimension, IncrDimension,
-                    TimeDimension, SteppingDimension, Operator, ShiftedDimension)
+                    TimeDimension, SteppingDimension, Operator, MPI)
 from devito.data import LEFT, OWNED
 from devito.mpi.halo_scheme import Halo
 from devito.mpi.routines import (MPIStatusObject, MPIMsgEnriched, MPIRequestObject,
                                  MPIRegion)
 from devito.types import (Array, CustomDimension, Symbol as dSymbol, Scalar,
                           PointerArray, Lock, PThreadArray, SharedData, Timer,
-                          DeviceID)
+                          DeviceID, ThreadID, TempFunction)
 from devito.symbolics import (IntDiv, ListInitializer, FieldFromPointer,
                               FunctionFromPointer, DefFunction)
 from examples.seismic import (demo_model, AcquisitionGeometry,
@@ -107,7 +107,7 @@ def test_array():
     d = Dimension(name='d')
 
     a = Array(name='a', dimensions=grid.dimensions, dtype=np.int32, halo=((1, 1), (2, 2)),
-              padding=((2, 2), (2, 2)), space='remote', scope='stack', sharing='local')
+              padding=((2, 2), (2, 2)), space='remote', scope='stack')
 
     pkl_a = pickle.dumps(a)
     new_a = pickle.loads(pkl_a)
@@ -119,7 +119,6 @@ def test_array():
     assert new_a.padding == ((2, 2), (2, 2))
     assert new_a.space == 'remote'
     assert new_a.scope == 'stack'
-    assert new_a.sharing == 'local'
 
     # Now with a pointer array
     pa = PointerArray(name='pa', dimensions=d, array=a)
@@ -171,17 +170,6 @@ def test_incr_dimension():
     assert dd.symbolic_min == new_dd.symbolic_min
     assert dd.symbolic_max == new_dd.symbolic_max
     assert dd.step == new_dd.step
-
-
-def test_shifted_dimension():
-    d = Dimension(name='d')
-    dd = ShiftedDimension(d, name='dd')
-
-    pkl_dd = pickle.dumps(dd)
-    new_dd = pickle.loads(pkl_dd)
-
-    assert dd.name == new_dd.name
-    assert dd.parent == new_dd.parent
 
 
 def test_custom_dimension():
@@ -466,6 +454,68 @@ def test_mpi_objects():
     assert obj.dtype == new_obj.dtype
 
 
+def test_threadid():
+    grid = Grid(shape=(4, 4, 4))
+    f = TimeFunction(name='f', grid=grid)
+    op = Operator(Eq(f.forward, f + 1.), openmp=True)
+
+    tid = ThreadID(op.nthreads)
+
+    pkl_tid = pickle.dumps(tid)
+    new_tid = pickle.loads(pkl_tid)
+
+    assert tid.name == new_tid.name
+    assert tid.nthreads.name == new_tid.nthreads.name
+    assert tid.symbolic_min.name == new_tid.symbolic_min.name
+    assert tid.symbolic_max.name == new_tid.symbolic_max.name
+
+
+@skipif(['nompi'])
+@pytest.mark.parallel(mode=[2])
+def test_mpi_grid():
+    grid = Grid(shape=(4, 4, 4))
+
+    pkl_grid = pickle.dumps(grid)
+    new_grid = pickle.loads(pkl_grid)
+
+    assert grid.distributor.comm.size == 2
+    assert new_grid.distributor.comm.size == 1  # Using cloned MPI_COMM_SELF
+    assert grid.distributor.shape == (2, 4, 4)
+    assert new_grid.distributor.shape == (4, 4, 4)
+
+    # Same as before but only one rank calls `loads`. We make sure this
+    # won't cause any hanging (this was an issue in the past when we're
+    # using MPI_COMM_WORLD at unpickling
+    if MPI.COMM_WORLD.rank == 1:
+        new_grid = pickle.loads(pkl_grid)
+        assert new_grid.distributor.comm.size == 1
+    MPI.COMM_WORLD.Barrier()
+
+
+def test_compilerfunction():
+    grid = Grid(shape=(3, 3))
+    d = Dimension(name='d')
+
+    cf = TempFunction(name='f', dtype=np.float64, dimensions=grid.dimensions,
+                      halo=((1, 1), (1, 1), (1, 1)))
+
+    pkl_cf = pickle.dumps(cf)
+    new_cf = pickle.loads(pkl_cf)
+    assert new_cf.name == cf.name
+    assert new_cf.dtype is np.float64
+    assert new_cf.halo == ((1, 1), (1, 1), (1, 1))
+    assert new_cf.ndim == cf.ndim
+    assert new_cf.dim is None
+
+    pcf = cf._make_pointer(d)
+
+    pkl_pcf = pickle.dumps(pcf)
+    new_pcf = pickle.loads(pkl_pcf)
+    assert new_pcf.name == pcf.name
+    assert new_pcf.dim.name == 'd'
+    assert new_pcf.ndim == cf.ndim + 1
+
+
 @skipif(['nompi'])
 @pytest.mark.parallel(mode=[1])
 def test_deviceid():
@@ -575,10 +625,10 @@ def test_full_model():
                       np.linalg.norm(new_time_range.time_values))
 
     # Test Class Constant pickling
-    pkl_origin = pickle.dumps(model.grid.origin)
+    pkl_origin = pickle.dumps(model.grid.origin_symbols)
     new_origin = pickle.loads(pkl_origin)
 
-    for a, b in zip(model.grid.origin, new_origin):
+    for a, b in zip(model.grid.origin_symbols, new_origin):
         assert a.compare(b) == 0
 
     # Test Class TimeDimension pickling

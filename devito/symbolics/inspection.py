@@ -79,13 +79,13 @@ def estimate_cost(exprs, estimate=False):
             * Powers with integer exponent `n>0` count as n-1 ops (as if
               it were a chain of multiplications).
     """
-    trascendentals_cost = {sin: 50, cos: 50, exp: 50, log: 50}
+    trascendentals_cost = {sin: 100, cos: 100, exp: 100, log: 100}
     pow_cost = 50
     div_cost = 25
 
     try:
         # Is it a plain symbol/array ?
-        if exprs.is_AbstractFunction or exprs.is_AbstractSymbol:
+        if exprs.is_Atom or exprs.is_Indexed or exprs.is_AbstractFunction:
             return 0
     except AttributeError:
         pass
@@ -124,11 +124,11 @@ def estimate_cost(exprs, estimate=False):
                     elif op.exp.is_Number:
                         if op.exp < 0:
                             flops += div_cost
-                        elif op.exp == 0:
+                        elif op.exp == 0 or op.exp == 1:
                             flops += 0
                         elif op.exp.is_Integer:
                             # Natural pows a**b are estimated as b-1 Muls
-                            flops += op.exp - 1
+                            flops += int(op.exp) - 1
                         else:
                             flops += pow_cost
                     else:

@@ -285,6 +285,8 @@ def run(problem, **kwargs):
 @benchmark.command(name='run-jit-backdoor')
 @option_simulation
 @option_performance
+@click.option('--dump-norms', is_flag=True, default=False,
+              help='Display norms of written fields')
 def cli_run_jit_backdoor(problem, **kwargs):
     """`click` interface for the `run_jit_backdoor` mode."""
     run_jit_backdoor(problem, **kwargs)
@@ -324,7 +326,15 @@ def run_jit_backdoor(problem, **kwargs):
     def _run_jit_backdoor():
         return run_op(solver, 'forward', autotune=autotune)
 
-    return _run_jit_backdoor()
+    retval = _run_jit_backdoor()
+
+    dumpnorms = kwargs.pop('dump_norms')
+    if dumpnorms:
+        for i in retval[:-1]:
+            if isinstance(i, DiscreteFunction):
+                info("'%s': %f" % (i.name, norm(i)))
+
+    return retval
 
 
 @benchmark.command(name='test')
@@ -402,9 +412,6 @@ def bench(problem, **kwargs):
 
 
 @benchmark.command(name='plot')
-@click.option('--backend', default='core',
-              type=click.Choice(configuration._accepted['backend']),
-              help='Used execution backend (e.g., core)')
 @click.option('-r', '--resultsdir', default='results',
               help='Directory containing results')
 @click.option('--max-bw', type=float,
@@ -429,7 +436,6 @@ def plot(problem, **kwargs):
     """
     Plotting mode to generate plots for performance analysis.
     """
-    backend = kwargs.pop('backend')
     resultsdir = kwargs.pop('resultsdir')
     max_bw = kwargs.pop('max_bw')
     flop_ceils = kwargs.pop('flop_ceil')
@@ -462,8 +468,8 @@ def plot(problem, **kwargs):
              if len(set(dict(j)[i] for j in gflopss)) > 1]
 
     # Filename
-    figname = "%s_shape%s_so%s_to%s_arch[%s]_bkend[%s]_at[%s]" % (
-        problem, shape, space_order, time_order, arch, backend, autotune
+    figname = "%s_shape%s_so%s_to%s_arch[%s]_at[%s]" % (
+        problem, shape, space_order, time_order, arch, autotune
     )
 
     # Legend setup. Do not plot a legend if there's no variation in performance

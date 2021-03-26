@@ -9,7 +9,7 @@ from operator import itemgetter
 
 import cgen as c
 
-from devito.ir import (EntryFunction, List, LocalExpression, PointerCast, FindSymbols,
+from devito.ir import (EntryFunction, List, LocalExpression, FindSymbols,
                        MapExprStmts, Transformer)
 from devito.passes.iet.engine import iet_pass
 from devito.passes.iet.langbase import LangBB
@@ -123,9 +123,9 @@ class DataManager(object):
             * The pointer array `obj`;
             * The pointee Array `obj.array`
 
-        If the pointer array is defined over `sregistry.threadid`, that it a thread
+        If the pointer array is defined over `sregistry.threadid`, that is a thread
         Dimension, then each `obj.array` slice is allocated and freed individually
-        by the logically-owning thread.
+        by the owner thread.
         """
         # The pointer array
         decl = "**%s" % obj.name
@@ -211,11 +211,11 @@ class DataManager(object):
                     continue
                 objs = [k.write]
             elif k.is_Dereference:
-                placed.append(k.array)
-                if k.parray in placed:
+                placed.append(k.pointee)
+                if k.pointer in placed:
                     objs = []
                 else:
-                    objs = [k.parray]
+                    objs = [k.pointer]
             elif k.is_Call:
                 objs = list(k.functions)
                 if k.retobj is not None:
@@ -231,7 +231,7 @@ class DataManager(object):
                 try:
                     if i.is_LocalObject:
                         # LocalObject's get placed as close as possible to
-                        # their first appearence
+                        # their first occurrence
                         site = iet
                         for n in v:
                             if i in refmap[n]:
@@ -239,25 +239,16 @@ class DataManager(object):
                             site = n
                         self._alloc_object_on_low_lat_mem(site, i, storage)
                     elif i.is_Array:
-                        # Array's get placed as far as possible from their
-                        # first appearence
-                        site = iet
-                        if i._mem_local:
-                            # If inside a ParallelBlock, make sure we allocate
-                            # inside of it
-                            for n in v:
-                                if n.is_ParallelBlock:
-                                    site = n
-                                    break
+                        # Arrays get placed at the top of the IET
                         if i._mem_heap:
-                            self._alloc_array_on_high_bw_mem(site, i, storage)
+                            self._alloc_array_on_high_bw_mem(iet, i, storage)
                         else:
-                            self._alloc_array_on_low_lat_mem(site, i, storage)
+                            self._alloc_array_on_low_lat_mem(iet, i, storage)
                     elif i.is_ObjectArray:
-                        # ObjectArray's get placed at the top of the IET
+                        # ObjectArrays get placed at the top of the IET
                         self._alloc_object_array_on_low_lat_mem(iet, i, storage)
                     elif i.is_PointerArray:
-                        # PointerArray's get placed at the top of the IET
+                        # PointerArrays get placed at the top of the IET
                         self._alloc_pointed_array_on_high_bw_mem(iet, i, storage)
                 except AttributeError:
                     # E.g., a generic SymPy expression
@@ -293,7 +284,7 @@ class DataManager(object):
         symbol_names = {i.name for i in FindSymbols('free-symbols').visit(iet)}
         need_cast = {i for i in need_cast if i.name in symbol_names}
 
-        casts = tuple(PointerCast(i) for i in iet.parameters if i in need_cast)
+        casts = tuple(self.lang.PointerCast(i) for i in iet.parameters if i in need_cast)
         if casts:
             casts = (List(body=casts, footer=c.Line()),)
 
