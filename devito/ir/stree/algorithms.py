@@ -190,5 +190,5 @@ def stree_section(stree):
     for i in sections:
         insert(NodeSection(), i.parent, i.nodes)
 
-    import pdb;pdb.set_trace()
+    #import pdb;pdb.set_trace()
     return stree

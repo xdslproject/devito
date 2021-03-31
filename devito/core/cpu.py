@@ -84,8 +84,6 @@ class Cpu64OperatorMixin(object):
         o['blocklevels'] = oo.pop('blocklevels', cls.BLOCK_LEVELS)
         o['skewing'] = oo.pop('skewing', False)
 
-        o['skewing'] = oo.pop('skewing', False)
-
         # CIRE
         o['min-storage'] = oo.pop('min-storage', False)
         o['cire-rotate'] = oo.pop('cire-rotate', False)
@@ -207,7 +205,7 @@ class Cpu64AdvOperator(Cpu64OperatorMixin, CoreOperator):
             mpiize(graph, mode=options['mpi'])
 
         # Lower IncrDimensions so that blocks of arbitrary shape may be used
-        # relax_incr_dimensions(graph, sregistry=sregistry)
+        relax_incr_dimensions(graph, sregistry=sregistry)
 
         # Parallelism
         parizer = cls._Target.Parizer(sregistry, options, platform)

@@ -380,7 +380,7 @@ class Operator(Callable):
 
         print(iet)
         # Analyze the IET Sections for C-level profiling
-        import pdb;pdb.set_trace()
+        #import pdb;pdb.set_trace()
         profiler.analyze(iet)
 
         # Wrap the IET with an EntryFunction (a special Callable representing

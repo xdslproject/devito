@@ -64,13 +64,13 @@ def relax_incr_dimensions(iet, **kwargs):
     """
 
     sregistry = kwargs['sregistry']
-    import pdb;pdb.set_trace()
+    #import pdb;pdb.set_trace()
     efuncs = []
     mapper = {}
     return iet, {'efuncs': efuncs}
 
     for tree in retrieve_iteration_tree(iet):
-        import pdb;pdb.set_trace()
+        #import pdb;pdb.set_trace()
 
         iterations = [i for i in tree if i.dim.is_Incr]
         if not iterations:
@@ -79,7 +79,6 @@ def relax_incr_dimensions(iet, **kwargs):
         root = iterations[0]
         if root.dim.is_Time and root.dim.symbolic_step.is_Incr:
             pass
-
 
         if root in mapper:
             continue
@@ -103,7 +102,7 @@ def relax_incr_dimensions(iet, **kwargs):
         # Create the ElementalFunction
         name = sregistry.make_name(prefix="bf")
         body = compose_nodes(outer)
-        import pdb;pdb.set_trace()
+        #import pdb;pdb.set_trace()
         dynamic_parameters = flatten((i.symbolic_bounds, i.step) for i in outer)
         dynamic_parameters.extend([i.step for i in inner if not is_integer(i.step)])
         efunc = make_efunc(name, body, dynamic_parameters)
@@ -124,7 +123,7 @@ def relax_incr_dimensions(iet, **kwargs):
                         dynamic_args_mapper[j.step] = (value,)
             calls.append(efunc.make_call(dynamic_args_mapper))
 
-        import pdb;pdb.set_trace()
+        #import pdb;pdb.set_trace()
 
         mapper[root] = List(body=calls)
 
