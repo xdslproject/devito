@@ -50,6 +50,7 @@ class Blocking(Queue):
     def __init__(self, options):
         self.inner = bool(options['blockinner'])
         self.levels = options['blocklevels']
+        self.skewing = options['skewing']
 
         self.nblocked = Counter()
 
@@ -121,8 +122,12 @@ class Blocking(Queue):
                 print(dict(c.properties))
                 properties = dict(c.properties)
                 properties.pop(d)
-                properties.update({bd: c.properties[d] for bd in block_dims})
-                print(properties)
+                properties.update({bd: c.properties[d] - {TILABLE} for bd in block_dims})
+                properties.update({bd: c.properties[d] - {SKEWABLE} for bd in
+                                   block_dims[:-1]})
+
+                #properties.update({bd: c.properties[d] for bd in block_dims})
+                #print(properties)
                 processed.append(c.rebuild(exprs=exprs, ispace=ispace,
                                            properties=properties))
                 self.nblocked[d] += 1
@@ -206,14 +211,16 @@ def decompose(ispace, d, block_dims):
 
     intervals = IntervalGroup(intervals, relations=relations)
 
-    #import pdb;pdb.set_trace()
+    sub_iterators = dict(ispace.sub_iterators)
+    sub_iterators.pop(d, None)
+    sub_iterators.update({bd: ispace.sub_iterators.get(d, []) for bd in block_dims})
+
+    import pdb;pdb.set_trace()
+
+    """
     if not d.is_Time:
-        sub_iterators = dict(ispace.sub_iterators)
-        sub_iterators.pop(d, None)
         sub_iterators.update({bd: ispace.sub_iterators.get(d, []) for bd in block_dims})
     else:
-        sub_iterators = dict(ispace.sub_iterators)
-        sub_iterators.pop(d, None)
         for bd in block_dims:
             if bd.symbolic_incr.is_Symbol:
                 sub_iterators.update({bd: ()})
@@ -221,6 +228,7 @@ def decompose(ispace, d, block_dims):
                 sub_iterators.update({bd: ispace.sub_iterators.get(d, [])})
 
     #import pdb;pdb.set_trace()
+    """
 
     directions = dict(ispace.directions)
     directions.pop(d)
@@ -302,4 +310,5 @@ class Skewing(Queue):
             processed.append(c.rebuild(exprs=exprs, ispace=ispace,
                                        properties=c.properties))
 
+        import pdb;pdb.set_trace()
         return processed
