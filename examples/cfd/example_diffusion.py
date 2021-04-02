@@ -21,12 +21,9 @@ import sympy
 from devito import Grid, Eq, Operator, TimeFunction, solve
 from devito.logger import log
 
-try:
-    from devitobench import Benchmark, Executor, Plotter
-except:
-    Benchmark = None
-    Executor = None
-    Plotter = None
+Benchmark = None
+Executor = None
+Plotter = None
 
 
 def ring_initial(spacing=0.01):
