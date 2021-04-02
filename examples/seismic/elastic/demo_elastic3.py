@@ -220,13 +220,13 @@ op1()
 
 sp_zi = Dimension(name='sp_zi')
 
-sp_source_mask = Function(name='sp_source_mask', shape=(list(sparse_shape)), dimensions=(x, y, sp_zi), space_order=0, dtype=np.int32)
+sp_source_id = Function(name='sp_source_id', shape=(list(sparse_shape)), dimensions=(x, y, sp_zi), space_order=0, dtype=np.int32)
 
 # Now holds IDs
-sp_source_mask.data[inds[0], inds[1], :] = tuple(inds[-1][:len(np.unique(inds[-1]))])
+sp_source_id.data[inds[0], inds[1], :] = tuple(inds[-1][:len(np.unique(inds[-1]))])
 
-assert(np.count_nonzero(sp_source_mask.data) == len(nzinds[0]))
-assert(len(sp_source_mask.dimensions) == 3)
+assert(np.count_nonzero(sp_source_id.data) == len(nzinds[0]))
+assert(len(sp_source_id.dimensions) == 3)
 
 # import pdb; pdb.set_trace()
 
@@ -255,12 +255,12 @@ u_t_sol = Eq(tau_sol.forward, tau_sol + dt * l * diag(div(v_sol.forward)) + dt *
 
 eq0 = Eq(sp_zi.symbolic_max, nnz_sp_source_mask[x, y] - 1, implicit_dims=(time, x, y))
 # eq1 = Eq(zind, sp_source_mask[x, sp_zi], implicit_dims=(time, x, sp_zi))
-eq1 = Eq(zind, sp_source_mask[x, y, sp_zi], implicit_dims=(time, x, y, sp_zi))
+eq1 = Eq(zind, sp_source_id[x, y, sp_zi], implicit_dims=(time, x, y, sp_zi))
 
 
-myexpr_fxx = source_mask[x, y, zind] * save_src_fxx[time, source_id[x, y, zind]]
-myexpr_fyy = source_mask[x, y, zind] * save_src_fyy[time, source_id[x, y, zind]]
-myexpr_fzz = source_mask[x, y, zind] * save_src_fzz[time, source_id[x, y, zind]]
+myexpr_fxx = save_src_fxx[time, source_id[x, y, zind]]
+myexpr_fyy = save_src_fyy[time, source_id[x, y, zind]]
+myexpr_fzz = save_src_fzz[time, source_id[x, y, zind]]
 
 # import pdb; pdb.set_trace()
 eq_fxx = Inc(tau_sol[0].forward[t+1, x, y, zind], myexpr_fxx, implicit_dims=(time, x, y, sp_zi))
