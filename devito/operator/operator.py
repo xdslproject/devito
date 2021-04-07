@@ -190,7 +190,7 @@ class Operator(Callable):
         # Lower ScheduleTree to an Iteration/Expression Tree
         iet, byproduct = cls._lower_iet(stree, profiler, **kwargs)
 
-        print(iet)
+        #print(iet)
 
         # Make it an actual Operator
         op = Callable.__new__(cls, **iet.args)
@@ -377,7 +377,7 @@ class Operator(Callable):
         # Build an IET from a ScheduleTree
         iet = iet_build(stree)
 
-        print(iet)
+        #print(iet)
         # Analyze the IET Sections for C-level profiling
         profiler.analyze(iet)
 

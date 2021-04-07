@@ -112,14 +112,14 @@ class Blocking(Queue):
                 processed.append(c.rebuild(exprs=exprs, ispace=ispace,
                                            properties=properties))
             elif 1 and SEQUENTIAL in c.properties[d]:
-                print(c.ispace)
+                #print(c.ispace)
                 ispace = decompose(c.ispace, d, block_dims)
-                print(ispace)
+                #print(ispace)
                 # Use the innermost IncrDimension in place of `d`
                 exprs = [uxreplace(e, {d: bd}) for e in c.exprs]
 
                 # The new Cluster properties
-                print(dict(c.properties))
+                #print(dict(c.properties))
                 properties = dict(c.properties)
                 properties.pop(d)
                 properties.update({bd: c.properties[d] - {TILABLE} for bd in block_dims})
