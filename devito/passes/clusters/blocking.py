@@ -100,7 +100,7 @@ class Blocking(Queue):
                 exprs = [uxreplace(e, {d: bd}) for e in c.exprs]
 
                 # The new Cluster properties
-                # TILABLE property is dropped after the blocking.
+                # TILABLE property is dropped after blocking
                 # SKEWABLE is dropped as well, but only from the new
                 # block dimensions.
                 properties = dict(c.properties)
@@ -125,6 +125,8 @@ class Blocking(Queue):
                 properties.update({bd: c.properties[d] - {TILABLE} for bd in block_dims})
                 properties.update({bd: c.properties[d] - {SKEWABLE} for bd in
                                    block_dims[:-1]})
+                properties.update({bd: c.properties[d] - {SEQUENTIAL} for bd in
+                                   block_dims[:-1]})
 
                 #properties.update({bd: c.properties[d] for bd in block_dims})
                 #print(properties)
@@ -141,8 +143,10 @@ class Blocking(Queue):
 
 
 def preprocess(clusters, options):
-    # Preprocess: heuristic: drop TILABLE from innermost Dimensions to
-    # maximize vectorization
+    """
+    Preprocess: heuristic: drop TILABLE from innermost Dimensions to
+    maximize vectorization
+    """
     inner = bool(options['blockinner'])
     processed = []
     for c in clusters:
@@ -213,11 +217,9 @@ def decompose(ispace, d, block_dims):
 
     sub_iterators = dict(ispace.sub_iterators)
     sub_iterators.pop(d, None)
-    sub_iterators.update({bd: ispace.sub_iterators.get(d, []) for bd in block_dims})
+    #sub_iterators.update({bd: ispace.sub_iterators.get(d, []) for bd in block_dims})
 
-    import pdb;pdb.set_trace()
-
-    """
+    
     if not d.is_Time:
         sub_iterators.update({bd: ispace.sub_iterators.get(d, []) for bd in block_dims})
     else:
@@ -226,9 +228,7 @@ def decompose(ispace, d, block_dims):
                 sub_iterators.update({bd: ()})
             else:
                 sub_iterators.update({bd: ispace.sub_iterators.get(d, [])})
-
-    #import pdb;pdb.set_trace()
-    """
+ 
 
     directions = dict(ispace.directions)
     directions.pop(d)
@@ -278,6 +278,7 @@ class Skewing(Queue):
     def callback(self, clusters, prefix):
         if not prefix:
             return clusters
+        
 
         d = prefix[-1].dim
 
@@ -310,5 +311,4 @@ class Skewing(Queue):
             processed.append(c.rebuild(exprs=exprs, ispace=ispace,
                                        properties=c.properties))
 
-        import pdb;pdb.set_trace()
         return processed

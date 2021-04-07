@@ -484,10 +484,8 @@ class Iteration(Node):
         self.pragmas = as_tuple(pragmas)
         self.uindices = as_tuple(uindices)
         try:
-            #import pdb;pdb.set_trace()
             assert all(i.is_Derived and self.dim in i._defines for i in uindices)
         except:
-            # import pdb;pdb.set_trace()
             pass
 
     def __repr__(self):

@@ -163,7 +163,6 @@ def stree_section(stree):
         section = None
         for n in findall(stree, filter_=lambda n: n.depth == i):
             if any(p in flatten(s.nodes for s in sections) for p in n.ancestors):
-                # import pdb;pdb.set_trace()
                 # Already within a section
                 continue
             elif n.is_Sync:
@@ -172,7 +171,6 @@ def stree_section(stree):
                 section = None
             elif n.is_Iteration:
                 if n.dim.is_Time and SEQUENTIAL in n.properties:
-                    # import pdb;pdb.set_trace()
                     # If n.dim.is_Time, we end up here in 99.9% of the cases.
                     # Sometimes, however, time is a PARALLEL Dimension (e.g.,
                     # think of `norm` Operators)
@@ -185,10 +183,8 @@ def stree_section(stree):
             else:
                 section = None
 
-    # import pdb;pdb.set_trace()
     # Transform the schedule tree by adding in sections
     for i in sections:
         insert(NodeSection(), i.parent, i.nodes)
 
-    #import pdb;pdb.set_trace()
     return stree

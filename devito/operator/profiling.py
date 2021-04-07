@@ -103,7 +103,6 @@ class Profiler(object):
         """
         Instrument the given IET for C-level performance profiling.
         """
-        #import pdb;pdb.set_trace()
         sections = FindNodes(Section).visit(iet)
         if sections:
             mapper = {}

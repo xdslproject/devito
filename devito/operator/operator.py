@@ -191,7 +191,6 @@ class Operator(Callable):
         iet, byproduct = cls._lower_iet(stree, profiler, **kwargs)
 
         print(iet)
-        import pdb;pdb.set_trace()
 
         # Make it an actual Operator
         op = Callable.__new__(cls, **iet.args)
@@ -380,7 +379,6 @@ class Operator(Callable):
 
         print(iet)
         # Analyze the IET Sections for C-level profiling
-        #import pdb;pdb.set_trace()
         profiler.analyze(iet)
 
         # Wrap the IET with an EntryFunction (a special Callable representing

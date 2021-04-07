@@ -33,7 +33,6 @@ class TestCodeGenSkewing(object):
         time_iter = [i for i in iters if i.dim.is_Time]
         assert len(time_iter) == 2
 
-        import pdb;pdb.set_trace()
         iters = FindNodes(Iteration).visit(op)
         assert len(iters) == 7
         assert iters[0].dim.parent is time
