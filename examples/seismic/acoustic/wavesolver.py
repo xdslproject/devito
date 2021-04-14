@@ -5,7 +5,7 @@ from examples.seismic.acoustic.operators import (
 )
 from examples.checkpointing.checkpoint import DevitoCheckpoint, CheckpointOperator
 from pyrevolve import Revolver
-import pyvista as pv
+# import pyvista as pv
 import matplotlib.pyplot as plt
 import numpy as np
 from devito.types.basic import Scalar
