@@ -8,15 +8,17 @@ from functools import singledispatch
 from operator import itemgetter
 
 import cgen as c
+import numpy as np
 
-from devito.ir import (EntryFunction, List, LocalExpression, FindSymbols,
-                       MapExprStmts, Transformer)
+from devito.data import FULL
+from devito.ir import (EntryFunction, Expression, List, LocalExpression, FindSymbols,
+                       FindNodes, MapExprStmts, Transformer, DummyEq)
 from devito.passes.iet.engine import iet_pass
 from devito.passes.iet.langbase import LangBB
 from devito.passes.iet.misc import is_on_device
-from devito.symbolics import ccode
-from devito.tools import as_mapper, filter_sorted, flatten
-from devito.types import DeviceRM
+from devito.symbolics import ccode, retrieve_indexed
+from devito.tools import DefaultOrderedDict, as_mapper, filter_sorted, flatten, frozendict
+from devito.types import DeviceRM, Symbol
 
 __all__ = ['DataManager', 'DeviceAwareDataManager', 'Storage']
 
@@ -303,7 +305,7 @@ class DataManager(object):
 
 class DeviceAwareDataManager(DataManager):
 
-    def __init__(self, sregistry, options):
+    def __init__(self, sregistry, options, **kwargs):
         """
         Parameters
         ----------
@@ -319,6 +321,7 @@ class DeviceAwareDataManager(DataManager):
         """
         super().__init__(sregistry)
         self.gpu_fit = options['gpu-fit']
+        self.name = kwargs['name']
 
     def _alloc_array_on_high_bw_mem(self, site, obj, storage):
         _storage = Storage()
@@ -382,3 +385,48 @@ class DeviceAwareDataManager(DataManager):
             return iet, {'args': devicerm}
 
         return _map_onmemspace(iet)
+
+    @iet_pass
+    def place_casts(self, iet):
+        if self.name != "IsoFwdOperator":
+            return super().place_casts.__wrapped__(self, iet)
+
+        # Find unique sizes (unique -> minimize necessary registers)
+        functions = [f for f in FindSymbols().visit(iet) if f.is_AbstractFunction]
+        functions = sorted(functions, key=len(i.dimensions), reverse=True)  # Neater codegen
+        mapper = DefaultOrderedDict(list)
+        for f in functions:
+            for d in f.dimensions[1:]:  # NOTE: the outermost dimension is unnecessary
+                # TODO: THIS SHOULD TAKE PADDING INTO ACCOUNT TOO
+                mapper[(d, f._size_halo[d], f.grid)].append(f)
+
+        # Build all exprs such as `const int xs = u_vec->size[1];`
+        imapper= DefaultOrderedDict(dict)
+        sizes = []
+        for (d, halo, _), v in mapper.items():
+            name = self.sregistry.make_name(prefix='%s_fsz' % d.name)
+            s = Symbol(name=name, dtype=np.int32, is_const=True)
+            sizes.append(LocalExpression(DummyEq(s, f._C_get_field(FULL, d).size)))
+            for f in v:
+                imapper[f][d] = s
+
+        # Build all exprs such as:
+        #const int u_t_slice = xs*ys*zs;  // consequently, same for u, b, damp, vp!
+        #const int u_x_slice = ys*zs;     // consequently, same for u, b, damp, vp!
+        #const int u_y_slice = zs;        // consequently, same for u, b, damp, vp!
+        seen = set()
+        slices = []
+        mapper = {}
+        for f, i in imapper.items():
+            m = frozendict(i)
+            if m in seen:
+                continue
+
+        from IPython import embed; embed()
+
+        for n in FindNodes(Expression).visit(iet):
+            expr = n.expr
+        from IPython import embed; embed()
+
+        # #define UA(t, x, y, z) (t)*u_t_slice + (8 + (x))*u_x_slice + (8 + (y))*u_y_slice + (8 + (z))
+

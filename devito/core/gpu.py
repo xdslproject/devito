@@ -188,7 +188,7 @@ class DeviceAdvOperator(DeviceOperatorMixin, CoreOperator):
         hoist_prodders(graph)
 
         # Symbol definitions
-        cls._Target.DataManager(sregistry, options).process(graph)
+        cls._Target.DataManager(sregistry, options, name=kwargs['name']).process(graph)
 
         # Initialize the target-language runtime
         parizer.initialize(graph)
