@@ -31,7 +31,7 @@ struct profiler
 
 extern "C" int IsoFwdOperator(struct dataobj * b_vec, struct dataobj * damp_vec, const float dt, const float o_x, const float o_y, const float o_z, struct dataobj * rec_vec, struct dataobj * rec_coords_vec, struct dataobj * src_vec, struct dataobj * src_coords_vec, struct dataobj * u_vec, struct dataobj * vp_vec, const int x_M, const int x_m, const int y_M, const int y_m, const int z_M, const int z_m, const int p_rec_M, const int p_rec_m, const int p_src_M, const int p_src_m, const int time_M, const int time_m, const int devicerm, const int deviceid, struct profiler * timers);
 
-struct dataobj* make_dataobj_device(struct dataobj * in, void * d_data);
+struct dataobj* make_dataobj_device(struct dataobj * in, void * d_data, const int n);
 void free_dataobj_device(struct dataobj * dev);
 __global__ void kernel0(struct dataobj * b_dev, struct dataobj * damp_dev, const float dt, struct dataobj * u_dev, struct dataobj * vp_dev, const int t0, const int t1, const int t2, const int x_M, const int x_m, const int y_M, const int y_m, const int z_M, const int z_m);
 void kernel1(struct dataobj * b_vec, const float dt, const float o_x, const float o_y, const float o_z, struct dataobj * src_vec, struct dataobj * src_coords_vec, struct dataobj * u_vec, struct dataobj * vp_vec, const int x_M, const int x_m, const int y_M, const int y_m, const int z_M, const int z_m, const int p_src_M, const int p_src_m, const int t2, const int time);
@@ -58,10 +58,10 @@ int IsoFwdOperator(struct dataobj * b_vec, struct dataobj * damp_vec, const floa
   // Symbols
 
   // dataobjs for devices
-  struct dataobj *u_dev = make_dataobj_device(u_vec, u);
-  struct dataobj *b_dev = make_dataobj_device(b_vec, b);
-  struct dataobj *damp_dev = make_dataobj_device(damp_vec, damp);
-  struct dataobj *vp_dev = make_dataobj_device(vp_vec, vp);
+  struct dataobj *u_dev = make_dataobj_device(u_vec, u, 4);
+  struct dataobj *b_dev = make_dataobj_device(b_vec, b, 3);
+  struct dataobj *damp_dev = make_dataobj_device(damp_vec, damp, 3);
+  struct dataobj *vp_dev = make_dataobj_device(vp_vec, vp, 3);
 
   // launch parameters
   const int x0_blk0_size = 8;
@@ -328,32 +328,25 @@ void kernel2(const float o_x, const float o_y, const float o_z, struct dataobj *
 // Utilities
 
 
-struct dataobj* make_dataobj_device(struct dataobj * in, void * d_data)
+struct dataobj* make_dataobj_device(struct dataobj * in, void * d_data, const int n)
 {
-  // hacky, but it does the trick
-  // (don't know how to easily change a single entry in a device struct)
+  // note: currently `const int n` emulates the `n` field that we'll have to add to
+  // `struct dataobj` for reflection (to get the size of the `size`, `npsize`, etc pointers
 
-  struct dataobj *out = (struct dataobj*) malloc(sizeof(struct dataobj));
+  struct dataobj *out = NULL;
+  cudaMallocManaged((void**)&out, sizeof(struct dataobj));
 
   out->data = d_data;
-  out->size = in->size;
-  out->npsize = in->npsize;
-  out->dsize = in->dsize;
-  out->hsize = in->hsize;
-  out->hofs = in->hofs;
-  out->oofs = in->oofs;
 
-  struct dataobj *out_dev = NULL;
-  cudaMalloc((void**)&out_dev, sizeof(struct dataobj));
+  cudaMalloc(&(out->size), sizeof(int)*n);
+  cudaMemcpy(out->size, in->size, sizeof(int)*n, cudaMemcpyHostToDevice);
 
-  cudaMemcpy(out_dev, out, sizeof(struct dataobj), cudaMemcpyHostToDevice);
-
-  free(out);
-
-  return out_dev;
+  return out;
 }
 
 void free_dataobj_device(struct dataobj * dev)
 {
+  cudaFree(dev->size);
   cudaFree(dev);
 }
+/* Backdoor edit at Mon May 10 15:13:14 2021*/ 
