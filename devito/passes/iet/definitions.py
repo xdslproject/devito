@@ -9,16 +9,19 @@ from operator import itemgetter
 
 import cgen as c
 import numpy as np
+import sympy as sp
 
 from devito.data import FULL
 from devito.ir import (EntryFunction, Expression, List, LocalExpression, FindSymbols,
-                       FindNodes, MapExprStmts, Transformer, DummyEq)
+                       FindNodes, MapExprStmts, Transformer, DummyEq, BlankLine)
 from devito.passes.iet.engine import iet_pass
 from devito.passes.iet.langbase import LangBB
 from devito.passes.iet.misc import is_on_device
-from devito.symbolics import ccode, retrieve_indexed
-from devito.tools import DefaultOrderedDict, as_mapper, filter_sorted, flatten, frozendict
-from devito.types import DeviceRM, Symbol
+from devito.symbolics import (DefFunction, MacroArgument, ccode, retrieve_indexed,
+                              uxreplace)
+from devito.tools import (DefaultOrderedDict, as_mapper, filter_sorted, flatten,
+                          frozendict, prod)
+from devito.types import DeviceRM, Symbol, Indexed
 
 __all__ = ['DataManager', 'DeviceAwareDataManager', 'Storage']
 
@@ -388,12 +391,12 @@ class DeviceAwareDataManager(DataManager):
 
     @iet_pass
     def place_casts(self, iet):
-        if self.name != "IsoFwdOperator":
+        if self.name != "IsoFwdOperator" or "for (int x" not in str(iet):
             return super().place_casts.__wrapped__(self, iet)
 
         # Find unique sizes (unique -> minimize necessary registers)
         functions = [f for f in FindSymbols().visit(iet) if f.is_AbstractFunction]
-        functions = sorted(functions, key=len(i.dimensions), reverse=True)  # Neater codegen
+        functions = sorted(functions, key=lambda f: len(f.dimensions), reverse=True)
         mapper = DefaultOrderedDict(list)
         for f in functions:
             for d in f.dimensions[1:]:  # NOTE: the outermost dimension is unnecessary
@@ -401,32 +404,57 @@ class DeviceAwareDataManager(DataManager):
                 mapper[(d, f._size_halo[d], f.grid)].append(f)
 
         # Build all exprs such as `const int xs = u_vec->size[1];`
-        imapper= DefaultOrderedDict(dict)
-        sizes = []
+        imapper= DefaultOrderedDict(list)
+        stmts = []
         for (d, halo, _), v in mapper.items():
             name = self.sregistry.make_name(prefix='%s_fsz' % d.name)
             s = Symbol(name=name, dtype=np.int32, is_const=True)
-            sizes.append(LocalExpression(DummyEq(s, f._C_get_field(FULL, d).size)))
+            expr = DummyEq(s, v[0]._C_get_field(FULL, d).size)
+            stmts.append(LocalExpression(expr))
             for f in v:
-                imapper[f][d] = s
+                imapper[f].append((d, s))
+        stmts.append(BlankLine)
 
         # Build all exprs such as:
         #const int u_t_slice = xs*ys*zs;  // consequently, same for u, b, damp, vp!
-        #const int u_x_slice = ys*zs;     // consequently, same for u, b, damp, vp!
-        #const int u_y_slice = zs;        // consequently, same for u, b, damp, vp!
-        seen = set()
-        slices = []
+        built = {}
+        # {f -> {d -> d_fsz_0, x -> x_fsz_0}}
+        mapper = DefaultOrderedDict(list)
+        for f, v in imapper.items():
+            for n, (d, _) in enumerate(v):
+                expr = prod(list(zip(*v[n:]))[1])
+                try:
+                    s = built[expr]
+                except KeyError:
+                    name = self.sregistry.make_name(prefix='%s_slc' % d.name)
+                    s = built[expr] = Symbol(name=name, dtype=np.int32, is_const=True)
+                    stmts.append(LocalExpression(DummyEq(s, expr)))
+
+                mapper[f].append(s)
+        stmts.append(BlankLine)
+
+        # Build defines such as:
+        # define UA(t, x, y, z) (t)*t_slice_sz + (x)*x_slice_sz + (y)*y_slice_sz + (z)
+        # => u[UA(t2, x+8, y+9, z+7)]
+        headers = []
+        for f, szs in mapper.items():
+            assert len(szs) == len(f.dimensions) - 1
+
+            expr = sum([MacroArgument(d.name)*s for d, s in zip(f.dimensions, szs)])
+            expr += MacroArgument(f.dimensions[-1].name) + f._size_halo[-1].left
+
+            define = DefFunction('%sA' % f.name, f.dimensions)
+
+            headers.append((ccode(define), ccode(expr)))
+
         mapper = {}
-        for f, i in imapper.items():
-            m = frozendict(i)
-            if m in seen:
-                continue
-
-        from IPython import embed; embed()
-
         for n in FindNodes(Expression).visit(iet):
-            expr = n.expr
-        from IPython import embed; embed()
+            subs = {i: Indexed(i.base, sp.Function('%sA' % i.name)(*i.indices))
+                    for i in retrieve_indexed(n.expr)}
+            mapper[n] = n._rebuild(expr=uxreplace(n.expr, subs))
 
-        # #define UA(t, x, y, z) (t)*u_t_slice + (8 + (x))*u_x_slice + (8 + (y))*u_y_slice + (8 + (z))
+        iet = Transformer(mapper).visit(iet)
 
+        iet = iet._rebuild(body=List(body=list(stmts) + list(iet.body)))
+
+        return iet, {'headers': headers}
