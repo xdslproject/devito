@@ -122,9 +122,6 @@ class SaIsoAcousticWaveSolver(object):
 
         op = self.op_fwd(save)
 
-        kwargs['time_M'] = 10
-        u.data[:, 100:130, 100:130, 100:130] = 2.3
-
         # Execute operator and return wavefield and receiver data
         summary = op.apply(src=src, rec=rec, u=u, **kwargs)
 
