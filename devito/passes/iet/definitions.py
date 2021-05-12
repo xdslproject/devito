@@ -441,7 +441,7 @@ class DeviceAwareDataManager(DataManager):
             assert len(szs) == len(f.dimensions) - 1
 
             expr = sum([MacroArgument(d.name)*s for d, s in zip(f.dimensions, szs)])
-            expr += MacroArgument(f.dimensions[-1].name) + f._size_halo[-1].left
+            expr += MacroArgument(f.dimensions[-1].name)
 
             define = DefFunction('%sA' % f.name, f.dimensions)
 
