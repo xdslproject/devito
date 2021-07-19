@@ -1,6 +1,6 @@
 from devito.core.cpu import Cpu64AdvOperator
 from devito.passes.iet import (CTarget, OmpTarget, mpiize, optimize_halospots,
-                               hoist_prodders, relax_incr_dimensions)
+                               hoist_prodders, finalize_loop_bounds)
 from devito.tools import timed_pass
 
 __all__ = ['ArmAdvCOperator', 'ArmAdvOmpOperator']

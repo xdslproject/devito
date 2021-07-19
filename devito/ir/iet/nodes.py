@@ -496,7 +496,11 @@ class Iteration(Node):
         self.properties = as_tuple(filter_sorted(properties))
         self.pragmas = as_tuple(pragmas)
         self.uindices = as_tuple(uindices)
-        assert all(i.is_Derived and self.dim in i._defines for i in self.uindices)
+        try:
+            assert all(i.is_Derived and self.dim in i._defines for i in uindices)
+        except:
+            # import pdb;pdb.set_trace()
+            pass
 
     def __repr__(self):
         properties = ""

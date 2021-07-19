@@ -1173,6 +1173,7 @@ class TestCodeGeneration(object):
         assert len(trees) == 2
         tree = trees[0]
         # Make sure `pokempi0` is the last node within the outer Iteration
+
         assert len(tree) == 2
         assert len(tree.root.nodes) == 2
         call = tree.root.nodes[1]
@@ -1196,8 +1197,8 @@ class TestCodeGeneration(object):
         tree = trees[1]
         # Make sure `pokempi0` is the last node within the inner Iteration over blocks
         assert len(tree) == 2
-        assert len(tree.root.nodes[0].nodes) == 2
-        call = tree.root.nodes[0].nodes[1]
+        assert len(tree.root.nodes) == 2
+        call = tree.root.nodes[1]
         assert call.name == 'pokempi0'
         assert call.arguments[0].name == 'msg0'
         if configuration['language'] == 'openmp':

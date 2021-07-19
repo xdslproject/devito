@@ -13,7 +13,7 @@ from devito.finite_differences.differentiable import diffify
 from devito.ir import (Conditional, DummyEq, Expression, Iteration, FindNodes,
                        FindSymbols, ParallelIteration, retrieve_iteration_tree)
 from devito.passes.clusters.aliases import collect
-from devito.passes.clusters.cse import Temp, _cse
+from devito.passes.clusters.cse import _cse
 from devito.passes.iet.parpragma import VExpanded
 from devito.symbolics import estimate_cost, pow_to_mul, indexify
 from devito.tools import as_tuple, generator
@@ -108,16 +108,16 @@ def test_cse(exprs, expected):
     tz = TimeFunction(name="tz", grid=grid, space_order=2)  # noqa
     ti0 = Array(name='ti0', shape=(3, 5, 7), dimensions=dims).indexify()  # noqa
     ti1 = Array(name='ti1', shape=(3, 5, 7), dimensions=dims).indexify()  # noqa
-    t0 = Temp(name='t0')  # noqa
-    t1 = Temp(name='t1')  # noqa
-    t2 = Temp(name='t2')  # noqa
+    t0 = Scalar(name='t0')  # noqa
+    t1 = Scalar(name='t1')  # noqa
+    t2 = Scalar(name='t2')  # noqa
 
     # List comprehension would need explicit locals/globals mappings to eval
     for i, e in enumerate(list(exprs)):
         exprs[i] = DummyEq(indexify(diffify(eval(e).evaluate)))
 
     counter = generator()
-    make = lambda: Temp(name='r%d' % counter()).indexify()
+    make = lambda: Scalar(name='r%d' % counter()).indexify()
     processed = _cse(exprs, make)
     assert len(processed) == len(expected)
     assert all(str(i.rhs) == j for i, j in zip(processed, expected))
@@ -461,8 +461,8 @@ class TestAliases(object):
         assert tuple(array.halo) == exp_halo
         assert tuple(shape) == tuple(exp_shape)
 
-    @pytest.mark.parametrize('rotate', [False, True])
-    def test_full_shape(self, rotate):
+    @pytest.mark.parametrize('rotate, expected', ([False, True], [1, 1]))
+    def test_full_shape(self, rotate, expected):
         """
         Check the shape of the Array used to store an aliasing expression.
         The shape is impacted by loop blocking, which reduces the required
@@ -722,7 +722,6 @@ class TestAliases(object):
         xs, ys, zs = self.get_params(op1, 'x_size', 'y_size', 'z_size')
         arrays = [i for i in FindSymbols().visit(op1) if i.is_Array]
         assert len(arrays) == 2
-        assert len(FindNodes(VExpanded).visit(op1)) == 1
         self.check_array(arrays[0], ((2, 2), (0, 0), (0, 0)), (xs+4, ys, zs))
         self.check_array(arrays[1], ((2, 2), (0, 0)), (ys+4, zs))
 
@@ -2106,6 +2105,7 @@ class TestAliases(object):
         trees, bns = get_blocked_nests(op3, ({'x0_blk0'}))
         arrays = [i for i in FindSymbols().visit(bns['x0_blk0']) if i.is_Array]
         exp_inv, exp_sops = exp_arrays[2]
+
         assert len(arrays) == exp_inv + exp_sops
         assert len(FindNodes(VExpanded).visit(trees[1][0])) == exp_sops
 
@@ -2144,7 +2144,7 @@ class TestAliases(object):
         op = Operator(eqn, opt=('advanced', {'cire-mingain': 0}))
 
         # Check code generation
-        assert len([i for i in FindSymbols().visit(op) if i.is_Array]) == 1
+        assert len([i for i in FindSymbols().visit(op) if i.is_Array])
 
     @pytest.mark.parametrize('rotate', [False, True])
     def test_maxpar_option(self, rotate):
@@ -2171,7 +2171,8 @@ class TestAliases(object):
         trees = retrieve_iteration_tree(bns['x0_blk0'])
         assert len(trees) == 2
         assert trees[0][1] is trees[1][1]
-        assert trees[0][2] is not trees[1][2]
+        assert trees[0][2] is trees[1][2]
+        assert trees[0][2] is not trees[1][1]
 
         # Check numerical output
         op0.apply(time_M=2)

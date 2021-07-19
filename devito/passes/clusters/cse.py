@@ -8,17 +8,13 @@ from devito.types import Symbol
 __all__ = ['cse']
 
 
-class Temp(Symbol):
-    pass
-
-
 @cluster_pass
 def cse(cluster, sregistry, *args):
     """
     Common sub-expressions elimination (CSE).
     """
-    make = lambda: Temp(name=sregistry.make_name(), dtype=cluster.dtype).indexify()
-    processed = _cse(cluster, make)
+    make = lambda: Symbol(name=sregistry.make_name(), dtype=cluster.dtype).indexify()
+    processed = _cse(cluster.exprs, make)
 
     return cluster.rebuild(processed)
 
@@ -101,7 +97,6 @@ def _cse(maybe_exprs, make, mode='default'):
 
     # At this point we may have useless temporaries (e.g., r0=r1). Let's drop them
     processed = _compact_temporaries(processed)
-
     return processed
 
 
@@ -112,12 +107,9 @@ def _compact_temporaries(exprs):
     # First of all, convert to SSA
     exprs = makeit_ssa(exprs)
 
-    # Drop candidates are all exprs in the form `t0 = s` where `s` is a symbol
-    # Note: only CSE-captured Temps, which are by construction local objects, may
-    # safely be compacted; a generic Symbol could instead be accessed in a subsequent
-    # Cluster, for example: `for (i = ...) { a = b; for (j = a ...) ...`
+    # What's gonna be dropped
     mapper = {e.lhs: e.rhs for e in exprs
-              if isinstance(e.lhs, Temp) and (q_leaf(e.rhs) or e.rhs.is_Function)}
+              if e.lhs.is_Symbol and (q_leaf(e.rhs) or e.rhs.is_Function)}
 
     processed = []
     for e in exprs:

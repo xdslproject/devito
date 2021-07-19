@@ -19,31 +19,24 @@ class TestGradient(object):
                                      ('noop',
                                       {'openmp': True})])
     @pytest.mark.parametrize('space_order', [4, 16])
-    @pytest.mark.parametrize('kernel, shape, spacing, setup_func, time_order', [
-        ('OT2', (70, 80), (10., 10.), setup, 2),
-        ('sls', (70, 80), (20., 20.), viscoacoustic_setup, 2),
-        ('sls', (70, 80), (20., 20.), viscoacoustic_setup, 1),
-    ])
-    def test_gradient_checkpointing(self, dtype, opt, space_order, kernel, shape, spacing,
-                                    setup_func, time_order):
+    def test_gradient_checkpointing(self, dtype, opt, space_order):
         """
         This test ensures that the FWI gradient computed with checkpointing matches
         the one without checkpointing. Note that this test fails with dynamic openmp
         scheduling enabled so this test disables it.
         """
-        wave = setup_func(shape=shape, spacing=spacing, dtype=dtype,
-                          kernel=kernel, space_order=space_order, nbl=40, opt=opt,
-                          time_order=time_order)
+        wave = setup(shape=(70, 80), spacing=(10., 10.), dtype=dtype,
+                     kernel='OT2', space_order=space_order, nbl=40, opt=opt)
 
         v0 = Function(name='v0', grid=wave.model.grid, space_order=space_order,
                       dtype=dtype)
         smooth(v0, wave.model.vp)
 
         # Compute receiver data for the true velocity
-        rec = wave.forward()[0]
+        rec, _, _ = wave.forward()
 
         # Compute receiver data and full wavefield for the smooth velocity
-        rec0, u0 = wave.forward(vp=v0, save=True)[0:2]
+        rec0, u0, _ = wave.forward(vp=v0, save=True)
 
         # Gradient: <J^T \delta d, dm>
         residual = Receiver(name='rec', grid=wave.model.grid, data=rec0.data - rec.data,
@@ -147,21 +140,22 @@ class TestGradient(object):
         assert(np.allclose(grad_u.data, grad_v.data, rtol=tolerance, atol=tolerance))
         assert(np.allclose(grad_u.data, grad_uv.data, rtol=tolerance, atol=tolerance))
 
-    @pytest.mark.parametrize('kernel, shape, ckp, setup_func, time_order', [
-        ('OT2', (50, 60), True, setup, 2),
-        ('OT2', (50, 60), False, setup, 2),
-        ('centered', (50, 60), True, tti_setup, 2),
-        ('centered', (50, 60), False, tti_setup, 2),
-        ('sls', (50, 60), True, viscoacoustic_setup, 2),
-        ('sls', (50, 60), False, viscoacoustic_setup, 2),
-        ('sls', (50, 60), True, viscoacoustic_setup, 1),
-        ('sls', (50, 60), False, viscoacoustic_setup, 1),
+    @pytest.mark.parametrize('dtype, space_order, kernel, shape, ckp, setup_func', [
+        (np.float32, 4, 'OT2', (50, 60), True, setup),
+        (np.float32, 4, 'OT2', (50, 60), False, setup),
+        (np.float64, 4, 'OT2', (50, 60), True, setup),
+        (np.float64, 4, 'OT2', (50, 60), False, setup),
+        (np.float32, 4, 'centered', (50, 60), True, tti_setup),
+        (np.float32, 4, 'centered', (50, 60), False, tti_setup),
+        (np.float64, 4, 'centered', (50, 60), True, tti_setup),
+        (np.float64, 4, 'centered', (50, 60), False, tti_setup),
+        (np.float32, 4, 'sls', (50, 60), True, viscoacoustic_setup),
+        (np.float32, 4, 'sls', (50, 60), False, viscoacoustic_setup),
+        (np.float64, 4, 'sls', (50, 60), True, viscoacoustic_setup),
+        (np.float64, 4, 'sls', (50, 60), False, viscoacoustic_setup),
     ])
-    @pytest.mark.parametrize('space_order', [4])
-    @pytest.mark.parametrize('dtype', [np.float32, np.float64])
-    def test_gradientFWI(self, dtype, space_order, kernel, shape, ckp, setup_func,
-                         time_order):
-        """
+    def test_gradientFWI(self, dtype, space_order, kernel, shape, ckp, setup_func):
+        r"""
         This test ensures that the FWI gradient computed with devito
         satisfies the Taylor expansion property:
         .. math::
@@ -177,9 +171,8 @@ class TestGradient(object):
         with F the Forward modelling operator.
         """
         spacing = tuple(10. for _ in shape)
-        wave = setup_func(shape=shape, spacing=spacing, dtype=dtype, kernel=kernel,
-                          tn=400.0, space_order=space_order, nbl=40,
-                          time_order=time_order)
+        wave = setup_func(shape=shape, spacing=spacing, dtype=dtype,
+                          kernel=kernel, tn=400.0, space_order=space_order, nbl=40)
 
         vel0 = Function(name='vel0', grid=wave.model.grid, space_order=space_order)
         smooth(vel0, wave.model.vp)
@@ -189,10 +182,10 @@ class TestGradient(object):
         rec = wave.forward()[0]
 
         # Compute receiver data and full wavefield for the smooth velocity
-        if setup_func is tti_setup:
-            rec0, u0, v0, _ = wave.forward(vp=vel0, save=True)
+        if setup_func is setup:
+            rec0, u0, _ = wave.forward(vp=vel0, save=True)
         else:
-            rec0, u0 = wave.forward(vp=vel0, save=True)[0:2]
+            rec0, u0, v0, _ = wave.forward(vp=vel0, save=True)
 
         # Objective function value
         F0 = .5*linalg.norm(rec0.data - rec.data)**2
@@ -202,11 +195,11 @@ class TestGradient(object):
                             time_range=wave.geometry.time_axis,
                             coordinates=wave.geometry.rec_positions)
 
-        if setup_func is tti_setup:
-            gradient, _ = wave.jacobian_adjoint(residual, u0, v0, vp=vel0,
+        if setup_func is setup:
+            gradient, _ = wave.jacobian_adjoint(residual, u0, vp=vel0,
                                                 checkpointing=ckp)
         else:
-            gradient, _ = wave.jacobian_adjoint(residual, u0, vp=vel0,
+            gradient, _ = wave.jacobian_adjoint(residual, u0, v0, vp=vel0,
                                                 checkpointing=ckp)
 
         G = np.dot(gradient.data.reshape(-1), dm.reshape(-1))
@@ -238,16 +231,14 @@ class TestGradient(object):
         assert np.isclose(p1[0], 1.0, rtol=0.1)
         assert np.isclose(p2[0], 2.0, rtol=0.1)
 
-    @pytest.mark.parametrize('kernel, shape, spacing, setup_func, time_order', [
-        ('OT2', (70, 80), (15., 15.), setup, 2),
-        ('sls', (70, 80), (20., 20.), viscoacoustic_setup, 2),
-        ('sls', (70, 80), (20., 20.), viscoacoustic_setup, 1),
+    @pytest.mark.parametrize('dtype, space_order, kernel, shape, spacing, setup_func', [
+        (np.float32, 4, 'OT2', (70, 80), (15., 15.), setup),
+        (np.float64, 4, 'OT2', (70, 80), (15., 15.), setup),
+        (np.float32, 4, 'sls', (70, 80), (20., 20.), viscoacoustic_setup),
+        (np.float64, 4, 'sls', (70, 80), (20., 20.), viscoacoustic_setup),
     ])
-    @pytest.mark.parametrize('space_order', [4])
-    @pytest.mark.parametrize('dtype', [np.float32, np.float64])
-    def test_gradientJ(self, dtype, space_order, kernel, shape, spacing, time_order,
-                       setup_func):
-        """
+    def test_gradientJ(self, dtype, space_order, kernel, shape, spacing, setup_func):
+        r"""
         This test ensures that the Jacobian computed with devito
         satisfies the Taylor expansion property:
         .. math::
@@ -257,7 +248,7 @@ class TestGradient(object):
         """
         wave = setup_func(shape=shape, spacing=spacing, dtype=dtype,
                           kernel=kernel, space_order=space_order,
-                          time_order=time_order, tn=1000., nbl=10+space_order/2)
+                          tn=1000., nbl=10+space_order/2)
 
         v0 = Function(name='v0', grid=wave.model.grid, space_order=space_order)
         smooth(v0, wave.model.vp)
