@@ -5,10 +5,10 @@ from matplotlib.pyplot import pause # noqa
 import matplotlib.pyplot as plt
 import numpy as np
 
-nx = 64
-ny = 64
-nz = 64
-nt = 58
+nx = 640
+ny = 640
+nz = 640
+nt = 5800
 nu = .5
 dx = 2. / (nx - 1)
 dy = 2. / (ny - 1)
@@ -21,7 +21,7 @@ init_value = 50
 
 # Field initialization
 grid = Grid(shape=(nx, ny, nz))
-u = TimeFunction(name='u', grid=grid, space_order=2)
+u = TimeFunction(name='u', grid=grid, space_order=8)
 u.data[:, :, :] = init_value
 
 # Create an equation with second-order derivatives
@@ -39,7 +39,7 @@ op = Operator(eq0, opt=('advanced', {'openmp': False,
 
 op.apply(time_M=time_M, dt=dt)
 print(np.linalg.norm(u.data))
-assert np.isclose(np.linalg.norm(u.data), 31873.133, atol=1e-3, rtol=0)
+# assert np.isclose(np.linalg.norm(u.data), 35795.605, atol=1e-3, rtol=0)
 u.data[:] = init_value
 op1 = Operator(eq0, opt=('advanced', {'openmp': False,
                                       'wavefront': True, 'blocklevels': 1}))

@@ -6,7 +6,7 @@ from devito.passes.equations import collect_derivatives
 from devito.passes.clusters import (Lift, blocking, buffering, cire, cse,
                                     extract_increments, factorize, fuse, optimize_pows)
 from devito.passes.iet import (CTarget, OmpTarget, avoid_denormals, mpiize,
-                               optimize_halospots, hoist_prodders, finalize_loop_bounds)
+                               optimize_halospots, hoist_prodders, relax_incr_dimensions)
 from devito.tools import timed_pass
 
 __all__ = ['Cpu64NoopCOperator', 'Cpu64NoopOmpOperator', 'Cpu64AdvCOperator',

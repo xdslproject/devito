@@ -8,7 +8,7 @@ from devito.passes.iet.engine import iet_pass
 from devito.symbolics import MIN, MAX
 from devito.tools import split, is_integer
 
-__all__ = ['avoid_denormals', 'hoist_prodders', 'finalize_loop_bounds', 'is_on_device']
+__all__ = ['avoid_denormals', 'hoist_prodders', 'relax_incr_dimensions', 'is_on_device']
 
 
 @iet_pass
@@ -55,7 +55,7 @@ def hoist_prodders(iet):
 
 
 @iet_pass
-def finalize_loop_bounds(iet, **kwargs):
+def relax_incr_dimensions(iet, **kwargs):
     """
     This pass adjusts the bounds of blocked Iterations in order to include the "remainder
     regions".  Without the relaxation that occurs in this pass, the only way to iterate
