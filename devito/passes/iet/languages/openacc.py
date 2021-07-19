@@ -1,7 +1,7 @@
 import cgen as c
 
 from devito.arch import AMDGPUX, NVIDIAX
-from devito.ir import Call, List, ParallelIteration, ParallelTree, FindSymbols
+from devito.ir import Call, List, ParallelIteration, FindSymbols
 from devito.passes.iet.definitions import DeviceAwareDataManager
 from devito.passes.iet.orchestration import Orchestrator
 from devito.passes.iet.parpragma import PragmaDeviceAwareTransformer, PragmaLangBB
@@ -22,13 +22,10 @@ class DeviceAccIteration(ParallelIteration):
         return 'acc parallel loop'
 
     @classmethod
-    def _make_clauses(cls, ncollapse=None, reduction=None, tile=None, **kwargs):
+    def _make_clauses(cls, ncollapse=None, reduction=None, **kwargs):
         clauses = []
 
-        if ncollapse:
-            clauses.append('collapse(%d)' % (ncollapse or 1))
-        elif tile:
-            clauses.append('tile(%s)' % ','.join(str(i) for i in tile))
+        clauses.append('collapse(%d)' % (ncollapse or 1))
 
         if reduction:
             clauses.append(make_clause_reduction(reduction))
@@ -58,10 +55,9 @@ class DeviceAccIteration(ParallelIteration):
         kwargs.pop('gpu_fit', None)
 
         kwargs.pop('schedule', None)
-        kwargs.pop('parallel', None)
+        kwargs.pop('parallel', False)
         kwargs.pop('chunk_size', None)
         kwargs.pop('nthreads', None)
-        kwargs.pop('tile', None)
 
         return kwargs
 
@@ -158,7 +154,6 @@ class AccBB(PragmaLangBB):
 
 
 class DeviceAccizer(PragmaDeviceAwareTransformer):
-
     lang = AccBB
 
     def _make_partree(self, candidates, nthreads=None):

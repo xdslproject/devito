@@ -21,6 +21,8 @@ class CodePrinter(C99CodePrinter):
         'FLOATP': '(float*)',
         'DOUBLE': '(double)',
         'DOUBLEP': '(double*)',
+        'Min': 'MIN',
+        'Max': 'MAX',
     }
 
     """

@@ -21,13 +21,12 @@ from devito.operator import Operator  # noqa
 # Other stuff exposed to the user
 from devito.builtins import *  # noqa
 from devito.data.allocators import *  # noqa
-from devito.mpi import MPI  # noqa
+from devito.mpi import MPI, mpi_registry  # noqa
 
 # Imports required to initialize Devito
 from devito.arch import compiler_registry, platform_registry
 from devito.core import *   # noqa
 from devito.logger import error, warning, info, logger_registry, set_log_level  # noqa
-from devito.mpi.routines import mpi_registry
 from devito.operator import profiler_registry, operator_registry
 
 

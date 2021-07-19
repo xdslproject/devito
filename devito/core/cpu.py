@@ -81,7 +81,8 @@ class Cpu64OperatorMixin(object):
         # Blocking
         o['blockinner'] = oo.pop('blockinner', False)
         o['blocklevels'] = oo.pop('blocklevels', cls.BLOCK_LEVELS)
-        o['skewing'] = oo.pop('skewing', False)
+        o['wavefront'] = oo.pop('wavefront', False)
+        o['skewing'] = oo.pop('skewing', False) or o['wavefront']
 
         # CIRE
         o['min-storage'] = oo.pop('min-storage', False)
@@ -165,6 +166,10 @@ class Cpu64AdvOperator(Cpu64OperatorMixin, CoreOperator):
         clusters = cire(clusters, 'invariants', sregistry, options, platform)
         clusters = Lift().process(clusters)
 
+        options['blocklevels'] = 2
+        options['wavefront'] = True
+        options['skewing'] = False
+
         # Blocking to improve data locality
         clusters = blocking(clusters, options)
 
@@ -177,8 +182,15 @@ class Cpu64AdvOperator(Cpu64OperatorMixin, CoreOperator):
         # The previous passes may have created fusion opportunities
         clusters = fuse(clusters)
 
-        # Reduce flops
+        # Reduce flops (no arithmetic alterations)
+        #if not options['wavefront']:
         clusters = cse(clusters, sregistry)
+
+        options['blocklevels'] = 0
+        options['wavefront'] = False
+        options['skewing'] = True
+        # Blocking to improve data locality
+        clusters = blocking(clusters, options)
 
         return clusters
 

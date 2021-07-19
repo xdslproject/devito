@@ -1,7 +1,7 @@
 from collections import Counter
 
 from devito.ir.clusters import Queue
-from devito.ir.support import (SEQUENTIAL, SKEWABLE, TILABLE, Interval, IntervalGroup,
+from devito.ir.support import (AFFINE, SEQUENTIAL, SKEWABLE, TILABLE, Interval, IntervalGroup,
                                IterationSpace)
 from devito.symbolics import uxreplace
 from devito.types import IncrDimension
@@ -49,6 +49,8 @@ class Blocking(Queue):
     def __init__(self, options):
         self.inner = bool(options['blockinner'])
         self.levels = options['blocklevels']
+        self.skewing = options['skewing']
+        self.wavefront = options['wavefront']
 
         self.nblocked = Counter()
 
@@ -82,6 +84,9 @@ class Blocking(Queue):
         size = bd.step
         block_dims = [bd]
 
+        if d.is_Time:
+            self.levels = 1
+
         for i in range(1, self.levels):
             bd = IncrDimension(name % i, bd, bd, bd + bd.step - 1, size=size)
             block_dims.append(bd)
@@ -93,6 +98,24 @@ class Blocking(Queue):
         for c in clusters:
             if TILABLE in c.properties[d]:
                 ispace = decompose(c.ispace, d, block_dims)
+
+                # Use the innermost IncrDimension in place of `d`
+                exprs = [uxreplace(e, {d: bd}) for e in c.exprs]
+
+                # The new Cluster properties
+                # TILABLE property is dropped after the blocking.
+                # SKEWABLE is dropped as well, but only from the new
+                # block dimensions.
+                properties = dict(c.properties)
+                properties.pop(d)
+                properties.update({bd: c.properties[d] - {TILABLE} for bd in block_dims})
+                properties.update({bd: c.properties[d] - {SKEWABLE}
+                                  for bd in block_dims[:-1]})
+
+                processed.append(c.rebuild(exprs=exprs, ispace=ispace,
+                                           properties=properties))
+            elif {AFFINE, SEQUENTIAL} <= c.properties[d] and self.wavefront:
+                ispace = decompose_sequential(c.ispace, d, block_dims)
 
                 # Use the innermost IncrDimension in place of `d`
                 exprs = [uxreplace(e, {d: bd}) for e in c.exprs]
@@ -191,7 +214,88 @@ def decompose(ispace, d, block_dims):
 
     sub_iterators = dict(ispace.sub_iterators)
     sub_iterators.pop(d, None)
-    sub_iterators.update({bd: ispace.sub_iterators.get(d, []) for bd in block_dims})
+
+    if not d.is_Time:
+        sub_iterators.update({bd: ispace.sub_iterators.get(d, []) for bd in block_dims})
+    else:
+        for bd in block_dims:
+            if bd.symbolic_incr.is_Symbol:
+                sub_iterators.update({bd: ()})
+            else:
+                sub_iterators.update({bd: ispace.sub_iterators.get(d, [])})
+
+    # sub_iterators.update({bd: ispace.sub_iterators.get(d, []) for bd in block_dims})
+
+    directions = dict(ispace.directions)
+    directions.pop(d)
+    directions.update({bd: ispace.directions[d] for bd in block_dims})
+
+    return IterationSpace(intervals, sub_iterators, directions)
+
+
+def decompose_sequential(ispace, d, block_dims):
+    """
+    Create a new IterationSpace in which the `d` Interval is decomposed
+    into a hierarchy of Intervals over ``block_dims``.
+    """
+    # Create the new Intervals
+    intervals = []
+    for i in ispace:
+        if i.dim is d:
+            intervals.append(i.switch(block_dims[0]))
+            intervals.extend([i.switch(bd).zero() for bd in block_dims[1:]])
+        else:
+            intervals.append(i)
+
+    # Create the relations.
+    # Example: consider the relation `(t, x, y)` and assume we decompose `x` over
+    # `xbb, xb, xi`; then we decompose the relation as two relations, `(t, xbb, y)`
+    # and `(xbb, xb, xi)`
+    relations = [block_dims]
+    for r in ispace.intervals.relations:
+        relations.append([block_dims[0] if i is d else i for i in r])
+
+    # The level of a given Dimension in the hierarchy of block Dimensions
+    level = lambda dim: len([i for i in dim._defines if i.is_Incr])
+
+    # Add more relations
+    for n, i in enumerate(ispace):
+        if i.dim is d:
+            continue
+        elif i.dim.is_Incr:
+            # Make sure IncrDimensions on the same level stick next to each other.
+            # For example, we want `(t, xbb, ybb, xb, yb, x, y)`, rather than say
+            # `(t, xbb, xb, x, ybb, ...)`
+            # pass
+            for bd in block_dims:
+            #    if level(i.dim) >= level(bd):
+                relations.append([bd, i.dim])
+            #    else:
+            #        relations.append([i.dim, bd])
+        elif n > ispace.intervals.index(d):
+            # The non-Incr subsequent Dimensions must follow the block Dimensions
+            # pass
+            for bd in block_dims:
+                relations.append([bd, i.dim])
+        else:
+            # All other Dimensions must precede the block Dimensions
+            # pass
+            for bd in block_dims:
+                relations.append([i.dim, bd])
+
+
+    intervals = IntervalGroup(intervals, relations=relations)
+
+    sub_iterators = dict(ispace.sub_iterators)
+    sub_iterators.pop(d, None)
+
+    for bd in block_dims:
+        if bd.symbolic_incr.is_Symbol:
+            sub_iterators.update({bd: ()})
+        else:
+            sub_iterators.update({bd: ispace.sub_iterators.get(d, [])})
+
+    # sub_iterators.update({bd: ispace.sub_iterators.get(d, []) for bd in block_dims})
 
     directions = dict(ispace.directions)
     directions.pop(d)
@@ -246,26 +350,55 @@ class Skewing(Queue):
 
         processed = []
         for c in clusters:
+
             if SKEWABLE not in c.properties[d]:
                 return clusters
 
             if d is c.ispace[-1].dim and not self.skewinner:
                 return clusters
 
-            skew_dims = {i.dim for i in c.ispace if SEQUENTIAL in c.properties[i.dim]}
-            if len(skew_dims) > 1:
+            skew_dims = [i.dim for i in c.ispace if SEQUENTIAL in c.properties[i.dim]]
+            if len(skew_dims) < 2:
                 return clusters
             skew_dim = skew_dims.pop()
 
             # Since we are here, prefix is skewable and nested under a
             # SEQUENTIAL loop.
             intervals = []
+
+            new_relations = []
+
+            # import pdb;pdb.set_trace()
+
+            # The level of a given Dimension in the hierarchy of block Dimensions
+            level = lambda dim: len([i for i in dim._defines if i.is_Incr])
+
+            skew_level = 1
+            # import pdb;pdb.set_trace()
+
+            for i in c.ispace.intervals.relations:
+                if not i:
+                    # import pdb;pdb.set_trace()
+                    continue
+                elif skew_dim is i[0] and level(i[1]) > skew_level:
+                    # import pdb;pdb.set_trace()
+                    new_relations.append(i)
+                elif skew_dim is i[0] and level(i[1]) == skew_level:
+                    # import pdb;pdb.set_trace()
+                    new_relations.append((i[1], skew_dim))
+                else:
+                    # import pdb;pdb.set_trace()
+                    new_relations.append(i)
+
+            # import pdb;pdb.set_trace()
+
             for i in c.ispace:
                 if i.dim is d:
                     intervals.append(Interval(d, skew_dim, skew_dim))
                 else:
                     intervals.append(i)
-            intervals = IntervalGroup(intervals, relations=c.ispace.relations)
+
+            intervals = IntervalGroup(intervals, relations=new_relations)
             ispace = IterationSpace(intervals, c.ispace.sub_iterators,
                                     c.ispace.directions)
 
