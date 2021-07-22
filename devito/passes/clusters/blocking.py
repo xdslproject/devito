@@ -8,7 +8,7 @@ from devito.types import IncrDimension
 
 from devito.symbolics import xreplace_indices
 
-__all__ = ['blocking']
+__all__ = ['blocking', 'skewing']
 
 
 def blocking(clusters, options):
@@ -35,6 +35,15 @@ def blocking(clusters, options):
 
     if options['blocklevels'] > 0:
         processed = Blocking(options).process(processed)
+
+    return processed
+
+
+def skewing(clusters, options):
+    """
+    skewing
+    """
+    processed = preprocess(clusters, options)
 
     if options['skewing']:
         processed = Skewing(options).process(processed)
@@ -282,7 +291,6 @@ def decompose_sequential(ispace, d, block_dims):
             # pass
             for bd in block_dims:
                 relations.append([i.dim, bd])
-
 
     intervals = IntervalGroup(intervals, relations=relations)
 

@@ -3,9 +3,8 @@ from functools import partial
 from devito.core.operator import CoreOperator, CustomOperator
 from devito.exceptions import InvalidOperator
 from devito.passes.equations import collect_derivatives
-from devito.passes.clusters import (Lift, blocking, buffering, cire, cse,
-                                    extract_increments, factorize, fission, fuse,
-                                    optimize_pows)
+from devito.passes.clusters import (Lift, blocking, buffering, cire, cse, skewing,
+                                    extract_increments, factorize, fuse, optimize_pows)
 from devito.passes.iet import (CTarget, OmpTarget, avoid_denormals, linearize, mpiize,
                                optimize_halospots, hoist_prodders, relax_incr_dimensions)
 from devito.tools import timed_pass
@@ -189,8 +188,8 @@ class Cpu64AdvOperator(Cpu64OperatorMixin, CoreOperator):
         options['blocklevels'] = 0
         options['wavefront'] = False
         options['skewing'] = True
-        # Blocking to improve data locality
-        clusters = blocking(clusters, options)
+        # Skewing
+        clusters = skewing(clusters, options)
 
         return clusters
 
