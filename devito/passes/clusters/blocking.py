@@ -33,6 +33,9 @@ def blocking(clusters, options):
     """
     processed = preprocess(clusters, options)
 
+    if options['wavefront']:
+        options['blocklevels'] = 2
+
     if options['blocklevels'] > 0:
         processed = Blocking(options).process(processed)
 
@@ -374,31 +377,23 @@ class Skewing(Queue):
             # SEQUENTIAL loop.
             intervals = []
 
+            # New relations used to perform loop interchange
             new_relations = []
-
-            # import pdb;pdb.set_trace()
 
             # The level of a given Dimension in the hierarchy of block Dimensions
             level = lambda dim: len([i for i in dim._defines if i.is_Incr])
 
             skew_level = 1
-            # import pdb;pdb.set_trace()
 
             for i in c.ispace.intervals.relations:
                 if not i:
-                    # import pdb;pdb.set_trace()
                     continue
                 elif skew_dim is i[0] and level(i[1]) > skew_level:
-                    # import pdb;pdb.set_trace()
                     new_relations.append(i)
                 elif skew_dim is i[0] and level(i[1]) == skew_level:
-                    # import pdb;pdb.set_trace()
                     new_relations.append((i[1], skew_dim))
                 else:
-                    # import pdb;pdb.set_trace()
                     new_relations.append(i)
-
-            # import pdb;pdb.set_trace()
 
             for i in c.ispace:
                 if i.dim is d:

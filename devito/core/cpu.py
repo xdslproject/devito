@@ -165,10 +165,6 @@ class Cpu64AdvOperator(Cpu64OperatorMixin, CoreOperator):
         clusters = cire(clusters, 'invariants', sregistry, options, platform)
         clusters = Lift().process(clusters)
 
-        options['blocklevels'] = 2
-        options['wavefront'] = True
-        options['skewing'] = False
-
         # Blocking to improve data locality
         clusters = blocking(clusters, options)
 
@@ -182,12 +178,8 @@ class Cpu64AdvOperator(Cpu64OperatorMixin, CoreOperator):
         clusters = fuse(clusters)
 
         # Reduce flops (no arithmetic alterations)
-        #if not options['wavefront']:
         clusters = cse(clusters, sregistry)
 
-        options['blocklevels'] = 0
-        options['wavefront'] = False
-        options['skewing'] = True
         # Skewing
         clusters = skewing(clusters, options)
 
