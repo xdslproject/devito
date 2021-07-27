@@ -142,14 +142,13 @@ def test_mixed_blocking_w_skewing(openmp, expected):
         assert 'nthreads' not in op._state['autotuning'][0]['tuned']
 
 
-@pytest.mark.parametrize('opt, expected', [('advanced', 30),
-                                           (('blocking', {'skewing': True}), 30)])
-def test_tti_aggressive(opt, expected):
+@pytest.mark.parametrize('opt', ['advanced', ('blocking', {'skewing': True})])
+def test_tti_aggressive(opt):
     from test_dse import TestTTI
     wave_solver = TestTTI().tti_operator(opt=opt)
     op = wave_solver.op_fwd()
     op.apply(time=0, autotune='aggressive', dt=0.1)
-    assert op._state['autotuning'][0]['runs'] == expected
+    assert op._state['autotuning'][0]['runs'] == 30
 
 
 @switchconfig(develop_mode=False)
@@ -161,7 +160,7 @@ def test_discarding_runs():
                   opt=('advanced', {'openmp': True, 'par-collapse-ncores': 1}))
     op.apply(time=100, nthreads=4, autotune='aggressive')
 
-    assert op._state['autotuning'][0]['runs'] == 10
+    assert op._state['autotuning'][0]['runs'] == 18
     assert op._state['autotuning'][0]['tpr'] == options['squeezer'] + 1
     assert len(op._state['autotuning'][0]['tuned']) == 3
     assert op._state['autotuning'][0]['tuned']['nthreads'] == 4
@@ -199,7 +198,6 @@ def test_at_w_mpi():
     # to perform the autotuning. Eventually, the result is complete garbage; note
     # also that this autotuning mode disables the halo exchanges
     op.apply(time=-1, autotune=('basic', 'destructive'))
-
     assert np.all(f._data_ro_with_inhalo.sum() == 904)
 
     # Check the halo hasn't been touched during AT

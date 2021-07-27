@@ -461,8 +461,8 @@ class TestAliases(object):
         assert tuple(array.halo) == exp_halo
         assert tuple(shape) == tuple(exp_shape)
 
-    @pytest.mark.parametrize('rotate, expected', ([False, True], [1, 1]))
-    def test_full_shape(self, rotate, expected):
+    @pytest.mark.parametrize('rotate', [False, True])
+    def test_full_shape(self, rotate):
         """
         Check the shape of the Array used to store an aliasing expression.
         The shape is impacted by loop blocking, which reduces the required
@@ -722,6 +722,7 @@ class TestAliases(object):
         xs, ys, zs = self.get_params(op1, 'x_size', 'y_size', 'z_size')
         arrays = [i for i in FindSymbols().visit(op1) if i.is_Array]
         assert len(arrays) == 2
+        assert len(FindNodes(VExpanded).visit(op1)) == 1
         self.check_array(arrays[0], ((2, 2), (0, 0), (0, 0)), (xs+4, ys, zs))
         self.check_array(arrays[1], ((2, 2), (0, 0)), (ys+4, zs))
 
@@ -2106,7 +2107,6 @@ class TestAliases(object):
 
         arrays = [i for i in FindSymbols().visit(bns['x0_blk0']) if i.is_Array]
         exp_inv, exp_sops = exp_arrays[2]
-
         assert len(arrays) == exp_inv + exp_sops
         assert len(FindNodes(VExpanded).visit(pbs['x0_blk0'])) == exp_sops
 
@@ -2145,7 +2145,7 @@ class TestAliases(object):
         op = Operator(eqn, opt=('advanced', {'cire-mingain': 0}))
 
         # Check code generation
-        assert len([i for i in FindSymbols().visit(op) if i.is_Array])
+        assert len([i for i in FindSymbols().visit(op) if i.is_Array]) == 1
 
     @pytest.mark.parametrize('rotate', [False, True])
     def test_maxpar_option(self, rotate):
@@ -2172,8 +2172,7 @@ class TestAliases(object):
         trees = retrieve_iteration_tree(bns['x0_blk0'])
         assert len(trees) == 2
         assert trees[0][1] is trees[1][1]
-        assert trees[0][2] is trees[1][2]
-        assert trees[0][2] is not trees[1][1]
+        assert trees[0][2] is not trees[1][2]
 
         # Check numerical output
         op0.apply(time_M=2)
