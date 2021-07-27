@@ -43,6 +43,7 @@ class PragmaSimdTransformer(PragmaTransformer):
         mapper = {}
         for tree in retrieve_iteration_tree(iet):
             candidates = [i for i in tree if i.is_ParallelRelaxed]
+
             # As long as there's an outer level of parallelism, the innermost
             # PARALLEL Iteration gets vectorized
             if len(candidates) < 2:
