@@ -47,9 +47,9 @@ def skewing(clusters, options):
     skewing
     """
     processed = preprocess(clusters, options)
-
-    if options['skewing']:
-        processed = Skewing(options).process(processed)
+    import pdb;pdb.set_trace()
+    #  if options['skewing'] or options['wavefront']:
+    processed = Skewing(options).process(processed)
 
     return processed
 
@@ -354,12 +354,14 @@ class Skewing(Queue):
         super(Skewing, self).__init__()
 
     def callback(self, clusters, prefix):
+        import pdb;pdb.set_trace()
         if not prefix:
             return clusters
 
         d = prefix[-1].dim
 
         processed = []
+
         for c in clusters:
 
             if SKEWABLE not in c.properties[d]:

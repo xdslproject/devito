@@ -177,7 +177,7 @@ class Cpu64AdvOperator(Cpu64OperatorMixin, CoreOperator):
         # The previous passes may have created fusion opportunities
         clusters = fuse(clusters)
 
-        # Reduce flops (no arithmetic alterations)
+        # Reduce flops
         clusters = cse(clusters, sregistry)
 
         # Skewing
@@ -299,6 +299,7 @@ class Cpu64CustomOperator(Cpu64OperatorMixin, CustomOperator):
         return {
             'buffering': lambda i: buffering(i, callback, sregistry, options),
             'blocking': lambda i: blocking(i, options),
+            'skewing': lambda i: skewing(i, options),
             'factorize': factorize,
             'fission': fission,
             'fuse': fuse,
@@ -337,8 +338,8 @@ class Cpu64CustomOperator(Cpu64OperatorMixin, CustomOperator):
         # Expressions
         'buffering',
         # Clusters
-        'blocking', 'topofuse', 'fission', 'fuse', 'factorize', 'cire-sops',
-        'cse', 'lift', 'opt-pows',
+        'blocking', 'skewing', 'topofuse', 'fuse', 'factorize', 'cire-sops', 'cse', 'lift',
+        'opt-pows',
         # IET
         'denormals', 'optcomms', 'openmp', 'mpi', 'linearize', 'simd', 'prodders',
     )
