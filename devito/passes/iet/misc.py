@@ -1,6 +1,5 @@
 import cgen
 
-from sympy import Min, Max
 from devito.ir.iet import (List, Prodder, FindNodes, Transformer, filter_iterations,
                            retrieve_iteration_tree)
 from devito.ir.support import Forward
@@ -90,12 +89,12 @@ def relax_incr_dimensions(iet, **kwargs):
         assert all(i.direction is Forward for i in iterations)
         outer, inner = split(iterations, lambda i: not i.dim.parent.is_Incr)
 
-        # Get symbolic_max out of each outer dimension
+        # Get root's `symbolic_max` out of each outer Dimension
         roots_max = {i.dim.root: i.symbolic_max for i in outer}
         roots_min = {i.dim.root: i.symbolic_min for i in outer}
 
-        # A dictionary to map maximum of parent dimensions
-        # useful for hierarchical blocking
+        # A dictionary to map maximum of processed parent dimensions. Helps to neatly
+        # handle bounds in hierarchical blocking and SubDimensions
         proc_parents_max = {}
         proc_parents_min = {}
 
@@ -103,7 +102,7 @@ def relax_incr_dimensions(iet, **kwargs):
         if inner[0].dim.is_Time:
             skew_dim = inner[0].dim
 
-        # Process inner iterations
+        # Process inner iterations and adjust their bounds
         for n, i in enumerate(inner):
             # assert i.direction is Forward
 
@@ -137,9 +136,6 @@ def relax_incr_dimensions(iet, **kwargs):
                 # root's max and the current iteration's required max
                 # and instead of `x_M` we may need `x_M + 1` or `x_M + 2`
                 root_max = roots_max[i.dim.root] + i.symbolic_max - i.dim.symbolic_max
-
-                # Domain max candidate
-                # e.g. domain_max = Max(x_M + 1, x_M)
 
                 if skew_dim and not i.dim.is_Time:
                     iter_max = MIN(i.symbolic_max, root_max + skew_dim)
