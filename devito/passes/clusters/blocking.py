@@ -47,8 +47,6 @@ def skewing(clusters, options):
     skewing
     """
     processed = preprocess(clusters, options)
-    import pdb;pdb.set_trace()
-    #  if options['skewing'] or options['wavefront']:
     processed = Skewing(options).process(processed)
 
     return processed
@@ -108,8 +106,8 @@ class Blocking(Queue):
 
         processed = []
         for c in clusters:
-            if TILABLE in c.properties[d]:
-                ispace = decompose(c.ispace, d, block_dims)
+            if (TILABLE in c.properties[d] or
+               {AFFINE, SEQUENTIAL} <= c.properties[d] and self.wavefront):
 
                 # Use the innermost IncrDimension in place of `d`
                 exprs = [uxreplace(e, {d: bd}) for e in c.exprs]
@@ -124,23 +122,10 @@ class Blocking(Queue):
                 properties.update({bd: c.properties[d] - {SKEWABLE}
                                   for bd in block_dims[:-1]})
 
-                processed.append(c.rebuild(exprs=exprs, ispace=ispace,
-                                           properties=properties))
-            elif {AFFINE, SEQUENTIAL} <= c.properties[d] and self.wavefront:
-                ispace = decompose_sequential(c.ispace, d, block_dims)
-
-                # Use the innermost IncrDimension in place of `d`
-                exprs = [uxreplace(e, {d: bd}) for e in c.exprs]
-
-                # The new Cluster properties
-                # TILABLE property is dropped after the blocking.
-                # SKEWABLE is dropped as well, but only from the new
-                # block dimensions.
-                properties = dict(c.properties)
-                properties.pop(d)
-                properties.update({bd: c.properties[d] - {TILABLE} for bd in block_dims})
-                properties.update({bd: c.properties[d] - {SKEWABLE}
-                                  for bd in block_dims[:-1]})
+                if TILABLE in c.properties[d]:
+                    ispace = decompose(c.ispace, d, block_dims)
+                else:
+                    ispace = decompose_sequential(c.ispace, d, block_dims)
 
                 processed.append(c.rebuild(exprs=exprs, ispace=ispace,
                                            properties=properties))
@@ -267,9 +252,6 @@ def decompose_sequential(ispace, d, block_dims):
     for r in ispace.intervals.relations:
         relations.append([block_dims[0] if i is d else i for i in r])
 
-    # The level of a given Dimension in the hierarchy of block Dimensions
-    level = lambda dim: len([i for i in dim._defines if i.is_Incr])
-
     # Add more relations
     for n, i in enumerate(ispace):
         if i.dim is d:
@@ -280,18 +262,13 @@ def decompose_sequential(ispace, d, block_dims):
             # `(t, xbb, xb, x, ybb, ...)`
             # pass
             for bd in block_dims:
-            #    if level(i.dim) >= level(bd):
                 relations.append([bd, i.dim])
-            #    else:
-            #        relations.append([i.dim, bd])
         elif n > ispace.intervals.index(d):
             # The non-Incr subsequent Dimensions must follow the block Dimensions
-            # pass
             for bd in block_dims:
                 relations.append([bd, i.dim])
         else:
             # All other Dimensions must precede the block Dimensions
-            # pass
             for bd in block_dims:
                 relations.append([i.dim, bd])
 
@@ -305,8 +282,6 @@ def decompose_sequential(ispace, d, block_dims):
             sub_iterators.update({bd: ()})
         else:
             sub_iterators.update({bd: ispace.sub_iterators.get(d, [])})
-
-    # sub_iterators.update({bd: ispace.sub_iterators.get(d, []) for bd in block_dims})
 
     directions = dict(ispace.directions)
     directions.pop(d)
@@ -354,7 +329,6 @@ class Skewing(Queue):
         super(Skewing, self).__init__()
 
     def callback(self, clusters, prefix):
-        import pdb;pdb.set_trace()
         if not prefix:
             return clusters
 

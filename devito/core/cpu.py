@@ -181,7 +181,8 @@ class Cpu64AdvOperator(Cpu64OperatorMixin, CoreOperator):
         clusters = cse(clusters, sregistry)
 
         # Skewing
-        clusters = skewing(clusters, options)
+        if options['skewing']:
+            clusters = skewing(clusters, options)
 
         return clusters
 
