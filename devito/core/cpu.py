@@ -300,7 +300,6 @@ class Cpu64CustomOperator(Cpu64OperatorMixin, CustomOperator):
         return {
             'buffering': lambda i: buffering(i, callback, sregistry, options),
             'blocking': lambda i: blocking(i, options),
-            'skewing': lambda i: skewing(i, options),
             'factorize': factorize,
             'fission': fission,
             'fuse': fuse,
@@ -309,7 +308,8 @@ class Cpu64CustomOperator(Cpu64OperatorMixin, CustomOperator):
             'cire-sops': lambda i: cire(i, 'sops', sregistry, options, platform),
             'cse': lambda i: cse(i, sregistry),
             'opt-pows': optimize_pows,
-            'topofuse': lambda i: fuse(i, toposort=True)
+            'topofuse': lambda i: fuse(i, toposort=True),
+            'skewing': lambda i: skewing(i, options)
         }
 
     @classmethod
@@ -339,8 +339,8 @@ class Cpu64CustomOperator(Cpu64OperatorMixin, CustomOperator):
         # Expressions
         'buffering',
         # Clusters
-        'blocking', 'skewing', 'topofuse', 'fuse', 'factorize', 'cire-sops', 'cse', 'lift',
-        'opt-pows',
+        'blocking', 'skewing', 'topofuse', 'fuse', 'factorize', 'cire-sops', 'cse',
+        'lift', 'opt-pows',
         # IET
         'denormals', 'optcomms', 'openmp', 'mpi', 'linearize', 'simd', 'prodders',
     )

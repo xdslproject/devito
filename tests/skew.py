@@ -41,8 +41,8 @@ op.apply(time_M=time_M, dt=dt)
 print(np.linalg.norm(u.data))
 assert np.isclose(np.linalg.norm(u.data), 31873.133, atol=1e-3, rtol=0)
 u.data[:] = init_value
-op1 = Operator(eq0, opt=('advanced', {'openmp': False,
-                                      'skewing': True, 'blocklevels': 1}))
+op1 = Operator(eq0, opt=('advanced', {'skewing': True, 'openmp': False,
+                         'blocklevels': 1}))
 
 op1.apply(time_M=time_M, dt=dt)
 print(np.linalg.norm(u.data))

@@ -1,8 +1,8 @@
 from collections import Counter
 
 from devito.ir.clusters import Queue
-from devito.ir.support import (AFFINE, SEQUENTIAL, SKEWABLE, TILABLE, Interval, IntervalGroup,
-                               IterationSpace)
+from devito.ir.support import (AFFINE, SEQUENTIAL, SKEWABLE, TILABLE, Interval,
+                               IntervalGroup, IterationSpace)
 from devito.symbolics import uxreplace
 from devito.types import IncrDimension
 
@@ -33,7 +33,7 @@ def blocking(clusters, options):
     """
     processed = preprocess(clusters, options)
 
-    if options['wavefront']:
+    if options['wavefront'] and options['blocklevels'] < 2:
         options['blocklevels'] = 2
 
     if options['blocklevels'] > 0:
@@ -47,6 +47,7 @@ def skewing(clusters, options):
     skewing
     """
     processed = preprocess(clusters, options)
+    # if options['skewing']:
     processed = Skewing(options).process(processed)
 
     return processed
@@ -329,6 +330,7 @@ class Skewing(Queue):
         super(Skewing, self).__init__()
 
     def callback(self, clusters, prefix):
+
         if not prefix:
             return clusters
 
@@ -345,31 +347,38 @@ class Skewing(Queue):
                 return clusters
 
             skew_dims = [i.dim for i in c.ispace if SEQUENTIAL in c.properties[i.dim]]
-            if len(skew_dims) < 2:
+
+            intervals = []
+
+            if not skew_dims or len(skew_dims) > 2:
                 return clusters
-            skew_dim = skew_dims.pop()
 
             # Since we are here, prefix is skewable and nested under a
             # SEQUENTIAL loop.
-            intervals = []
-
-            # New relations used to perform loop interchange
+            skew_dim = skew_dims.pop()
             new_relations = []
 
-            # The level of a given Dimension in the hierarchy of block Dimensions
-            level = lambda dim: len([i for i in dim._defines if i.is_Incr])
+            if len(skew_dims) == 1:  # Time is not-blocked
+                new_relations = c.ispace.relations
+            elif len(skew_dims) == 2:
+                # Time is blocked so new `relations` are used
+                # to perform a loop interchange
+                new_relations = []
 
-            skew_level = 1
+                # The level of a given Dimension in the hierarchy of block Dimensions
+                level = lambda dim: len([i for i in dim._defines if i.is_Incr])
 
-            for i in c.ispace.intervals.relations:
-                if not i:
-                    continue
-                elif skew_dim is i[0] and level(i[1]) > skew_level:
-                    new_relations.append(i)
-                elif skew_dim is i[0] and level(i[1]) == skew_level:
-                    new_relations.append((i[1], skew_dim))
-                else:
-                    new_relations.append(i)
+                skew_level = 1
+
+                for i in c.ispace.intervals.relations:
+                    if not i:
+                        continue
+                    elif skew_dim is i[0] and level(i[1]) > skew_level:
+                        new_relations.append(i)
+                    elif skew_dim is i[0] and level(i[1]) == skew_level:
+                        new_relations.append((i[1], skew_dim))
+                    else:
+                        new_relations.append(i)
 
             for i in c.ispace:
                 if i.dim is d:
