@@ -104,7 +104,7 @@ def relax_incr_dimensions(iet, **kwargs):
 
         # Process inner iterations and adjust their bounds
         for n, i in enumerate(inner):
-            # assert i.direction is Forward
+            assert i.direction is Forward
 
             if i.dim.parent in proc_parents_max and i.symbolic_size == i.dim.parent.step:
                 iter_max = proc_parents_max[i.dim.parent]
@@ -162,7 +162,7 @@ def relax_incr_dimensions(iet, **kwargs):
             mapper[i] = i._rebuild(limits=(symbolic_min, iter_max, i.step))
 
         for n, i in enumerate(outer):
-            # assert i.direction is Forward
+            assert i.direction is Forward
 
             if skew_dim and not i.dim.is_Time:
                 time_size = skew_dim.root.symbolic_max - skew_dim.root.symbolic_min

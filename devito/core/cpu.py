@@ -7,6 +7,7 @@ from devito.passes.clusters import (Lift, blocking, buffering, cire, cse, skewin
                                     extract_increments, factorize, fuse, optimize_pows)
 from devito.passes.iet import (CTarget, OmpTarget, avoid_denormals, linearize, mpiize,
                                optimize_halospots, hoist_prodders, relax_incr_dimensions)
+from devito.ir.clusters.analysis import analyze
 from devito.tools import timed_pass
 
 __all__ = ['Cpu64NoopCOperator', 'Cpu64NoopOmpOperator', 'Cpu64AdvCOperator',

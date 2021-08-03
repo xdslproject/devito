@@ -10,7 +10,7 @@ import cgen as c
 
 from devito.data import FULL
 from devito.ir.equations import DummyEq
-from devito.ir.support import (SEQUENTIAL, PARALLEL, PARALLEL_IF_ATOMIC,
+from devito.ir.support import (SEQUENTIAL, PARALLEL, PARALLEL_IF_ATOMIC, SKEWABLE,
                                PARALLEL_IF_PVT, VECTORIZED, AFFINE, COLLAPSED,
                                Property, Forward, detect_io)
 from devito.symbolics import ListInitializer, FunctionFromPointer, as_symbol, ccode
@@ -528,6 +528,10 @@ class Iteration(Node):
     @property
     def is_Vectorized(self):
         return VECTORIZED in self.properties
+
+    @property
+    def is_Skewable(self):
+        return SKEWABLE in self.properties
 
     @property
     def ncollapsed(self):

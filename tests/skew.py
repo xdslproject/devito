@@ -8,7 +8,7 @@ import numpy as np
 nx = 64
 ny = 64
 nz = 64
-nt = 58
+nt = 340
 nu = .5
 dx = 2. / (nx - 1)
 dy = 2. / (ny - 1)
@@ -34,21 +34,21 @@ eq0
 time_M = nt
 
 # List comprehension would need explicit locals/globals mappings to eval
-op = Operator(eq0, opt=('advanced', {'openmp': False,
+op = Operator(eq0, opt=('advanced', {'openmp': True,
                                      'wavefront': False, 'blocklevels': 1}))
 
 op.apply(time_M=time_M, dt=dt)
 print(np.linalg.norm(u.data))
-assert np.isclose(np.linalg.norm(u.data), 31873.133, atol=1e-3, rtol=0)
+# assert np.isclose(np.linalg.norm(u.data), 31873.133, atol=1e-3, rtol=0)
 u.data[:] = init_value
-op1 = Operator(eq0, opt=('advanced', {'skewing': True, 'openmp': False,
+op1 = Operator(eq0, opt=('advanced', {'skewing': True, 'openmp': True,
                          'blocklevels': 1}))
 
 op1.apply(time_M=time_M, dt=dt)
 print(np.linalg.norm(u.data))
 # assert np.isclose(norm(u), 2467.3872, atol=1e-3, rtol=0)
 u.data[:] = init_value
-op2 = Operator(eq0, opt=('advanced', {'openmp': False,
+op2 = Operator(eq0, opt=('advanced', {'openmp': True,
                                       'wavefront': True, 'blocklevels': 2}))
 
 op2.apply(time_M=time_M, dt=dt)
@@ -57,7 +57,7 @@ print(np.linalg.norm(u.data))
 u.data[:] = init_value
 
 # List comprehension would need explicit locals/globals mappings to eval
-op3 = Operator(eq0, opt=('advanced', {'openmp': False,
+op3 = Operator(eq0, opt=('advanced', {'openmp': True,
                                       'wavefront': True, 'blocklevels': 3}))
 
 op3.apply(time_M=time_M, dt=dt)
@@ -66,7 +66,7 @@ print(np.linalg.norm(u.data))
 u.data[:] = init_value
 
 # List comprehension would need explicit locals/globals mappings to eval
-op4 = Operator(eq0, opt=('advanced', {'openmp': False,
+op4 = Operator(eq0, opt=('advanced', {'openmp': True,
                                       'wavefront': True, 'blocklevels': 4}))
 
 op4.apply(time_M=time_M, dt=dt)
