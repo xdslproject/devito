@@ -6,7 +6,7 @@ from devito.ir.support import Forward
 from devito.logger import warning
 from devito.passes.iet.engine import iet_pass
 from devito.symbolics import MIN, MAX
-from devito.tools import split, is_integer
+from devito.tools import is_integer, split
 
 __all__ = ['avoid_denormals', 'hoist_prodders', 'relax_incr_dimensions', 'is_on_device']
 
@@ -107,11 +107,12 @@ def relax_incr_dimensions(iet, **kwargs):
             assert i.direction is Forward
 
             if i.dim.parent in proc_parents_max and i.symbolic_size == i.dim.parent.step:
-                iter_max = proc_parents_max[i.dim.parent]
+                iter_max = MIN(proc_parents_max[i.dim.parent], i.dim.symbolic_max)
 
                 if skew_dim and not i.dim.is_Time:
+                    # import pdb;pdb.set_trace()
                     # symbolic_min = i.symbolic_min - skew_dim
-                    symbolic_min = proc_parents_min[i.dim.parent]
+                    symbolic_min = i.dim.symbolic_min  # proc_parents_min[i.dim.parent]
                 else:
                     symbolic_min = i.symbolic_min
             else:

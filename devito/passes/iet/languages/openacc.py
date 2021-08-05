@@ -184,22 +184,6 @@ class DeviceAccizer(PragmaDeviceAwareTransformer):
         else:
             return super()._make_partree(candidates, nthreads)
 
-        if self._is_offloadable(root) and \
-           all(i.is_Affine for i in [root] + collapsable) and \
-           self.par_tile:
-            if isinstance(self.par_tile, tuple):
-                tile = self.par_tile[:ncollapsable + 1]
-            else:
-                # (32,4,4,...) is typically a decent choice
-                tile = (32,) + (4,)*ncollapsable
-
-            body = self.DeviceIteration(gpu_fit=self.gpu_fit, tile=tile, **root.args)
-            partree = ParallelTree([], body, nthreads=nthreads)
-
-            return root, partree
-        else:
-            return super()._make_partree(candidates, nthreads)
-
 
 class DeviceAccDataManager(DeviceAwareDataManager):
     lang = AccBB
