@@ -111,8 +111,9 @@ def relax_incr_dimensions(iet, **kwargs):
 
                 if skew_dim and not i.dim.is_Time:
                     # import pdb;pdb.set_trace()
-                    # symbolic_min = i.symbolic_min - skew_dim
-                    symbolic_min = i.dim.symbolic_min  # proc_parents_min[i.dim.parent]
+                    symbolic_min = i.symbolic_min - skew_dim
+                    # symbolic_min = i.dim.symbolic_min  # proc_parents_min[i.dim.parent]
+                    # proc_parents_min[i.dim.parent]
                 else:
                     symbolic_min = i.symbolic_min
             else:
