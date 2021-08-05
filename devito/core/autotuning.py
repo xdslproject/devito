@@ -371,7 +371,7 @@ def generate_nthreads(nthreads, args, level):
 options = {
     'squeezer': 4,
     'blocksize-l0': (8, 16, 24, 32, 64, 96, 128),
-    'blocksize-l1': (4, 8, 16, 32),
+    'blocksize-l1': (8, 16, 32),
 }
 """Autotuning options."""
 
