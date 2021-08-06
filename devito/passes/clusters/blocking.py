@@ -3,7 +3,7 @@ from collections import Counter
 from devito.ir.clusters import Queue
 from devito.ir.support import (AFFINE, SEQUENTIAL, PARALLEL, SKEWABLE, TILABLE, Interval,
                                IntervalGroup, IterationSpace)
-from devito.symbolics import uxreplace
+from devito.symbolics import uxreplace, retrieve_indexed
 from devito.types import IncrDimension
 
 from devito.symbolics import xreplace_indices
@@ -356,7 +356,16 @@ class Skewing(Queue):
                 return clusters
 
             # Since we are here, prefix is skewable and nested under a
-            # SEQUENTIAL loop. Pop skewing dim.
+            # SEQUENTIAL loop.
+
+            # Retrieve skewing factor
+            functs = retrieve_indexed(c.exprs)
+            functions = {i.function for i in functs}
+            skewing_factor = max([i.space_order for i in functions])
+            print(functions)
+            print(skewing_factor)
+
+            # Pop skewing dim.
             skew_dim = skew_dims.pop()
             new_relations = []
 
