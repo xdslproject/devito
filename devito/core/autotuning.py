@@ -81,7 +81,7 @@ def autotune(operator, args, level, mode):
             return args, {}
     elif len(steppers) == 2:
         stepper = steppers.pop()
-        import pdb;pdb.set_trace()
+        # import pdb;pdb.set_trace()
         # at_args['time_M']
         options['squeezer'] = at_args['time_M'] - 1
         timesteps = init_time_bounds(stepper, at_args, args)

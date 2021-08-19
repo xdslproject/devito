@@ -21,7 +21,7 @@ init_value = 50
 
 # Field initialization
 grid = Grid(shape=(nx, ny, nz))
-u = TimeFunction(name='u', grid=grid, space_order=2)
+u = TimeFunction(name='u', grid=grid, space_order=4)
 u.data[:, :, :] = init_value
 
 # Create an equation with second-order derivatives
