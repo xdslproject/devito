@@ -7,7 +7,7 @@ from devito.passes.clusters import (Lift, blocking, buffering, cire, cse,
                                     extract_increments, factorize, fission, fuse,
                                     optimize_pows, optimize_msds)
 from devito.passes.iet import (CTarget, OmpTarget, avoid_denormals, linearize, mpiize,
-                               optimize_halospots, hoist_prodders, relax_incr_dimensions)
+                               optimize_halospots, hoist_prodders)
 from devito.tools import timed_pass
 
 __all__ = ['Cpu64NoopCOperator', 'Cpu64NoopOmpOperator', 'Cpu64AdvCOperator',
@@ -187,6 +187,9 @@ class Cpu64AdvOperator(Cpu64OperatorMixin, CoreOperator):
         # Reduce flops
         clusters = cse(clusters, sregistry)
 
+        # Relaxing
+        # clusters = relaxing(clusters, options)
+
         return clusters
 
     @classmethod
@@ -206,7 +209,7 @@ class Cpu64AdvOperator(Cpu64OperatorMixin, CoreOperator):
             mpiize(graph, mode=options['mpi'], language=language, sregistry=sregistry)
 
         # Lower IncrDimensions so that blocks of arbitrary shape may be used
-        relax_incr_dimensions(graph)
+        # relax_incr_dimensions(graph)
 
         # Parallelism
         parizer = cls._Target.Parizer(sregistry, options, platform)
@@ -277,6 +280,9 @@ class Cpu64FsgOperator(Cpu64AdvOperator):
         # Blocking to improve data locality
         clusters = blocking(clusters, options)
 
+        # Relaxing
+        clusters = relaxing(clusters, options)
+
         return clusters
 
 
@@ -308,6 +314,7 @@ class Cpu64CustomOperator(Cpu64OperatorMixin, CustomOperator):
             'buffering': lambda i: buffering(i, callback, sregistry, options),
             'blocking': lambda i: blocking(i, options),
             'factorize': factorize,
+            'relaxing': relaxing,
             'fission': fission,
             'fuse': lambda i: fuse(i, options=options),
             'lift': lambda i: Lift().process(cire(i, 'invariants', sregistry,
@@ -329,7 +336,7 @@ class Cpu64CustomOperator(Cpu64OperatorMixin, CustomOperator):
         return {
             'denormals': avoid_denormals,
             'optcomms': optimize_halospots,
-            'blocking': partial(relax_incr_dimensions),
+            'blocking': partial(relaxing),
             'parallel': parizer.make_parallel,
             'openmp': parizer.make_parallel,
             'mpi': partial(mpiize, mode=options['mpi'], language=kwargs['language'],
@@ -347,7 +354,7 @@ class Cpu64CustomOperator(Cpu64OperatorMixin, CustomOperator):
         'buffering',
         # Clusters
         'blocking', 'topofuse', 'fission', 'fuse', 'factorize', 'cire-sops',
-        'cse', 'lift', 'opt-pows',
+        'cse', 'lift', 'opt-pows', 'relaxing',
         # IET
         'denormals', 'optcomms', 'openmp', 'mpi', 'linearize', 'simd', 'prodders',
     )

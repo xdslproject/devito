@@ -39,6 +39,8 @@ def blocking(clusters, options):
     if options['skewing']:
         processed = Skewing(options).process(processed)
 
+    processed = Relaxing(options).process(processed)
+
     return processed
 
 
@@ -274,5 +276,50 @@ class Skewing(Queue):
             exprs = xreplace_indices(c.exprs, {d: d - skew_dim})
             processed.append(c.rebuild(exprs=exprs, ispace=ispace,
                                        properties=c.properties))
+
+        return processed
+
+
+class Relaxing(Queue):
+
+    """
+    Relax_incr_dimensions
+    """
+
+    def __init__(self, options):
+        # self.skewinner = bool(options['blockinner'])
+
+        super(Relaxing, self).__init__()
+
+    def callback(self, clusters, prefix):
+        if not prefix:
+            return clusters
+
+        d = prefix[-1].dim
+
+        processed = []
+        for c in clusters:
+            intervals = []
+            for i in c.ispace:
+
+                import pdb;pdb.set_trace()
+
+                if i.dim is d and level(d) <= 1:  # Skew only at level 0 or 1
+                    intervals.append(Interval(d, skew_dim, skew_dim))
+                else:
+                    intervals.append(i)
+            intervals = IntervalGroup(intervals, relations=c.ispace.relations)
+            ispace = IterationSpace(intervals, c.ispace.sub_iterators,
+                                    c.ispace.directions)
+
+            exprs = xreplace_indices(c.exprs, {d: d - skew_dim})
+            processed.append(c.rebuild(exprs=exprs, ispace=ispace,
+                                       properties=c.properties))
+
+
+        mapper[i] = i._rebuild(limits=(i.symbolic_min, iter_max, i.step))
+
+
+
 
         return processed
