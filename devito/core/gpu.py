@@ -68,6 +68,7 @@ class DeviceOperatorMixin(object):
         o['blockinner'] = oo.pop('blockinner', True)
         o['blocklevels'] = oo.pop('blocklevels', cls.BLOCK_LEVELS)
         o['skewing'] = oo.pop('skewing', False)
+        o['relaxing'] = oo.pop('relaxing', False)
 
         # CIRE
         o['min-storage'] = False
