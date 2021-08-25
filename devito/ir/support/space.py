@@ -853,6 +853,7 @@ class IterationSpace(Space):
 
     @cached_property
     def itintervals(self):
+        # import pdb;pdb.set_trace()
         return tuple(IterationInterval(
             i, self.sub_iterators.get(i.dim), self.directions[i.dim]
         ) for i in self.intervals)

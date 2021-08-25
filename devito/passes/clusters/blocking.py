@@ -6,7 +6,7 @@ from devito.ir.support import (SEQUENTIAL, SKEWABLE, TILABLE, Interval, Interval
 from devito.symbolics import uxreplace
 from devito.types import IncrDimension
 
-from devito.symbolics import xreplace_indices
+from devito.symbolics import xreplace_indices, MIN, MAX
 
 __all__ = ['blocking']
 
@@ -297,29 +297,53 @@ class Relaxing(Queue):
 
         d = prefix[-1].dim
 
+        # import pdb;pdb.set_trace()
+
         processed = []
+
         for c in clusters:
-            intervals = []
+
+            if not d.is_Incr:
+                return clusters
+
+            new_intervals = []
+
             for i in c.ispace:
-
-                import pdb;pdb.set_trace()
-
-                if i.dim is d and level(d) <= 1:  # Skew only at level 0 or 1
-                    intervals.append(Interval(d, skew_dim, skew_dim))
+                if i.dim.is_Incr and i.dim is d:
+                    d_new = IncrDimension(d.name, d, d.symbolic_min,
+                                          d.symbolic_max, size=d.step)
+                    new_intervals.append(Interval(d_new, i.lower, i.upper))
                 else:
-                    intervals.append(i)
-            intervals = IntervalGroup(intervals, relations=c.ispace.relations)
-            ispace = IterationSpace(intervals, c.ispace.sub_iterators,
-                                    c.ispace.directions)
+                    new_intervals.append(i)
 
-            exprs = xreplace_indices(c.exprs, {d: d - skew_dim})
-            processed.append(c.rebuild(exprs=exprs, ispace=ispace,
+            assert len(c.ispace) == len(new_intervals)
+
+            new_relations = set()
+            for i in c.ispace.intervals.relations:
+                if not i:
+                    new_relations.add(i)
+                elif d is i[0]:
+                    new_relations.add((d_new, i[1]))
+                elif d is i[1]:
+                    new_relations.add((i[0], d_new))
+                else:
+                    new_relations.add(i)
+
+            # assert len(new_relations) == len(c.ispace.intervals.relations)
+
+            intervals = IntervalGroup(new_intervals, new_relations)
+
+            directions = dict(c.ispace.directions)
+            directions.pop(d)
+            directions.update({d_new: c.ispace.directions[d]})
+
+            # import pdb;pdb.set_trace()
+            new_ispace = IterationSpace(intervals, c.ispace.sub_iterators,
+                                        directions)
+
+            processed.append(c.rebuild(exprs=c.exprs, ispace=new_ispace,
                                        properties=c.properties))
 
-
-        mapper[i] = i._rebuild(limits=(i.symbolic_min, iter_max, i.step))
-
-
-
+            import pdb;pdb.set_trace()
 
         return processed
