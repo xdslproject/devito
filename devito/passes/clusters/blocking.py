@@ -320,6 +320,7 @@ class Relaxing(Queue):
 
             new_relations = set()
             for i in c.ispace.intervals.relations:
+                import pdb;pdb.set_trace()
                 if not i:
                     new_relations.add(i)
                 elif d is i[0]:
@@ -329,7 +330,7 @@ class Relaxing(Queue):
                 else:
                     new_relations.add(i)
 
-            # assert len(new_relations) == len(c.ispace.intervals.relations)
+            assert len(new_relations) == len(c.ispace.intervals.relations)
 
             intervals = IntervalGroup(new_intervals, new_relations)
 
@@ -343,7 +344,5 @@ class Relaxing(Queue):
 
             processed.append(c.rebuild(exprs=c.exprs, ispace=new_ispace,
                                        properties=c.properties))
-
-            import pdb;pdb.set_trace()
 
         return processed
