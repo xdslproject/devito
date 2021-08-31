@@ -1,5 +1,4 @@
 FROM python:3.6
-FROM intel/oneapi-basekit:latest
 FROM intel/oneapi-hpckit:latest
 
 RUN rm /bin/sh && ln -s /bin/bash /bin/sh
@@ -10,10 +9,10 @@ RUN apt-get update -y && \
         software-properties-common \
         vim \
         curl \
-        libgl1-mesa-glx \
         wget \
         openssh-server \
         openssh-client
+
 RUN source /opt/intel/oneapi/compiler/latest/env/vars.sh
 RUN source /opt/intel/oneapi/mpi/latest/env/vars.sh
 ADD ./requirements.txt /app/requirements.txt
@@ -28,7 +27,8 @@ RUN python3 -m venv /venv && \
     /venv/bin/pip install --no-cache-dir -r /app/requirements-optional.txt && \
     /venv/bin/pip install --no-cache-dir -r /app/requirements-mpi.txt && \
     rm -rf ~/.cache/pip
-
+RUN ls
+RUN which mpicc
 ADD ./devito /app/devito
 ADD ./tests /app/tests
 ADD ./examples /app/examples
