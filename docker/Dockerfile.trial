@@ -1,0 +1,58 @@
+FROM intel/oneapi-hpckit
+
+RUN rm /bin/sh && ln -s /bin/bash /bin/sh
+
+RUN apt-get update -y && \
+    apt-get install -y -q \
+        apt-utils \
+        software-properties-common \
+        vim \
+        curl \
+        wget \
+        openssh-server \
+        openssh-client
+
+ADD ./requirements.txt /app/requirements.txt
+ADD ./requirements-optional.txt /app/requirements-optional.txt
+ADD ./requirements-mpi.txt /app/requirements-mpi.txt
+ADD ./setup.py /app/setup.py
+
+RUN which mpicc
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir jupyter && \
+    pip install --no-cache-dir wheel && \
+    pip install --no-cache-dir -r /app/requirements.txt && \
+    pip install --no-cache-dir -r /app/requirements-optional.txt && \
+    pip install --no-cache-dir -r /app/requirements-mpi.txt && \  
+    rm -rf ~/.cache/pip
+
+ADD ./devito /app/devito
+ADD ./tests /app/tests
+ADD ./examples /app/examples
+ADD ./benchmarks /app/benchmarks
+
+ADD docker/run-jupyter.sh /jupyter
+ADD docker/run-tests.sh /tests
+ADD docker/run-print-defaults.sh /print-defaults
+ADD docker/entrypoint.sh /docker-entrypoint.sh
+
+RUN chmod +x \
+    /print-defaults \
+    /jupyter \
+    /tests \
+    /docker-entrypoint.sh
+
+WORKDIR /app
+
+# Add examples for trial run
+ENV PYTHONPATH=/app:$PYTHONPATH
+ENV DEVITO_ARCH="icc"
+ENV DEVITO_LANGUAGE="openmp"
+
+# debug ON to see Intel Compiler in logs
+ENV DEVITO_LOGGING="DEBUG"
+RUN python /app/examples/seismic/acoustic/acoustic_example.py
+
+EXPOSE 8888
+ENTRYPOINT ["/docker-entrypoint.sh"]
+CMD ["/jupyter"]
