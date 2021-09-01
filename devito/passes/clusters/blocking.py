@@ -5,7 +5,7 @@ from devito.ir.support import (SEQUENTIAL, SKEWABLE, TILABLE, Interval, Interval
                                IterationSpace)
 from devito.symbolics import uxreplace
 from devito.types import IncrDimension
-
+from devito.tools import split
 from devito.symbolics import xreplace_indices, MIN, MAX
 
 __all__ = ['blocking']
@@ -310,15 +310,32 @@ class Relaxing(Queue):
 
             # import pdb;pdb.set_trace()
             new_dims = {}
+
+            it_ints = [i for i in c.ispace if i.dim.is_Incr]
+            outer, inner = split(it_ints, lambda i: not i.dim.parent.is_Incr)
             for i in c.ispace:
-                # roots_max = {i.dim.root: i.symbolic_max for i in outer}
-                if i.dim.is_Incr and i.dim is d:
+                roots_max = {i.dim.root: i.dim.root.symbolic_max for i in c.ispace}
+
+            d_new = None
+            for i in c.ispace:
+                if i.dim.is_Incr and i.dim is d and i in inner:
+                    root_max = roots_max[i.dim.root]
+
+                    try:
+                        iter_max = (min(i.dim.symbolic_max, root_max))
+                        bool(iter_max)  # Can it be evaluated?
+                    except TypeError:
+                        iter_max = MIN(i.dim.symbolic_max, root_max)
+
                     d_new = IncrDimension(d.name, d.parent, d.symbolic_min,
-                                          d.symbolic_max, step=d.step, size=d.size)
+                                          iter_max, step=d.step, size=d.size)
                     new_dims[d] = d_new
 
+            if d_new is None:
+                return clusters
+
             for i in c.ispace:
-                if i.dim.is_Incr and i.dim is d:
+                if i.dim.is_Incr and i.dim is d and i in inner:
                     new_intervals.append(Interval(d_new, i.lower, i.upper))
                 else:
                     # import pdb;pdb.set_trace()
@@ -364,8 +381,6 @@ class Relaxing(Queue):
             new_ispace = IterationSpace(new_intervals, sub_iterators,
                                         directions)
 
-
-            import pdb;pdb.set_trace()
             exprs = xreplace_indices(c.exprs, {d: d_new})
             processed.append(c.rebuild(exprs=exprs, ispace=new_ispace,
                                        properties=properties))

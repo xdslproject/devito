@@ -154,8 +154,6 @@ class PragmaShmTransformer(PragmaSimdTransformer):
                 #     ...
                 #
                 # Here, we make sure this won't happen
-                import pdb;pdb.set_trace()
-                
                 if any(j.dim in i.symbolic_min.free_symbols for j in candidates[:n]):
                     break
 
