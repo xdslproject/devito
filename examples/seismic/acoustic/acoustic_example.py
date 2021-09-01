@@ -7,6 +7,7 @@ from examples.seismic.acoustic import AcousticWaveSolver
 from examples.seismic import demo_model, setup_geometry, seismic_args
 
 
+
 def acoustic_setup(shape=(50, 50, 50), spacing=(15.0, 15.0, 15.0),
                    tn=500., kernel='OT2', space_order=4, nbl=10,
                    preset='layers-isotropic', fs=False, **kwargs):
@@ -38,6 +39,8 @@ def run(shape=(50, 50, 50), spacing=(20.0, 20.0, 20.0), tn=1000.0,
     save = full_run and not checkpointing
     # Define receiver geometry (spread across x, just below surface)
     rec, u, summary = solver.forward(save=save, autotune=autotune)
+    print("---------------------------------------------------------------")
+    print(np.linalg.norm(u.data))
 
     if preset == 'constant':
         # With  a new m as Constant
@@ -47,7 +50,8 @@ def run(shape=(50, 50, 50), spacing=(20.0, 20.0, 20.0), tn=1000.0,
         solver.forward(save=save, vp=2.0)
 
     if not full_run:
-        return summary.gflopss, summary.oi, summary.timings, [rec, u.data]
+        #return summary.gflopss, summary.oi, summary.timings, [rec, u.data]
+        return
 
     # Smooth velocity
     initial_vp = Function(name='v0', grid=solver.model.grid, space_order=space_order)
