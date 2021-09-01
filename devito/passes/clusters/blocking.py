@@ -309,16 +309,19 @@ class Relaxing(Queue):
             new_intervals = []
 
             # import pdb;pdb.set_trace()
+            new_dims = {}
             for i in c.ispace:
-                import pdb;pdb.set_trace()
+                # roots_max = {i.dim.root: i.symbolic_max for i in outer}
                 if i.dim.is_Incr and i.dim is d:
                     d_new = IncrDimension(d.name, d.parent, d.symbolic_min,
                                           d.symbolic_max, step=d.step, size=d.size)
+                    new_dims[d] = d_new
 
             for i in c.ispace:
                 if i.dim.is_Incr and i.dim is d:
                     new_intervals.append(Interval(d_new, i.lower, i.upper))
                 else:
+                    # import pdb;pdb.set_trace()
                     new_intervals.append(i)
 
             assert len(c.ispace) == len(new_intervals)
