@@ -308,10 +308,13 @@ class Relaxing(Queue):
 
             new_intervals = []
 
+            # import pdb;pdb.set_trace()
             for i in c.ispace:
                 if i.dim.is_Incr and i.dim is d:
-                    d_new = IncrDimension(d.name, d, d.symbolic_min,
-                                          d.symbolic_max, size=d.step)
+                    import pdb;pdb.set_trace()
+                    d_new = IncrDimension(d.name, d.parent, d.symbolic_min,
+                                          d.symbolic_max, step=d.step, size=d.size)
+                    
                     new_intervals.append(Interval(d_new, i.lower, i.upper))
                 else:
                     new_intervals.append(i)
@@ -320,29 +323,38 @@ class Relaxing(Queue):
 
             new_relations = set()
             for i in c.ispace.intervals.relations:
-                import pdb;pdb.set_trace()
                 if not i:
                     new_relations.add(i)
-                elif d is i[0]:
-                    new_relations.add((d_new, i[1]))
-                elif d is i[1]:
-                    new_relations.add((i[0], d_new))
+                elif d in i:
+                    index = i.index(d)
+                    nrel = list(i)
+                    # import pdb;pdb.set_trace()
+                    nrel[index] = d_new
+                    new_relations.add(tuple(nrel))
                 else:
                     new_relations.add(i)
 
             assert len(new_relations) == len(c.ispace.intervals.relations)
 
-            intervals = IntervalGroup(new_intervals, new_relations)
+            new_intervals = IntervalGroup(new_intervals, new_relations)
+
+            print(new_intervals[d_new].offsets)
+            print(d_new)
 
             directions = dict(c.ispace.directions)
             directions.pop(d)
             directions.update({d_new: c.ispace.directions[d]})
 
-            # import pdb;pdb.set_trace()
-            new_ispace = IterationSpace(intervals, c.ispace.sub_iterators,
+            sub_iterators = dict(c.ispace.sub_iterators)
+            sub_iterators.pop(d)
+            sub_iterators.update({d_new: c.ispace.sub_iterators[d]})
+
+            new_ispace = IterationSpace(new_intervals, sub_iterators,
                                         directions)
 
-            processed.append(c.rebuild(exprs=c.exprs, ispace=new_ispace,
+            exprs = xreplace_indices(c.exprs, {d: d_new})
+            processed.append(c.rebuild(exprs=exprs, ispace=new_ispace,
                                        properties=c.properties))
 
+        # import pdb;pdb.set_trace()
         return processed
