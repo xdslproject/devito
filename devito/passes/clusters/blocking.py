@@ -310,11 +310,13 @@ class Relaxing(Queue):
 
             # import pdb;pdb.set_trace()
             for i in c.ispace:
+                import pdb;pdb.set_trace()
                 if i.dim.is_Incr and i.dim is d:
-                    import pdb;pdb.set_trace()
                     d_new = IncrDimension(d.name, d.parent, d.symbolic_min,
                                           d.symbolic_max, step=d.step, size=d.size)
-                    
+
+            for i in c.ispace:
+                if i.dim.is_Incr and i.dim is d:
                     new_intervals.append(Interval(d_new, i.lower, i.upper))
                 else:
                     new_intervals.append(i)
@@ -349,12 +351,21 @@ class Relaxing(Queue):
             sub_iterators.pop(d)
             sub_iterators.update({d_new: c.ispace.sub_iterators[d]})
 
+            # import pdb;pdb.set_trace()
+            properties = dict(c.properties)
+            properties[d_new] = properties[d]
+            properties.pop(d)
+            assert len(properties) == len(c.properties)
+            # properties.update({d_new: c.properties[d]})
+
             new_ispace = IterationSpace(new_intervals, sub_iterators,
                                         directions)
 
+
+            import pdb;pdb.set_trace()
             exprs = xreplace_indices(c.exprs, {d: d_new})
             processed.append(c.rebuild(exprs=exprs, ispace=new_ispace,
-                                       properties=c.properties))
+                                       properties=properties))
 
         # import pdb;pdb.set_trace()
         return processed

@@ -209,6 +209,7 @@ class Cpu64AdvOperator(Cpu64OperatorMixin, CoreOperator):
             mpiize(graph, mode=options['mpi'], language=language, sregistry=sregistry)
 
         # Lower IncrDimensions so that blocks of arbitrary shape may be used
+        # import pdb;pdb.set_trace()
         # relax_incr_dimensions(graph)
 
         # Parallelism
