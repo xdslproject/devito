@@ -8,7 +8,7 @@ from devito.types import IncrDimension
 from devito.tools import split
 from devito.symbolics import xreplace_indices, MIN, MAX
 
-__all__ = ['blocking']
+__all__ = ['blocking', 'relaxing']
 
 
 def blocking(clusters, options):
@@ -38,8 +38,6 @@ def blocking(clusters, options):
 
     if options['skewing']:
         processed = Skewing(options).process(processed)
-
-    processed = Relaxing(options).process(processed)
 
     return processed
 
@@ -200,6 +198,13 @@ def decompose(ispace, d, block_dims):
     return IterationSpace(intervals, sub_iterators, directions)
 
 
+def relaxing(clusters):
+
+    processed = Relaxing().process(clusters)
+
+    return processed
+
+
 class Skewing(Queue):
 
     """
@@ -286,7 +291,7 @@ class Relaxing(Queue):
     Relax_incr_dimensions
     """
 
-    def __init__(self, options):
+    def __init__(self):
         # self.skewinner = bool(options['blockinner'])
 
         super(Relaxing, self).__init__()
@@ -297,93 +302,109 @@ class Relaxing(Queue):
 
         d = prefix[-1].dim
 
-        # import pdb;pdb.set_trace()
-
         processed = []
 
         for c in clusters:
-
             if not d.is_Incr:
                 return clusters
+            else:
+                new_intervals = []
+                new_dims = {}
 
-            new_intervals = []
+                it_ints = [i for i in c.ispace if i.dim.is_Incr]
+                outer, inner = split(it_ints, lambda i: not i.dim.parent.is_Incr)
 
-            # import pdb;pdb.set_trace()
-            new_dims = {}
+                for i in c.ispace:
+                    roots_max = {i.dim.root: i.dim.root.symbolic_max for i in c.ispace}
 
-            it_ints = [i for i in c.ispace if i.dim.is_Incr]
-            outer, inner = split(it_ints, lambda i: not i.dim.parent.is_Incr)
-            for i in c.ispace:
-                roots_max = {i.dim.root: i.dim.root.symbolic_max for i in c.ispace}
+                # import pdb;pdb.set_trace()
+                d_new = None
+                for i in c.ispace:
+                    if i.dim is d and i in inner:
+                        root_max = roots_max[i.dim.root]
 
-            d_new = None
-            for i in c.ispace:
-                if i.dim.is_Incr and i.dim is d and i in inner:
-                    root_max = roots_max[i.dim.root]
+                        try:
+                            iter_max = (min(i.dim.symbolic_max, root_max))
+                            bool(iter_max)  # Can it be evaluated?
+                        except TypeError:
+                            iter_max = MIN(i.dim.symbolic_max, root_max)
 
-                    try:
-                        iter_max = (min(i.dim.symbolic_max, root_max))
-                        bool(iter_max)  # Can it be evaluated?
-                    except TypeError:
-                        iter_max = MIN(i.dim.symbolic_max, root_max)
+                        d_new = IncrDimension(d.name, d.parent, d.symbolic_min,
+                                              iter_max, step=d.step, size=d.size)
+                        new_dims[d] = d_new
 
-                    d_new = IncrDimension(d.name, d.parent, d.symbolic_min,
-                                          iter_max, step=d.step, size=d.size)
-                    new_dims[d] = d_new
+                for i in c.ispace:
+                    if i.dim is d and i in inner:
+                        new_intervals.append(Interval(d_new, i.lower, i.upper))
+                    else:
+                        new_intervals.append(i)
 
-            if d_new is None:
-                return clusters
+                if d_new is None:
+                    return clusters
+                    continue
 
-            for i in c.ispace:
-                if i.dim.is_Incr and i.dim is d and i in inner:
-                    new_intervals.append(Interval(d_new, i.lower, i.upper))
-                else:
-                    # import pdb;pdb.set_trace()
-                    new_intervals.append(i)
+                assert len(c.ispace) == len(new_intervals)
 
-            assert len(c.ispace) == len(new_intervals)
+                new_relations = set()
+                for i in c.ispace.intervals.relations:
+                    if not i:
+                        new_relations.add(i)
+                    elif d in i:
+                        index = i.index(d)
+                        nrel = list(i)
+                        nrel[index] = d_new
+                        new_relations.add(tuple(nrel))
+                    else:
+                        new_relations.add(i)
 
-            new_relations = set()
-            for i in c.ispace.intervals.relations:
-                if not i:
-                    new_relations.add(i)
-                elif d in i:
-                    index = i.index(d)
-                    nrel = list(i)
-                    # import pdb;pdb.set_trace()
-                    nrel[index] = d_new
-                    new_relations.add(tuple(nrel))
-                else:
-                    new_relations.add(i)
+                assert len(new_relations) == len(c.ispace.intervals.relations)
 
-            assert len(new_relations) == len(c.ispace.intervals.relations)
+                new_intervals = IntervalGroup(new_intervals, new_relations)
 
-            new_intervals = IntervalGroup(new_intervals, new_relations)
+                print(new_intervals[d_new].offsets)
+                print(d_new)
 
-            print(new_intervals[d_new].offsets)
-            print(d_new)
+                directions = dict(c.ispace.directions)
+                directions.pop(d)
+                directions.update({d_new: c.ispace.directions[d]})
 
-            directions = dict(c.ispace.directions)
-            directions.pop(d)
-            directions.update({d_new: c.ispace.directions[d]})
+                sub_iterators = dict(c.ispace.sub_iterators)
+                sub_iterators.pop(d, None)
+                sub_iterators.update({d_new: c.ispace.sub_iterators.get(d, [])})
+                assert len(sub_iterators) == len(c.ispace.sub_iterators)
+                assert len(sub_iterators[d_new]) == len(c.ispace.sub_iterators[d])
 
-            sub_iterators = dict(c.ispace.sub_iterators)
-            sub_iterators.pop(d)
-            sub_iterators.update({d_new: c.ispace.sub_iterators[d]})
+                for n, i in enumerate(sub_iterators[d_new]):
+                    mylist = []
+                    if d is i.parent:
+                        i_new = IncrDimension(i.name, d_new, i.symbolic_min,
+                                              i.symbolic_max, step=i.step, size=i.size)
+                        # import pdb;pdb.set_trace()
+                        mylist.append(i_new)
+                    else:
+                        mylist.append(i)
 
-            # import pdb;pdb.set_trace()
-            properties = dict(c.properties)
-            properties[d_new] = properties[d]
-            properties.pop(d)
-            assert len(properties) == len(c.properties)
-            # properties.update({d_new: c.properties[d]})
+                mytuple = tuple(mylist)
+                sub_iterators.update({d_new: mytuple})
 
-            new_ispace = IterationSpace(new_intervals, sub_iterators,
-                                        directions)
 
-            exprs = xreplace_indices(c.exprs, {d: d_new})
-            processed.append(c.rebuild(exprs=exprs, ispace=new_ispace,
-                                       properties=properties))
+                import pdb;pdb.set_trace()
+
+
+                # import pdb;pdb.set_trace()
+                properties = dict(c.properties)
+                properties[d_new] = properties[d]
+                properties.pop(d)
+                assert len(properties) == len(c.properties)
+                # properties.update({d_new: c.properties[d]})
+
+                new_ispace = IterationSpace(new_intervals, sub_iterators,
+                                            directions)
+
+                exprs = xreplace_indices(c.exprs, {d: d_new})
+                # assert len(c.ispace.dimensions) == len(new_ispace.dimensions)
+                processed.append(c.rebuild(exprs=exprs, ispace=new_ispace,
+                                           properties=properties))
 
         # import pdb;pdb.set_trace()
         return processed
