@@ -5,9 +5,9 @@ from devito.exceptions import InvalidOperator
 from devito.passes.equations import collect_derivatives
 from devito.passes.clusters import (Lift, blocking, buffering, cire, cse,
                                     extract_increments, factorize, fission, fuse,
-                                    optimize_pows, optimize_msds)
+                                    optimize_pows, relaxing)
 from devito.passes.iet import (CTarget, OmpTarget, avoid_denormals, linearize, mpiize,
-                               optimize_halospots, hoist_prodders)
+                               optimize_halospots, hoist_prodders, relax_incr_dimensions)
 from devito.tools import timed_pass
 
 __all__ = ['Cpu64NoopCOperator', 'Cpu64NoopOmpOperator', 'Cpu64AdvCOperator',
@@ -188,7 +188,7 @@ class Cpu64AdvOperator(Cpu64OperatorMixin, CoreOperator):
         clusters = cse(clusters, sregistry)
 
         # Relaxing
-        # clusters = relaxing(clusters, options)
+        clusters = relaxing(clusters)
 
         return clusters
 
@@ -210,7 +210,7 @@ class Cpu64AdvOperator(Cpu64OperatorMixin, CoreOperator):
 
         # Lower IncrDimensions so that blocks of arbitrary shape may be used
         # import pdb;pdb.set_trace()
-        # relax_incr_dimensions(graph)
+        relax_incr_dimensions(graph)
 
         # Parallelism
         parizer = cls._Target.Parizer(sregistry, options, platform)
@@ -282,7 +282,7 @@ class Cpu64FsgOperator(Cpu64AdvOperator):
         clusters = blocking(clusters, options)
 
         # Relaxing
-        clusters = relaxing(clusters, options)
+        clusters = relaxing(clusters)
 
         return clusters
 
@@ -337,7 +337,7 @@ class Cpu64CustomOperator(Cpu64OperatorMixin, CustomOperator):
         return {
             'denormals': avoid_denormals,
             'optcomms': optimize_halospots,
-            'blocking': partial(relaxing),
+            'blocking': partial(relax_incr_dimensions),
             'parallel': parizer.make_parallel,
             'openmp': parizer.make_parallel,
             'mpi': partial(mpiize, mode=options['mpi'], language=kwargs['language'],
