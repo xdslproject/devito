@@ -198,9 +198,9 @@ def decompose(ispace, d, block_dims):
     return IterationSpace(intervals, sub_iterators, directions)
 
 
-def relaxing(clusters):
+def relaxing(clusters, options):
 
-    processed = Relaxing().process(clusters)
+    processed = Relaxing(options).process(clusters)
 
     return processed
 
@@ -290,11 +290,31 @@ class Relaxing(Queue):
     """
     Relax_incr_dimensions
     """
+    template = "%s%d_blk%s"
 
-    def __init__(self):
-        # self.skewinner = bool(options['blockinner'])
+    def __init__(self, options):
+        self.inner = bool(options['blockinner'])
+        self.levels = options['blocklevels']
 
+        self.nblocked = Counter()
+
+        # import pdb;pdb.set_trace()
         super(Relaxing, self).__init__()
+
+    def _make_key_hook(self, cluster, level):
+        return (tuple(cluster.guards.get(i.dim) for i in cluster.itintervals[:level]),)
+
+    def _process_fdta(self, clusters, level, prefix=None):
+        # Truncate recursion in case of TILABLE, non-perfect sub-nests, as
+        # it's an unsupported case
+        if prefix:
+            d = prefix[-1].dim
+            test0 = any(TILABLE in c.properties[d] for c in clusters)
+            test1 = len({c.itintervals[:level] for c in clusters}) > 1
+            if test0 and test1:
+                return self.callback(clusters, prefix)
+
+        return super(Relaxing, self)._process_fdta(clusters, level, prefix)
 
     def callback(self, clusters, prefix):
         if not prefix:
@@ -302,109 +322,102 @@ class Relaxing(Queue):
 
         d = prefix[-1].dim
 
+        # Create the block Dimensions (in total `self.levels` Dimensions)
+        name = self.template % (d.name, self.nblocked[d], '%d')
+
+        bd = IncrDimension(name % 0, d, d.symbolic_min, d.symbolic_max)
+        size = bd.step
+        block_dims = [bd]
+
+        for i in range(1, self.levels):
+            bd = IncrDimension(name % i, bd, bd, bd + bd.step - 1, size=size)
+            block_dims.append(bd)
+
+        bd = IncrDimension(d.name, bd, bd, bd + bd.step - 1, 1, size=size)
+        block_dims.append(bd)
+
         processed = []
-
         for c in clusters:
-            if not d.is_Incr:
-                return clusters
-            else:
-                new_intervals = []
-                new_dims = {}
+            if TILABLE in c.properties[d]:
+                ispace = decompose_relax(c.ispace, d, block_dims)
 
-                it_ints = [i for i in c.ispace if i.dim.is_Incr]
-                outer, inner = split(it_ints, lambda i: not i.dim.parent.is_Incr)
+                # Use the innermost IncrDimension in place of `d`
+                exprs = [uxreplace(e, {d: bd}) for e in c.exprs]
 
-                for i in c.ispace:
-                    roots_max = {i.dim.root: i.dim.root.symbolic_max for i in c.ispace}
-
-                # import pdb;pdb.set_trace()
-                d_new = None
-                for i in c.ispace:
-                    if i.dim is d and i in inner:
-                        root_max = roots_max[i.dim.root]
-
-                        try:
-                            iter_max = (min(i.dim.symbolic_max, root_max))
-                            bool(iter_max)  # Can it be evaluated?
-                        except TypeError:
-                            iter_max = MIN(i.dim.symbolic_max, root_max)
-
-                        d_new = IncrDimension(d.name, d.parent, d.symbolic_min,
-                                              iter_max, step=d.step, size=d.size)
-                        new_dims[d] = d_new
-
-                for i in c.ispace:
-                    if i.dim is d and i in inner:
-                        new_intervals.append(Interval(d_new, i.lower, i.upper))
-                    else:
-                        new_intervals.append(i)
-
-                if d_new is None:
-                    return clusters
-                    continue
-
-                assert len(c.ispace) == len(new_intervals)
-
-                new_relations = set()
-                for i in c.ispace.intervals.relations:
-                    if not i:
-                        new_relations.add(i)
-                    elif d in i:
-                        index = i.index(d)
-                        nrel = list(i)
-                        nrel[index] = d_new
-                        new_relations.add(tuple(nrel))
-                    else:
-                        new_relations.add(i)
-
-                assert len(new_relations) == len(c.ispace.intervals.relations)
-
-                new_intervals = IntervalGroup(new_intervals, new_relations)
-
-                print(new_intervals[d_new].offsets)
-                print(d_new)
-
-                directions = dict(c.ispace.directions)
-                directions.pop(d)
-                directions.update({d_new: c.ispace.directions[d]})
-
-                sub_iterators = dict(c.ispace.sub_iterators)
-                sub_iterators.pop(d, None)
-                sub_iterators.update({d_new: c.ispace.sub_iterators.get(d, [])})
-                assert len(sub_iterators) == len(c.ispace.sub_iterators)
-                assert len(sub_iterators[d_new]) == len(c.ispace.sub_iterators[d])
-
-                for n, i in enumerate(sub_iterators[d_new]):
-                    mylist = []
-                    if d is i.parent:
-                        i_new = IncrDimension(i.name, d_new, i.symbolic_min,
-                                              i.symbolic_max, step=i.step, size=i.size)
-                        # import pdb;pdb.set_trace()
-                        mylist.append(i_new)
-                    else:
-                        mylist.append(i)
-
-                mytuple = tuple(mylist)
-                sub_iterators.update({d_new: mytuple})
-
-
-                import pdb;pdb.set_trace()
-
-
-                # import pdb;pdb.set_trace()
+                # The new Cluster properties
+                # TILABLE property is dropped after the blocking.
+                # SKEWABLE is dropped as well, but only from the new
+                # block dimensions.
                 properties = dict(c.properties)
-                properties[d_new] = properties[d]
                 properties.pop(d)
-                assert len(properties) == len(c.properties)
-                # properties.update({d_new: c.properties[d]})
+                properties.update({bd: c.properties[d] - {TILABLE} for bd in block_dims})
 
-                new_ispace = IterationSpace(new_intervals, sub_iterators,
-                                            directions)
-
-                exprs = xreplace_indices(c.exprs, {d: d_new})
-                # assert len(c.ispace.dimensions) == len(new_ispace.dimensions)
-                processed.append(c.rebuild(exprs=exprs, ispace=new_ispace,
+                processed.append(c.rebuild(exprs=exprs, ispace=ispace,
                                            properties=properties))
+            else:
+                processed.append(c)
 
-        # import pdb;pdb.set_trace()
+        # Make sure to use unique IncrDimensions
+        self.nblocked[d] += int(any(TILABLE in c.properties[d] for c in clusters))
+
         return processed
+
+
+def decompose_relax(ispace, d, block_dims):
+    """
+    Create a new IterationSpace in which the `d` Interval is decomposed
+    into a hierarchy of Intervals over ``block_dims``.
+    """
+    # Create the new Intervals
+    intervals = []
+    for i in ispace:
+        if i.dim is d:
+            intervals.append(i.switch(block_dims[0]))
+            intervals.extend([i.switch(bd).zero() for bd in block_dims[1:]])
+        else:
+            intervals.append(i)
+
+    # Create the relations.
+    # Example: consider the relation `(t, x, y)` and assume we decompose `x` over
+    # `xbb, xb, xi`; then we decompose the relation as two relations, `(t, xbb, y)`
+    # and `(xbb, xb, xi)`
+    relations = [block_dims]
+    for r in ispace.intervals.relations:
+        relations.append([block_dims[0] if i is d else i for i in r])
+
+    # The level of a given Dimension in the hierarchy of block Dimensions
+    level = lambda dim: len([i for i in dim._defines if i.is_Incr])
+
+    # Add more relations
+    for n, i in enumerate(ispace):
+        if i.dim is d:
+            continue
+        elif i.dim.is_Incr:
+            # Make sure IncrDimensions on the same level stick next to each other.
+            # For example, we want `(t, xbb, ybb, xb, yb, x, y)`, rather than say
+            # `(t, xbb, xb, x, ybb, ...)`
+            for bd in block_dims:
+                if level(i.dim) >= level(bd):
+                    relations.append([bd, i.dim])
+                else:
+                    relations.append([i.dim, bd])
+        elif n > ispace.intervals.index(d):
+            # The non-Incr subsequent Dimensions must follow the block Dimensions
+            for bd in block_dims:
+                relations.append([bd, i.dim])
+        else:
+            # All other Dimensions must precede the block Dimensions
+            for bd in block_dims:
+                relations.append([i.dim, bd])
+
+    intervals = IntervalGroup(intervals, relations=relations)
+
+    sub_iterators = dict(ispace.sub_iterators)
+    sub_iterators.pop(d, None)
+    sub_iterators.update({bd: ispace.sub_iterators.get(d, []) for bd in block_dims})
+
+    directions = dict(ispace.directions)
+    directions.pop(d)
+    directions.update({bd: ispace.directions[d] for bd in block_dims})
+
+    return IterationSpace(intervals, sub_iterators, directions)

@@ -188,7 +188,7 @@ class Cpu64AdvOperator(Cpu64OperatorMixin, CoreOperator):
         clusters = cse(clusters, sregistry)
 
         # Relaxing
-        clusters = relaxing(clusters)
+        clusters = relaxing(clusters, options)
 
         return clusters
 
@@ -282,7 +282,7 @@ class Cpu64FsgOperator(Cpu64AdvOperator):
         clusters = blocking(clusters, options)
 
         # Relaxing
-        clusters = relaxing(clusters)
+        clusters = relaxing(clusters, options)
 
         return clusters
 
