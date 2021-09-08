@@ -200,7 +200,8 @@ def decompose(ispace, d, block_dims):
 
 def relaxing(clusters, options):
 
-    processed = Relaxing(options).process(clusters)
+    processed = preprocess(clusters, options)
+    processed = Relaxing(options).process(processed)
 
     return processed
 
@@ -298,7 +299,6 @@ class Relaxing(Queue):
 
         self.nblocked = Counter()
 
-        # import pdb;pdb.set_trace()
         super(Relaxing, self).__init__()
 
     def _make_key_hook(self, cluster, level):
@@ -322,6 +322,14 @@ class Relaxing(Queue):
 
         d = prefix[-1].dim
 
+        for c in clusters:
+            dimensions = [i for i in c.ispace.dimensions if i.is_Incr]
+            outer, inner = split(dimensions, lambda i: not i.parent.is_Incr)
+ 
+        if d in outer:
+            import pdb;pdb.set_trace()
+            return clusters
+
         # Create the block Dimensions (in total `self.levels` Dimensions)
         name = self.template % (d.name, self.nblocked[d], '%d')
 
@@ -338,8 +346,9 @@ class Relaxing(Queue):
 
         processed = []
         for c in clusters:
-            if TILABLE in c.properties[d]:
-                ispace = decompose_relax(c.ispace, d, block_dims)
+            if TILABLE in c.properties[d] and d in inner:
+                import pdb;pdb.set_trace()
+                ispace = decompose_relax(c.ispace, d, block_dims, inner, outer)
 
                 # Use the innermost IncrDimension in place of `d`
                 exprs = [uxreplace(e, {d: bd}) for e in c.exprs]
@@ -363,7 +372,7 @@ class Relaxing(Queue):
         return processed
 
 
-def decompose_relax(ispace, d, block_dims):
+def decompose_relax(ispace, d, block_dims, inner, outer):
     """
     Create a new IterationSpace in which the `d` Interval is decomposed
     into a hierarchy of Intervals over ``block_dims``.
@@ -374,41 +383,20 @@ def decompose_relax(ispace, d, block_dims):
         if i.dim is d:
             intervals.append(i.switch(block_dims[0]))
             intervals.extend([i.switch(bd).zero() for bd in block_dims[1:]])
+        elif i.dim in outer:
+            pass
         else:
             intervals.append(i)
 
-    # Create the relations.
-    # Example: consider the relation `(t, x, y)` and assume we decompose `x` over
-    # `xbb, xb, xi`; then we decompose the relation as two relations, `(t, xbb, y)`
-    # and `(xbb, xb, xi)`
-    relations = [block_dims]
+    relations = []
     for r in ispace.intervals.relations:
-        relations.append([block_dims[0] if i is d else i for i in r])
-
-    # The level of a given Dimension in the hierarchy of block Dimensions
-    level = lambda dim: len([i for i in dim._defines if i.is_Incr])
-
-    # Add more relations
-    for n, i in enumerate(ispace):
-        if i.dim is d:
-            continue
-        elif i.dim.is_Incr:
-            # Make sure IncrDimensions on the same level stick next to each other.
-            # For example, we want `(t, xbb, ybb, xb, yb, x, y)`, rather than say
-            # `(t, xbb, xb, x, ybb, ...)`
-            for bd in block_dims:
-                if level(i.dim) >= level(bd):
-                    relations.append([bd, i.dim])
-                else:
-                    relations.append([i.dim, bd])
-        elif n > ispace.intervals.index(d):
-            # The non-Incr subsequent Dimensions must follow the block Dimensions
-            for bd in block_dims:
-                relations.append([bd, i.dim])
-        else:
-            # All other Dimensions must precede the block Dimensions
-            for bd in block_dims:
-                relations.append([i.dim, bd])
+        rnew = []
+        for i in r:
+            if i in outer and i == block_dims[0]:
+                rnew.append(block_dims[0])
+            else:
+                rnew.append(i)
+        relations.append(rnew)
 
     intervals = IntervalGroup(intervals, relations=relations)
 
@@ -416,8 +404,32 @@ def decompose_relax(ispace, d, block_dims):
     sub_iterators.pop(d, None)
     sub_iterators.update({bd: ispace.sub_iterators.get(d, []) for bd in block_dims})
 
+    trmv = []
+
+    for i in outer:
+        if i in sub_iterators:
+            trmv.append(i)
+
+    for fd in trmv:
+        sub_iterators.pop(fd, None)
+
+    # import pdb;pdb.set_trace()
+
     directions = dict(ispace.directions)
     directions.pop(d)
     directions.update({bd: ispace.directions[d] for bd in block_dims})
+
+    '''
+    trmv = []
+    import pdb;pdb.set_trace()
+
+    for i in outer:
+        if i in ispace.directions:
+            trmv.append(i)
+
+    for fd in trmv:
+        if fd is not d:
+            directions.pop(fd)
+    '''
 
     return IterationSpace(intervals, sub_iterators, directions)
