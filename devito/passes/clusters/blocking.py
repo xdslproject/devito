@@ -3,6 +3,7 @@ from collections import Counter
 from devito.ir.clusters import Queue
 from devito.ir.support import (SEQUENTIAL, SKEWABLE, TILABLE, Interval, IntervalGroup,
                                IterationSpace)
+from devito.passes.clusters.utils import level
 from devito.symbolics import uxreplace
 from devito.types import IncrDimension
 
@@ -159,9 +160,6 @@ def decompose(ispace, d, block_dims):
     relations = [block_dims]
     for r in ispace.intervals.relations:
         relations.append([block_dims[0] if i is d else i for i in r])
-
-    # The level of a given Dimension in the hierarchy of block Dimensions
-    level = lambda dim: len([i for i in dim._defines if i.is_Incr])
 
     # Add more relations
     for n, i in enumerate(ispace):
