@@ -7,6 +7,7 @@ from cached_property import cached_property
 from devito.data import LEFT, RIGHT
 from devito.exceptions import InvalidArgument
 from devito.logger import debug
+from devito.symbolics import evalmin
 from devito.tools import Pickable, dtype_to_cstr, is_integer
 from devito.types.args import ArgProvider
 from devito.types.basic import Symbol, DataSymbol, Scalar
@@ -1040,6 +1041,8 @@ class IncrDimension(DerivedDimension):
         super().__init_finalize__(name, parent)
         self._min = _min
         self._max = _max
+        self._rmin = _min
+        self._rmax = evalmin(_max, parent.symbolic_max)
         self._step = step
         self._size = size
 
@@ -1084,6 +1087,24 @@ class IncrDimension(DerivedDimension):
             return sympy.Number(self._max)
         except (TypeError, ValueError):
             return self._max
+
+    @cached_property
+    def symbolic_rmin(self):
+        # Make sure we return a symbolic object as the provided relaxed min might
+        # be for example a pure int
+        try:
+            return sympy.Number(self._rmin)
+        except (TypeError, ValueError):
+            return self._rmin
+
+    @cached_property
+    def symbolic_rmax(self):
+        # Make sure we return a symbolic object as the provided relaxed max might
+        # be for example a pure int
+        try:
+            return sympy.Number(self._rmax)
+        except (TypeError, ValueError):
+            return self._rmax
 
     @cached_property
     def symbolic_incr(self):

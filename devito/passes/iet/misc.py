@@ -4,7 +4,7 @@ from devito.ir import (Forward, List, Prodder, FindNodes, Transformer,
                        filter_iterations, retrieve_iteration_tree)
 from devito.logger import warning
 from devito.passes.iet.engine import iet_pass
-from devito.symbolics import MIN, MAX
+from devito.symbolics import MIN, MAX, evalmin
 from devito.tools import is_integer, split
 
 __all__ = ['avoid_denormals', 'hoist_prodders', 'relax_incr_dimensions', 'is_on_device']
@@ -77,6 +77,7 @@ def relax_incr_dimensions(iet, **kwargs):
 
     """
     mapper = {}
+    print(len(retrieve_iteration_tree(iet)))
     for tree in retrieve_iteration_tree(iet):
         iterations = [i for i in tree if i.dim.is_Incr]
         if not iterations:
@@ -103,15 +104,8 @@ def relax_incr_dimensions(iet, **kwargs):
             # E.g. assume `i.symbolic_max = x0_blk0 + x0_blk0_size + 1` and
             # `i.dim.symbolic_max = x0_blk0 + x0_blk0_size - 1` then the generated
             # maximum will be `MIN(x0_blk0 + x0_blk0_size + 1, x_M + 2)`
-
             root_max = roots_max[i.dim.root] + i.symbolic_max - i.dim.symbolic_max
-
-            try:
-                iter_max = (min(i.symbolic_max, root_max))
-                bool(iter_max)  # Can it be evaluated?
-            except TypeError:
-                iter_max = MIN(i.symbolic_max, root_max)
-
+            iter_max = evalmin(i.symbolic_max, root_max)
             mapper[i] = i._rebuild(limits=(i.symbolic_min, iter_max, i.step))
 
     if mapper:
