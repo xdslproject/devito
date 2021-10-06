@@ -462,7 +462,8 @@ class Skewing(Queue):
                 sub_iterators.update({d: tuple(sub_iters)})
                 intervals.append(i)
             elif i.dim is d and i.dim is skew_dim.parent:
-                intervals.append(Interval(d, sf, sf))
+                intervals.append(Interval(d, 0, i.upper + (sf - 1)*i.dim.symbolic_max))
+                # import pdb;pdb.set_trace()
             else:
                 intervals.append(i)
 

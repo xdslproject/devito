@@ -77,6 +77,7 @@ def relax_incr_dimensions(iet, **kwargs):
         <Iteration x; (x0_blk0, MIN(x_M, x0_blk0 + x0_blk0_size - 1)), 1)>
     """
     mapper = {}
+    import pdb;pdb.set_trace()
     for tree in retrieve_iteration_tree(iet):
         iterations = [i for i in tree if i.dim.is_Incr]
         if not iterations:
@@ -214,21 +215,19 @@ def relax_seq_n_outer(seq_dims, roots_dim_max, outer, skew_inner):
     """
     mapper = {}
     # Sniff skewing factor
-    skewing_offset = seq_dims[0].symbolic_max - seq_dims[0].dim.symbolic_max
+    skewing_offset = seq_dims[0].symbolic_max/seq_dims[0].dim.symbolic_max
     sf = (skewing_offset if skewing_offset else 1)
 
     for i in seq_dims:
         symbolic_min = i.dim.symbolic_min
-        root = sf*roots_dim_max[i.dim.root]
+        root = roots_dim_max[i.dim.root]
         if i.dim is skew_inner:
             mapper[i] = i._rebuild(limits=(symbolic_min, evalmin(i.symbolic_max,
-                                   root), sf*i.step))
-        else:
-            mapper[i] = i._rebuild(limits=(symbolic_min, root, i.step))
+                                   sf*root), sf*i.step))
 
     # Tile size should be extended by time size for 'outer' iterations
     for i in outer:
-        iter_max = i.symbolic_max + sf*seq_dims[0].symbolic_size
+        iter_max = i.symbolic_max + sf*seq_dims[0].dim.symbolic_size
         mapper[i] = i._rebuild(limits=(i.symbolic_min, iter_max, i.step))
 
     return mapper
