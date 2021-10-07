@@ -1,10 +1,10 @@
 from devito.symbolics.queries import (q_indexed, q_function, q_terminal, q_leaf, q_xop,
-                                      q_symbol, q_dimension)
+                                      q_symbol, q_dimension, q_routine)
 from devito.tools import as_tuple
 
 __all__ = ['retrieve_indexed', 'retrieve_functions', 'retrieve_function_carriers',
            'retrieve_terminals', 'retrieve_xops', 'retrieve_symbols',
-           'retrieve_dimensions', 'search']
+           'retrieve_dimensions', 'retrieve_external_calls', 'search']
 
 
 class Search(object):
@@ -137,6 +137,11 @@ def retrieve_indexed(exprs, mode='all', deep=False):
 def retrieve_functions(exprs, mode='all'):
     """Shorthand to retrieve the DiscreteFunctions in ``exprs``."""
     return search(exprs, q_function, mode, 'dfs')
+
+
+def retrieve_external_calls(exprs, mode='all'):
+    """Shorthand to retrieve the external calls (or "routines") in ``exprs``."""
+    return search(exprs, q_routine, mode, 'dfs')
 
 
 def retrieve_symbols(exprs, mode='all'):

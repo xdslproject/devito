@@ -6,7 +6,7 @@ from cached_property import cached_property
 from devito.ir.equations import ClusterizedEq
 from devito.ir.support import (PARALLEL, PARALLEL_IF_PVT, IterationSpace, DataSpace,
                                Scope, detect_io, normalize_properties)
-from devito.symbolics import estimate_cost
+from devito.symbolics import estimate_cost, retrieve_external_calls
 from devito.tools import as_tuple, flatten, frozendict
 from devito.types import normalize_syncs
 
@@ -177,6 +177,10 @@ class Cluster(object):
     @cached_property
     def has_increments(self):
         return any(e.is_Increment for e in self.exprs)
+
+    @cached_property
+    def has_external_calls(self):
+        return any(retrieve_external_calls(e) for e in self.exprs)
 
     @cached_property
     def is_scalar(self):

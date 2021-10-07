@@ -72,6 +72,11 @@ class Lift(Queue):
                 processed.append(c)
                 continue
 
+            # External calls prevent lifting
+            if c.has_external_calls:
+                processed.append(c)
+                continue
+
             # The contracted iteration and data spaces
             key = lambda d: d not in hope_invariant
             ispace = c.ispace.project(key).reset()

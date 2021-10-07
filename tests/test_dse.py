@@ -15,7 +15,7 @@ from devito.ir import (Conditional, DummyEq, Expression, Iteration, FindNodes,
 from devito.passes.clusters.aliases import collect
 from devito.passes.clusters.cse import Temp, _cse
 from devito.passes.iet.parpragma import VExpanded
-from devito.symbolics import estimate_cost, pow_to_mul, indexify
+from devito.symbolics import DefFunction, estimate_cost, pow_to_mul, indexify
 from devito.tools import as_tuple, generator
 from devito.types import Scalar, Array
 
@@ -356,6 +356,22 @@ class TestLifting(object):
         assert ["".join(mapper.get(i.dim.name, i.dim.name) for i in j)
                 for j in trees] == expected
         assert "".join(mapper.get(i.dim.name, i.dim.name) for i in iters) == visit
+
+    def test_external_calls(self):
+        grid = Grid(shape=(4, 4))
+        time_dim = grid.time_dim
+
+        s = Scalar(name='s')
+        u = TimeFunction(name='u', grid=grid)
+
+        eqns = [Eq(u.forward, u + 1.),
+                Eq(s, DefFunction('foo'), implicit_dims=(time_dim,))]
+
+        op = Operator(eqns)
+
+        # The `implicit_dims` should enforce the positioning of `foo` within
+        # the time loop. We check this here
+        assert str(op.body.body[-1].body[-1].nodes[-1]) == 'float s = foo();'
 
 
 class TestAliases(object):
