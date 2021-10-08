@@ -1,14 +1,15 @@
 from collections import Counter
 
 from devito.ir.clusters import Queue
-from devito.ir.support import (SEQUENTIAL, SKEWABLE, TILABLE, Interval, IntervalGroup,
-                               IterationSpace)
-from devito.symbolics import uxreplace
-from devito.types import IncrDimension
+from devito.ir.support import (AFFINE, SEQUENTIAL, SKEWABLE, TILABLE, Interval,
+                               IntervalGroup, IterationSpace)
+from devito.logger import warning
+from devito.symbolics import uxreplace, level
+from devito.types import IncrDimension, SteppingDimension
 
 from devito.symbolics import xreplace_indices
 
-__all__ = ['blocking']
+__all__ = ['blocking', 'skewing']
 
 
 def blocking(clusters, options):
@@ -25,7 +26,22 @@ def blocking(clusters, options):
            innermost loop.
         * `blocklevels` (int, 1): 1 => classic loop blocking; 2 for two-level
            hierarchical blocking.
+        * `blocktime` (boolean, False): Block a sequential dimension. Usually a
+           `TimeDimension`.
         * `skewing` (boolean, False): enable/disable loop skewing.
+
+    Example
+    -------
+        * A typical use case, e.g.
+          .. code-block::
+                            Classical   +blockinner  2-level Hierarchical
+            for x            for xb        for xb         for xbb
+              for y    -->    for yb        for yb         for ybb
+                for z          for x         for zb         for xb
+                                for y         for x          for yb
+                                 for z         for y          for x
+                                                for z          for y
+                                                                for z
 
     Notes
     ------
@@ -35,9 +51,6 @@ def blocking(clusters, options):
 
     if options['blocklevels'] > 0:
         processed = Blocking(options).process(processed)
-
-    if options['skewing']:
-        processed = Skewing(options).process(processed)
 
     return processed
 
@@ -49,6 +62,7 @@ class Blocking(Queue):
     def __init__(self, options):
         self.inner = bool(options['blockinner'])
         self.levels = options['blocklevels']
+        self.blocktime = options['blocktime']
 
         self.nblocked = Counter()
 
@@ -82,7 +96,10 @@ class Blocking(Queue):
         size = bd.step
         block_dims = [bd]
 
-        for i in range(1, self.levels):
+        # When blocking SEQUENTIAL dims, only use one level.
+        levels = (1 if any(SEQUENTIAL in c.properties[d] for c in clusters)
+                  else self.levels)
+        for i in range(1, levels):
             bd = IncrDimension(name % i, bd, bd, bd + bd.step - 1, size=size)
             block_dims.append(bd)
 
@@ -91,16 +108,18 @@ class Blocking(Queue):
 
         processed = []
         for c in clusters:
-            if TILABLE in c.properties[d]:
-                ispace = decompose(c.ispace, d, block_dims)
+            parblock = TILABLE in c.properties[d]
+            seqblock = (c.properties[d] == {SEQUENTIAL, AFFINE}
+                        and self.blocktime and not d.is_Sub)
+            if parblock or seqblock:
+                mode = ('parallel' if parblock else 'sequential')
+                ispace = decompose(c.ispace, d, block_dims, mode)
 
                 # Use the innermost IncrDimension in place of `d`
                 exprs = [uxreplace(e, {d: bd}) for e in c.exprs]
 
                 # The new Cluster properties
                 # TILABLE property is dropped after the blocking.
-                # SKEWABLE is dropped as well, but only from the new
-                # block dimensions.
                 properties = dict(c.properties)
                 properties.pop(d)
                 properties.update({bd: c.properties[d] - {TILABLE} for bd in block_dims})
@@ -138,7 +157,7 @@ def preprocess(clusters, options):
     return processed
 
 
-def decompose(ispace, d, block_dims):
+def decompose(ispace, d, block_dims, mode='parallel'):
     """
     Create a new IterationSpace in which the `d` Interval is decomposed
     into a hierarchy of Intervals over ``block_dims``.
@@ -160,9 +179,6 @@ def decompose(ispace, d, block_dims):
     for r in ispace.intervals.relations:
         relations.append([block_dims[0] if i is d else i for i in r])
 
-    # The level of a given Dimension in the hierarchy of block Dimensions
-    level = lambda dim: len([i for i in dim._defines if i.is_Incr])
-
     # Add more relations
     for n, i in enumerate(ispace):
         if i.dim is d:
@@ -170,9 +186,11 @@ def decompose(ispace, d, block_dims):
         elif i.dim.is_Incr:
             # Make sure IncrDimensions on the same level stick next to each other.
             # For example, we want `(t, xbb, ybb, xb, yb, x, y)`, rather than say
-            # `(t, xbb, xb, x, ybb, ...)`
+            # `(t, xbb, xb, x, ybb, ...)`. In sequential blocking, IncrDimensions
+            # stick together and should result in `(tbb, tb, t, xbb, ybb, xb, yb, ...)`
+            # rather than `(tbb, xbb, ybb, tb, xb, yb, b, x, y)`
             for bd in block_dims:
-                if level(i.dim) >= level(bd):
+                if level(i.dim) >= level(bd) or mode == 'sequential':
                     relations.append([bd, i.dim])
                 else:
                     relations.append([i.dim, bd])
@@ -191,11 +209,44 @@ def decompose(ispace, d, block_dims):
     sub_iterators.pop(d, None)
     sub_iterators.update({bd: ispace.sub_iterators.get(d, []) for bd in block_dims})
 
+    # When blocking sequentially, update modulo subiterators with new parents
+    if mode == 'sequential':
+        [b0, b1] = block_dims
+        sub_iterators.update({b0: ()})
+        sub_iters = []
+        for i in sub_iterators[b1]:
+            if i.parent.is_Stepping:
+                parent = SteppingDimension(name=i.parent.name, parent=b1)
+            else:
+                parent = b1
+
+            sub_iters.append(i.func(parent=parent, offset=(b1 + i.offset - d))
+                             if i.is_Modulo else i)
+
+        sub_iterators.update({block_dims[1]: tuple(sub_iters)})
+
     directions = dict(ispace.directions)
     directions.pop(d)
     directions.update({bd: ispace.directions[d] for bd in block_dims})
 
     return IterationSpace(intervals, sub_iterators, directions)
+
+
+def skewing(clusters, options):
+    """
+    This pass helps to skew accesses and loop bounds as well as perform loop interchange
+    towards wavefront temporal blocking
+    Parameters
+    ----------
+    clusters : tuple of Clusters
+        Input Clusters, subject of the optimization pass.
+    options : dict
+        The optimization options.
+        * `skewinner` (boolean, False): enable/disable loop skewing along the
+           innermost loop.
+    """
+
+    return Skewing(options).process(clusters)
 
 
 class Skewing(Queue):
@@ -233,6 +284,7 @@ class Skewing(Queue):
 
     def __init__(self, options):
         self.skewinner = bool(options['blockinner'])
+        self.blocktime = bool(options['blocktime'])
 
         super(Skewing, self).__init__()
 
@@ -244,34 +296,44 @@ class Skewing(Queue):
 
         processed = []
         for c in clusters:
+            # Return if nothing to do
             if SKEWABLE not in c.properties[d]:
                 return clusters
 
             if d is c.ispace[-1].dim and not self.skewinner:
                 return clusters
 
-            skew_dims = {i.dim for i in c.ispace if SEQUENTIAL in c.properties[i.dim]}
-            if len(skew_dims) > 1:
-                return clusters
-            skew_dim = skew_dims.pop()
+            seq_dims = [i.dim for i in c.ispace if
+                        c.properties[i.dim] == {SEQUENTIAL, AFFINE}]
 
-            # The level of a given Dimension in the hierarchy of block Dimensions, used
-            # to skew over the outer level of loops.
-            level = lambda dim: len([i for i in dim._defines if i.is_Incr])
+            if not len(seq_dims) in (1, 2):
+                warning("Loop structure not compatible with skewing/wavefront temporal"
+                        "blocking, skipping")
+
+            # Here, prefix is skewable and nested under a SEQUENTIAL loop. Pop skew dim.
+            skew_dim = seq_dims.pop()
+
+            # Helper variable to define the number of block levels between time loops
+            # Defaults to 1 for Wavefront Temporal Blocking
+            skewlevel = 1
 
             # Since we are here, prefix is skewable and nested under a
             # SEQUENTIAL loop.
+
+            # Skew intervals for SKEWABLE dimensions, interchange loops, update properties
             intervals = []
             for i in c.ispace:
-                if i.dim is d and level(d) <= 1:  # Skew only at level 0 or 1
+                if i.dim is d and level(d) <= skewlevel:
                     intervals.append(Interval(d, skew_dim, skew_dim))
                 else:
                     intervals.append(i)
+
+            exprs = xreplace_indices(c.exprs, {d: d - skew_dim})
+
             intervals = IntervalGroup(intervals, relations=c.ispace.relations)
             ispace = IterationSpace(intervals, c.ispace.sub_iterators,
                                     c.ispace.directions)
 
-            exprs = xreplace_indices(c.exprs, {d: d - skew_dim})
             processed.append(c.rebuild(exprs=exprs, ispace=ispace,
                                        properties=c.properties))
 

@@ -86,3 +86,10 @@ def makeit_ssa(exprs):
         else:
             processed.append(e.func(e.lhs, rhs))
     return processed
+
+
+def level(dim):
+    '''
+    The level of a given Dimension in the hierarchy of block Dimensions.
+    '''
+    return len([i for i in dim._defines if i.is_Incr])

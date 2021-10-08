@@ -4,7 +4,7 @@ from math import floor
 
 from sympy import sin, tan
 
-from conftest import opts_tiling, assert_structure
+from conftest import opts_timetiling, assert_structure
 from devito import (Grid, Function, TimeFunction, Eq, solve, Operator, SubDomain,
                     SubDomainSet, Dimension)
 from devito.ir import FindNodes, Expression
@@ -162,7 +162,7 @@ class TestSubdomains(object):
 
         assert u0.data.all() == u1.data.all() == u2.data.all() == u3.data.all()
 
-    @pytest.mark.parametrize('opt', opts_tiling)
+    @pytest.mark.parametrize('opt', opts_timetiling)
     def test_iterate_NDomains(self, opt):
         """
         Test that a set of subdomains are iterated upon correctly.

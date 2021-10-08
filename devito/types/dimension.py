@@ -913,6 +913,16 @@ class ModuloDimension(DerivedDimension):
         self._origin = origin
 
     @property
+    def func(self):
+        return lambda **kwargs:\
+            self.__class__(name=kwargs.get('name', self.name),
+                           parent=kwargs.get('parent', self.parent),
+                           offset=kwargs.get('offset', self.offset),
+                           modulo=kwargs.get('modulo', self.modulo),
+                           incr=kwargs.get('incr', self.incr),
+                           origin=kwargs.get('origin', self.origin))
+
+    @property
     def offset(self):
         return self._offset
 

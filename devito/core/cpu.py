@@ -5,7 +5,7 @@ from devito.exceptions import InvalidOperator
 from devito.passes.equations import collect_derivatives
 from devito.passes.clusters import (Lift, blocking, buffering, cire, cse,
                                     extract_increments, factorize, fission, fuse,
-                                    optimize_pows, optimize_msds)
+                                    skewing, optimize_pows, optimize_msds)
 from devito.passes.iet import (CTarget, OmpTarget, avoid_denormals, linearize, mpiize,
                                optimize_halospots, hoist_prodders, relax_incr_dimensions)
 from devito.tools import timed_pass
@@ -84,6 +84,7 @@ class Cpu64OperatorMixin(object):
         # Blocking
         o['blockinner'] = oo.pop('blockinner', False)
         o['blocklevels'] = oo.pop('blocklevels', cls.BLOCK_LEVELS)
+        o['blocktime'] = oo.pop('blocktime', False)
         o['skewing'] = oo.pop('skewing', False)
 
         # CIRE
@@ -186,6 +187,10 @@ class Cpu64AdvOperator(Cpu64OperatorMixin, CoreOperator):
 
         # Reduce flops
         clusters = cse(clusters, sregistry)
+
+        # Skewing
+        if options['skewing']:
+            clusters = skewing(clusters, options)
 
         return clusters
 
@@ -305,6 +310,7 @@ class Cpu64CustomOperator(Cpu64OperatorMixin, CustomOperator):
         return {
             'buffering': lambda i: buffering(i, callback, sregistry, options),
             'blocking': lambda i: blocking(i, options),
+            'skewing': lambda i: skewing(i, options),
             'factorize': factorize,
             'fission': fission,
             'fuse': lambda i: fuse(i, options=options),
@@ -345,7 +351,7 @@ class Cpu64CustomOperator(Cpu64OperatorMixin, CustomOperator):
         'buffering',
         # Clusters
         'blocking', 'topofuse', 'fission', 'fuse', 'factorize', 'cire-sops',
-        'cse', 'lift', 'opt-pows',
+        'cse', 'lift', 'opt-pows', 'skewing',
         # IET
         'denormals', 'optcomms', 'openmp', 'mpi', 'linearize', 'simd', 'prodders',
     )
