@@ -1,10 +1,11 @@
 from collections import Counter
 
 from devito.ir.clusters import Queue
-from devito.ir.support import (AFFINE, SEQUENTIAL, SKEWABLE, TILABLE, Interval,
-                               IntervalGroup, IterationSpace)
+from devito.ir.support import (AFFINE, SEQUENTIAL, SKEWABLE, TILABLE, STILABLE,
+                               Interval, IntervalGroup, IterationSpace)
 from devito.logger import warning
-from devito.symbolics import uxreplace, level
+from devito.passes.clusters.utils import level
+from devito.symbolics import uxreplace
 from devito.types import IncrDimension, SteppingDimension
 
 from devito.symbolics import xreplace_indices
@@ -109,8 +110,7 @@ class Blocking(Queue):
         processed = []
         for c in clusters:
             parblock = TILABLE in c.properties[d]
-            seqblock = (c.properties[d] == {SEQUENTIAL, AFFINE}
-                        and self.blocktime and not d.is_Sub)
+            seqblock = STILABLE in c.properties[d] and self.blocktime
             if parblock or seqblock:
                 mode = ('parallel' if parblock else 'sequential')
                 ispace = decompose(c.ispace, d, block_dims, mode)
@@ -304,11 +304,12 @@ class Skewing(Queue):
                 return clusters
 
             seq_dims = [i.dim for i in c.ispace if
-                        c.properties[i.dim] == {SEQUENTIAL, AFFINE}]
+                        c.properties[i.dim] == {SEQUENTIAL, AFFINE, STILABLE}]
 
             if not len(seq_dims) in (1, 2):
                 warning("Loop structure not compatible with skewing/wavefront temporal"
                         "blocking, skipping")
+                return clusters
 
             # Here, prefix is skewable and nested under a SEQUENTIAL loop. Pop skew dim.
             skew_dim = seq_dims.pop()

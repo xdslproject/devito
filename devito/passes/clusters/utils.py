@@ -90,6 +90,6 @@ def makeit_ssa(exprs):
 
 def level(dim):
     '''
-    The level of a given Dimension in the hierarchy of block Dimensions.
+    The level of a given Dimension in the hierarchy of `IncrDimension`s.
     '''
     return len([i for i in dim._defines if i.is_Incr])

@@ -344,7 +344,7 @@ def test_time_blocking():
 
     u = TimeFunction(name='u', grid=grid, space_order=2)
 
-    opt = ('advanced', {'openmp': False, 'wavefront': True, 'blocklevels': 2})
+    opt = ('advanced', {'openmp': False, 'blocktime': True, 'blocklevels': 2})
     op = Operator(Eq(u.forward, u + 1), opt=opt)
 
     # 'basic' mode
