@@ -5,7 +5,7 @@ from devito.exceptions import InvalidOperator
 from devito.passes.equations import collect_derivatives
 from devito.passes.clusters import (Lift, blocking, buffering, cire, cse,
                                     extract_increments, factorize, fission, fuse,
-                                    optimize_pows, optimize_msds, relax)
+                                    optimize_pows, optimize_msds, relaxing)
 from devito.passes.iet import (CTarget, OmpTarget, avoid_denormals, linearize, mpiize,
                                optimize_halospots, hoist_prodders, relax_incr_dimensions)
 from devito.tools import timed_pass
@@ -188,7 +188,7 @@ class Cpu64AdvOperator(Cpu64OperatorMixin, CoreOperator):
         clusters = cse(clusters, sregistry)
 
         # Relax clusters
-        clusters = relax(clusters, options)
+        clusters = relaxing(clusters, options)
 
         return clusters
 
@@ -200,17 +200,19 @@ class Cpu64AdvOperator(Cpu64OperatorMixin, CoreOperator):
         platform = kwargs['platform']
         sregistry = kwargs['sregistry']
 
+        import pdb;pdb.set_trace()
         # Flush denormal numbers
         avoid_denormals(graph)
 
         # Distributed-memory parallelism
         optimize_halospots(graph)
+
         if options['mpi']:
             mpiize(graph, mode=options['mpi'], language=language, sregistry=sregistry)
 
         # Lower IncrDimensions so that blocks of arbitrary shape may be used
-        relax_incr_dimensions(graph)
-
+        # relax_incr_dimensions(graph)
+        
         # Parallelism
         parizer = cls._Target.Parizer(sregistry, options, platform)
         parizer.make_simd(graph)
@@ -279,7 +281,7 @@ class Cpu64FsgOperator(Cpu64AdvOperator):
         clusters = blocking(clusters, options)
 
         # Relax clusters
-        clusters = relax(clusters, options)
+        clusters = relaxing(clusters)
 
         return clusters
 
