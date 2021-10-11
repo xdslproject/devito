@@ -2,7 +2,7 @@ from devito.passes.clusters.utils import cluster_pass
 from devito.types import IncrDimension, Symbol
 from devito.ir.support import Interval, IntervalGroup, IterationSpace
 from devito.ir.clusters import Queue
-from devito.tools import split
+from devito.tools import split, as_list, as_tuple
 from devito.symbolics import xreplace_indices, MIN, MAX, uxreplace
 
 __all__ = ['relaxing']
@@ -18,6 +18,7 @@ def relaxing(clusters, options):
 class Relaxing(Queue):
 
     def __init__(self, options):
+        self.levels = options['blocklevels']
 
         super(Relaxing, self).__init__()
 
@@ -44,52 +45,101 @@ class Relaxing(Queue):
 
         root_max = d.root.symbolic_max
 
+        # import pdb;pdb.set_trace()
+
         try:
             iter_max = (min(d.symbolic_max, root_max))
             bool(iter_max)  # Can it be evaluated?
         except TypeError:
             iter_max = MIN(d.symbolic_max, root_max)
 
-        d_new = d.func(max=iter_max)
+        # d_new = d.func(max=iter_max)
+
+        d_new = IncrDimension(d.name, d.parent, d.symbolic_min, iter_max, step=d.step)
         processed = []
+
         for c in clusters:
+
+            it_ints = [i for i in c.ispace if i.dim.is_Incr]
+            outer, inner = split(it_ints, lambda i: not i.dim.parent.is_Incr)
+
+            # if d exists in inner
+            relatives = [d]
+            if any(d is i.dim for i in inner):
+                for o in outer:
+                    if o.dim is d.parent:
+                        relatives.append(o.dim)
+
+            # relatives.append(d)
+
+            mapper = {}
+            mapper[d] = d_new
+            for r in relatives[1:]:
+                mapper[r] = IncrDimension(r.name, r.parent, r.symbolic_min,
+                                          r.symbolic_max)
 
             # Create the new Intervals
             intervals = []
             for i in c.ispace:
-                if i.dim is d:
-                    intervals.append(i.switch(d_new))
+                if i.dim in relatives:
+                    intervals.append(i.switch(mapper[i.dim]))
                 else:
                     intervals.append(i)
 
+            relations = set()
+            for r in c.ispace.intervals.relations:
+                rel = as_list(r)
+                new_rel = []
+                for ii in rel:
+                    new_i = ii.xreplace(mapper)
+                    new_rel.append(new_i)
+
+                relations.add(as_tuple(new_rel))
+                '''
+                elif d in r:
+                    index = r.index(d)
+                    nrel = list(r)
+                    nrel[index] = d_new
+                    relations.add(tuple(nrel))
+                else:
+                    relations.add(r)
+                '''
+
+            # import pdb;pdb.set_trace()
+
             directions = dict(c.ispace.directions)
-            directions.pop(d)
-            directions[d_new] = c.ispace.directions[i.dim]
+            for rel in relatives:
+                directions.pop(rel, None)
+            directions.update({mapper[rel]: c.ispace.directions.get(rel, [])
+                               for rel in relatives})
 
             sub_iterators = dict(c.ispace.sub_iterators)
-            sub_iterators.pop(i.dim, None)
-            sub_iterators.update({d_new: c.ispace.sub_iterators.get(i.dim, [])})
+            for rel in relatives:
+                sub_iterators.pop(rel, None)
+            sub_iterators.update({mapper[rel]: c.ispace.sub_iterators.get(rel, [])
+                                  for rel in relatives})
 
             # try:
             #    assert len(sub_iterators) == len(c.ispace.sub_iterators)
             #except:
-            #    import pdb;pdb.set_trace()
+            # import pdb;pdb.set_trace()
             #assert len(sub_iterators[d_new]) == len(c.ispace.sub_iterators[i.dim])
 
+            intervals = IntervalGroup(intervals, relations=relations)
             ispace = IterationSpace(intervals, sub_iterators, directions)
             # Use the innermost IncrDimension in place of `d`
-            exprs = [uxreplace(e, {d: d_new}) for e in c.exprs]
+            exprs = [uxreplace(e, mapper) for e in c.exprs]
 
             properties = dict(c.properties)
-            properties.pop(d)
-            properties.update({d_new: c.properties[d]})
+            for rel in relatives:
+                properties.pop(rel, None)
+            properties.update({mapper[rel]: c.properties.get(rel, [])
+                               for rel in relatives})
 
             processed.append(c.rebuild(exprs=exprs, ispace=ispace,
                                        properties=properties))
-        else:
-            processed.append(c)
 
-        import pdb;pdb.set_trace()
+        # import pdb;pdb.set_trace()
         return processed
 '''
 
@@ -233,8 +283,6 @@ class Relaxing(Queue):
             assert len(new_relations) == len(c.ispace.intervals.relations)
         except AssertionError:
             import pdb;pdb.set_trace()
-
-        import pdb;pdb.set_trace()
 
         # Required to build intervals
         # relations = c.ispace.relations
