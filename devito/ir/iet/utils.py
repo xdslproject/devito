@@ -3,6 +3,7 @@ from devito.symbolics import Literal, Macro
 from devito.tools import as_tuple, filter_ordered, split
 from devito.types import Array, LocalObject
 
+
 __all__ = ['filter_iterations', 'retrieve_iteration_tree', 'derive_parameters',
            'diff_parameters']
 

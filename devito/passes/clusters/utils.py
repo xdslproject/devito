@@ -1,10 +1,10 @@
 from collections.abc import Iterable
 
-from devito.symbolics import uxreplace, MIN, MAX
+from devito.symbolics import uxreplace
 from devito.tools import flatten, timed_pass
 from devito.types import Symbol
 
-__all__ = ['cluster_pass', 'makeit_ssa', 'evalmin', 'evalmax', 'level']
+__all__ = ['cluster_pass', 'makeit_ssa', 'level']
 
 
 class cluster_pass(object):
@@ -93,25 +93,3 @@ def level(dim):
     The level of a given Dimension in the hierarchy of block Dimensions.
     '''
     return len([i for i in dim._defines if i.is_Incr])
-
-
-def evalmin(a, b):
-    """
-    Simplify min(a, b) expressions if possible
-    """
-    try:
-        bool(min(a, b))  # Can it be evaluated?
-        return min(a, b)
-    except TypeError:
-        return MIN(a, b)
-
-
-def evalmax(a, b):
-    """
-    Simplify max(a, b) if possible
-    """
-    try:
-        bool(max(a, b))  # Can it be evaluated?
-        return max(a, b)
-    except TypeError:
-        return MAX(a, b)

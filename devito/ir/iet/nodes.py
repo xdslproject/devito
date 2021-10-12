@@ -7,7 +7,6 @@ from collections import OrderedDict, namedtuple
 from collections.abc import Iterable
 
 import cgen as c
-
 from devito.data import FULL
 from devito.ir.equations import DummyEq
 from devito.ir.support import (SEQUENTIAL, PARALLEL, PARALLEL_IF_ATOMIC,
@@ -16,6 +15,8 @@ from devito.ir.support import (SEQUENTIAL, PARALLEL, PARALLEL_IF_ATOMIC,
 from devito.symbolics import ListInitializer, FunctionFromPointer, as_symbol, ccode
 from devito.tools import Signer, as_tuple, filter_ordered, filter_sorted, flatten
 from devito.types.basic import AbstractFunction, Indexed, LocalObject, Symbol
+from devito.symbolics.utils import evalmin
+
 
 __all__ = ['Node', 'Block', 'Expression', 'Element', 'Callable', 'Call',
            'Conditional', 'Iteration', 'List', 'Section', 'TimedList', 'Prodder',
@@ -598,6 +599,13 @@ class Iteration(Node):
     @property
     def defines(self):
         return self.dimensions
+
+    def relax(self, rule, roots_max):
+
+        if rule == 'classic':
+            rmax = (roots_max[self.dim.root] +
+                    self.symbolic_max - self.dim.symbolic_max)
+            return evalmin(self.symbolic_max, rmax)
 
 
 class While(Node):
