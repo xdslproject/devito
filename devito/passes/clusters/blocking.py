@@ -29,7 +29,21 @@ def blocking(clusters, options):
     Notes
     ------
     In case of skewing, if 'blockinner' is enabled, the innermost loop is also skewed.
+
+    Example
+    -------
+        * A typical use case, e.g.
+          .. code-block::
+                            Classical   +blockinner  2-level Hierarchical
+            for x            for xb        for xb         for xbb
+              for y    -->    for yb        for yb         for ybb
+                for z          for x         for zb         for xb
+                                for y         for x          for yb
+                                 for z         for y          for x
+                                                for z          for y
+                                                                for z
     """
+
     processed = preprocess(clusters, options)
 
     if options['blocklevels'] > 0:
@@ -187,7 +201,8 @@ def decompose(ispace, d, block_dims):
 
     sub_iterators = dict(ispace.sub_iterators)
     sub_iterators.pop(d, None)
-    sub_iterators.update({bd: ispace.sub_iterators.get(d, []) for bd in block_dims})
+    sub_iterators.update({block_dims[-1]: ispace.sub_iterators.get(d, [])})
+    sub_iterators.update({bd: () for bd in block_dims[:-1]})
 
     directions = dict(ispace.directions)
     directions.pop(d)
@@ -209,7 +224,6 @@ def skewing(clusters, options):
         * `skewinner` (boolean, False): enable/disable loop skewing along the
            innermost loop.
     """
-    import pdb;pdb.set_trace()
     return Skewing(options).process(clusters)
 
 
@@ -245,9 +259,13 @@ class Skewing(Queue):
                 a[i,j-i] = (a[a-1,j-i] + a[i,j-1-i] + a[i+1,j-i] + a[i,j+1-i]) / 4
 
     """
+    template = "%s%d_blk%s"
 
     def __init__(self, options):
         self.skewinner = bool(options['blockinner'])
+        self.blocktime = bool(options['blocktime'])
+
+        self.nblocked = Counter()
 
         super(Skewing, self).__init__()
 
@@ -257,6 +275,16 @@ class Skewing(Queue):
 
         d = prefix[-1].dim
 
+        processed = clusters
+
+        processed = self.skew(processed, d)
+
+        if self.blocktime:
+            processed = self.tempblock(processed, d)
+
+        return processed
+
+    def skew(self, clusters, d):
         processed = []
         for c in clusters:
             if SKEWABLE not in c.properties[d]:
@@ -289,5 +317,37 @@ class Skewing(Queue):
             exprs = xreplace_indices(c.exprs, {d: d - skew_dim})
             processed.append(c.rebuild(exprs=exprs, ispace=ispace,
                                        properties=c.properties))
+
+        return processed
+
+    def tempblock(self, clusters, d):
+        # Create the block Dimensions (in total `self.levels` Dimensions)
+
+        name = self.template % (d.name, self.nblocked[d], '%d')
+
+        bd = IncrDimension(name % 0, d, d.symbolic_min, d.symbolic_max)
+        size = bd.step
+        block_dims = [bd]
+
+        bd = IncrDimension(d.name, bd, bd, bd + bd.step - 1, 1, size=size,
+                           _rmax=evalmin(bd + bd.step - 1, bd.root.symbolic_max))
+        block_dims.append(bd)
+
+        processed = []
+        for c in clusters:
+            if d.is_Time:
+                ispace = decompose(c.ispace, d, block_dims)
+                # Use the innermost IncrDimension in place of `d`
+                exprs = [uxreplace(e, {d: bd}) for e in c.exprs]
+
+                # The new Cluster properties
+                properties = dict(c.properties)
+                properties.pop(d)
+                properties.update({bd: c.properties[d] for bd in block_dims})
+
+                processed.append(c.rebuild(exprs=exprs, ispace=ispace,
+                                           properties=properties))
+            else:
+                processed.append(c)
 
         return processed

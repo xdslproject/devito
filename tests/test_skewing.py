@@ -33,7 +33,7 @@ class TestCodeGenSkewing(object):
         v = TimeFunction(name='v', grid=grid)  # noqa
         eqn = eval(expr)
         # List comprehension would need explicit locals/globals mappings to eval
-        op = Operator(eqn, opt=('blocking', 'skewing'))
+        op = Operator(eqn, opt=('advanced', {'skewing': True, 'blocktime': False}))
         op.apply(time_M=5)
         iters = FindNodes(Iteration).visit(op)
         time_iter = [i for i in iters if i.dim.is_Time]
@@ -140,7 +140,7 @@ class TestCodeGenSkewing(object):
         eqn = eval(expr)
         # List comprehension would need explicit locals/globals mappings to eval
         op = Operator(eqn, opt=('advanced', {'blocklevels': 0, 'skewing': skewing,
-                                             'blockinner': blockinner}))
+                                'blockinner': blockinner, 'blocktime': False}))
         op.apply(time_M=5)
 
         iters = FindNodes(Iteration).visit(op)
@@ -174,5 +174,64 @@ class TestCodeGenSkewing(object):
             assert (iters[2].symbolic_max == (iters[2].dim.symbolic_max))
             assert (iters[3].symbolic_min == (iters[3].dim.symbolic_min))
             assert (iters[3].symbolic_max == (iters[3].dim.symbolic_max))
+
+        assert str(skewed[0]).replace(' ', '') == expected
+
+    '''
+    Test code generation with skewing only
+    '''
+    @pytest.mark.parametrize('expr, expected, skewing, blockinner', [
+        (['Eq(u.forward, u + 1)',
+          'Eq(u[t1,-time+x+1,-time+y+1,z+1],u[t0,-time+x+1,-time+y+1,z+1]+1)', True,
+          False]),
+        (['Eq(u.forward, v + 1)',
+          'Eq(u[t1,-time+x+1,-time+y+1,z+1],v[t0,-time+x+1,-time+y+1,z+1]+1)', True,
+          False]),
+        (['Eq(u, v + 1)',
+          'Eq(u[t0,-time+x+1,-time+y+1,z+1],v[t0,-time+x+1,-time+y+1,z+1]+1)', True,
+          False]),
+        (['Eq(u, v + 1)',
+          'Eq(u[t0,-time+x+1,-time+y+1,-time+z+1],v[t0,-time+x+1,-time+y+1,-time+z+1]+1)',
+          True, True]),
+    ])
+    def test_skewing_timeblocking(self, expr, expected, skewing, blockinner):
+        """Tests code generation on skewed indices."""
+        grid = Grid(shape=(16, 16, 16))
+        x, y, z = grid.dimensions
+        time = grid.time_dim
+
+        u = TimeFunction(name='u', grid=grid)  # noqa
+        v = TimeFunction(name='v', grid=grid)  # noqa
+        eqn = eval(expr)
+        # List comprehension would need explicit locals/globals mappings to eval
+        op = Operator(eqn, opt=('advanced', {'blocklevels': 0, 'skewing': skewing,
+                                'blockinner': blockinner}))
+
+        iters = FindNodes(Iteration).visit(op)
+
+        assert len(iters) == 5
+        assert iters[0].dim is not time
+        assert iters[0].dim.root is time
+        assert iters[1].dim.parent is iters[0].dim
+        assert iters[2].dim is x
+        assert iters[3].dim is y
+        assert iters[4].dim is z
+
+        skewed = [i.expr for i in FindNodes(Expression).visit(op)]
+
+        if skewing and not blockinner:
+            assert iters[2].symbolic_min == (iters[2].dim.symbolic_min + time)
+            assert iters[2].symbolic_max == (iters[2].dim.symbolic_max + time)
+            assert iters[3].symbolic_min == (iters[3].dim.symbolic_min + time)
+            assert iters[3].symbolic_max == (iters[3].dim.symbolic_max + time)
+            assert iters[4].symbolic_min == (iters[4].dim.symbolic_min)
+            assert iters[4].symbolic_max == (iters[4].dim.symbolic_max)
+        elif skewing and blockinner:
+            assert iters[2].symbolic_min == (iters[2].dim.symbolic_min + time)
+            assert iters[2].symbolic_max == (iters[2].dim.symbolic_max + time)
+            assert iters[3].symbolic_min == (iters[3].dim.symbolic_min + time)
+            assert iters[3].symbolic_max == (iters[3].dim.symbolic_max + time)
+            assert iters[4].symbolic_min == (iters[4].dim.symbolic_min + time)
+            assert iters[4].symbolic_max == (iters[4].dim.symbolic_max + time)
 
         assert str(skewed[0]).replace(' ', '') == expected
