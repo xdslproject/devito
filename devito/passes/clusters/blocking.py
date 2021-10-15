@@ -8,7 +8,7 @@ from devito.types import IncrDimension
 
 from devito.symbolics import xreplace_indices
 
-__all__ = ['blocking']
+__all__ = ['blocking', 'skewing']
 
 
 def blocking(clusters, options):
@@ -25,7 +25,6 @@ def blocking(clusters, options):
            innermost loop.
         * `blocklevels` (int, 1): 1 => classic loop blocking; 2 for two-level
            hierarchical blocking.
-        * `skewing` (boolean, False): enable/disable loop skewing.
 
     Notes
     ------
@@ -35,9 +34,6 @@ def blocking(clusters, options):
 
     if options['blocklevels'] > 0:
         processed = Blocking(options).process(processed)
-
-    if options['skewing']:
-        processed = Skewing(options).process(processed)
 
     return processed
 
@@ -198,6 +194,22 @@ def decompose(ispace, d, block_dims):
     directions.update({bd: ispace.directions[d] for bd in block_dims})
 
     return IterationSpace(intervals, sub_iterators, directions)
+
+
+def skewing(clusters, options):
+    """
+    This pass helps to skew accesses and loop bounds as well as perform loop interchange
+    towards wavefront temporal blocking
+    Parameters
+    ----------
+    clusters : tuple of Clusters
+        Input Clusters, subject of the optimization pass.
+    options : dict
+        The optimization options.
+        * `skewinner` (boolean, False): enable/disable loop skewing along the
+           innermost loop.
+    """
+    return Skewing(options).process(clusters)
 
 
 class Skewing(Queue):
