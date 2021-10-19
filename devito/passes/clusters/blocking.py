@@ -3,9 +3,9 @@ from collections import Counter
 from devito.ir.clusters import Queue
 from devito.ir.support import (SEQUENTIAL, SKEWABLE, TILABLE, Interval, IntervalGroup,
                                IterationSpace)
-from devito.symbolics import uxreplace, evalmin
+from devito.symbolics import uxreplace, evalmin, evalmax
 from devito.types import IncrDimension
-
+from devito.tools import as_list, as_tuple
 from devito.symbolics import xreplace_indices
 
 __all__ = ['blocking', 'skewing']
@@ -59,6 +59,9 @@ class Blocking(Queue):
     def __init__(self, options):
         self.inner = bool(options['blockinner'])
         self.levels = options['blocklevels']
+
+        if options['skewing']:
+            self.levels = self.levels + 1
 
         self.nblocked = Counter()
 
@@ -304,19 +307,65 @@ class Skewing(Queue):
 
             # Since we are here, prefix is skewable and nested under a
             # SEQUENTIAL loop.
+            sd = 0
             intervals = []
             for i in c.ispace:
-                if i.dim is d and level(d) <= 1:  # Skew only at level 0 or 1
-                    intervals.append(Interval(d, skew_dim, skew_dim))
+                if i.dim is d and level(d) == 3:  # Skew only at level 0 or 1
+                    rmax = evalmin(d.relaxed_max, d.parent.symbolic_max)
+                    rmax = rmax.xreplace({d.root.symbolic_max: d.root.symbolic_max+skew_dim})
+                    sd = d.func(_rmax=rmax)
+                    intervals.append(Interval(sd, i.lower, i.upper))
+                elif i.dim is d and level(d) == 2:  # Skew only at level 0 or 1
+                    # import pdb;pdb.set_trace()
+                    rmin = evalmax(d.symbolic_min, d.root.symbolic_min + skew_dim)
+                    rmax = d._rmax.xreplace({d.root.symbolic_max: d.root.symbolic_max+skew_dim})
+                    sd = d.func(_rmin=rmin, _rmax=rmax)
+                    intervals.append(Interval(sd, i.lower, i.upper))
                 else:
                     intervals.append(i)
-            intervals = IntervalGroup(intervals, relations=c.ispace.relations)
-            ispace = IterationSpace(intervals, c.ispace.sub_iterators,
-                                    c.ispace.directions)
 
-            exprs = xreplace_indices(c.exprs, {d: d - skew_dim})
+            relations = []
+            for r in c.ispace.relations:
+                if d in r and sd:
+                    rl = as_list(r)
+                    newr = [j.xreplace({d: sd}) for j in rl]
+                    relations.append(as_tuple(newr))
+                else:
+                    relations.append(r)
+
+            assert len(relations) == len(c.ispace.relations)
+            # import pdb;pdb.set_trace()
+
+            intervals = IntervalGroup(intervals, relations=relations)
+
+            sub_iterators = dict(c.ispace.sub_iterators)
+
+            if sd:
+                sub_iterators.pop(d, None)
+                sub_iterators.update({sd: c.ispace.sub_iterators.get(d, [])})
+
+            directions = dict(c.ispace.directions)
+            if sd:
+                directions.pop(d)
+                directions.update({sd: c.ispace.directions[d]})
+
+            ispace = IterationSpace(intervals, sub_iterators,
+                                    directions)
+
+            exprs = c.exprs
+            if sd:
+                exprs = xreplace_indices(c.exprs, {d: sd - skew_dim})
+
+            properties = dict(c.properties)
+
+            if sd:
+                properties.pop(d)
+                properties.update({sd: c.properties[d]})
+
+            # import pdb;pdb.set_trace()
+
             processed.append(c.rebuild(exprs=exprs, ispace=ispace,
-                                       properties=c.properties))
+                                       properties=properties))
 
         return processed
 
@@ -343,7 +392,8 @@ class Skewing(Queue):
                 # The new Cluster properties
                 properties = dict(c.properties)
                 properties.pop(d)
-                properties.update({bd: c.properties[d] for bd in block_dims})
+                import pdb;pdb.set_trace()
+                properties.update({bd: c.properties[d] - {SKEWABLE} for bd in block_dims})
 
                 processed.append(c.rebuild(exprs=exprs, ispace=ispace,
                                            properties=properties))

@@ -200,7 +200,6 @@ class PragmaShmTransformer(PragmaSimdTransformer):
     def _make_partree(self, candidates, nthreads=None):
         assert candidates
         root = candidates[0]
-
         # Get the collapsable Iterations
         collapsable = self._find_collapsable(root, candidates)
         ncollapse = 1 + len(collapsable)
@@ -324,6 +323,7 @@ class PragmaShmTransformer(PragmaSimdTransformer):
             if not candidates:
                 continue
 
+            import pdb;pdb.set_trace()
             # Outer parallelism
             root, partree = self._make_partree(candidates)
             if partree is None or root in mapper:

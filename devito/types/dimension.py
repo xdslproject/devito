@@ -1036,13 +1036,14 @@ class IncrDimension(DerivedDimension):
     is_PerfKnob = True
 
     def __init_finalize__(self, name, parent, _min, _max, step=None, size=None,
-                          _rmax=None):
+                          _rmax=None, _rmin=None):
         super().__init_finalize__(name, parent)
         self._min = _min
         self._max = _max
         self._step = step
         self._size = size
         self._rmax = _rmax
+        self._rmin = _rmin
 
     @property
     def size(self):
@@ -1086,6 +1087,14 @@ class IncrDimension(DerivedDimension):
             return evalmin(self._max, self.parent._max)
 
     @cached_property
+    def relaxed_min(self):
+        # If not provided return a default relaxed min template
+        if self._rmin is not None:
+            return self._rmin
+        else:
+            return self._min
+
+    @cached_property
     def symbolic_max(self):
         # Make sure we return a symbolic object as the provided max might
         # be for example a pure int
@@ -1100,6 +1109,18 @@ class IncrDimension(DerivedDimension):
             return sympy.Number(self.step)
         except (TypeError, ValueError):
             return self.step
+
+    @property
+    def func(self):
+        return lambda **kwargs:\
+            self.__class__(name=kwargs.get('name', self.name),
+                           parent=kwargs.get('parent', self.parent),
+                           _min=kwargs.get('_min', self._min),
+                           _max=kwargs.get('_max', self._max),
+                           step=kwargs.get('step', self.step),
+                           size=kwargs.get('size', self.size),
+                           _rmax=kwargs.get('_rmax', self._rmax),
+                           _rmin=kwargs.get('_rmin', self._rmin))
 
     @cached_property
     def _arg_names(self):

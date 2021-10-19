@@ -112,7 +112,7 @@ def relax_incr_dimensions(iet, **kwargs):
 
             iter_max = i.dim.relaxed_max.xreplace(rmapper)
 
-            mapper[i] = i._rebuild(limits=(i.symbolic_min, iter_max, i.step))
+            mapper[i] = i._rebuild(limits=(i.dim.relaxed_min, iter_max, i.step))
 
     if mapper:
         iet = Transformer(mapper, nested=True).visit(iet)
