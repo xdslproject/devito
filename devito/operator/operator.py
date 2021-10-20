@@ -475,7 +475,11 @@ class Operator(Callable):
 
         # Sanity check
         for p in self.parameters:
-            p._arg_check(args, self._dspace[p])
+            try:
+                print(type(p))
+                p._arg_check(args, self._dspace[p])
+            except AttributeError:
+                import pdb;pdb.set_trace()
         for d in self.dimensions:
             if d.is_Derived:
                 d._arg_check(args, self._dspace[p])

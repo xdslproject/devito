@@ -19,7 +19,8 @@ from devito.types.caching import Cached
 from devito.types.lazy import Evaluable
 from devito.types.utils import DimensionTuple
 
-__all__ = ['Symbol', 'Scalar', 'Indexed', 'Object', 'LocalObject', 'CompositeObject']
+__all__ = ['Symbol', 'Scalar', 'Indexed', 'Object', 'LocalObject', 'CompositeObject',
+           'COV']
 
 
 Size = namedtuple('Size', 'left right')
@@ -396,7 +397,7 @@ class Symbol(AbstractSymbol, Cached):
 class DataSymbol(AbstractSymbol, Cached):
 
     """
-    A scalar symbol, cached by both Devito and SymPy, which carries data.
+    A scalar Symbol, cached by both Devito and SymPy, which carries data.
     """
 
     @classmethod
@@ -486,6 +487,30 @@ class Scalar(Symbol, ArgProvider):
             return {self.name: kwargs.pop(self.name)}
         else:
             return self._arg_defaults()
+
+
+class COV(Symbol, Cached):
+
+    """
+    Like a Symbol, but in addition it can pass runtime values to an Operator.
+
+    Parameters
+    ----------
+    name : str
+        Name of the symbol.
+    dtype : data-type, optional
+        Any object that can be interpreted as a numpy data type. Defaults
+        to ``np.float32``.
+    is_const : bool, optional
+        True if the symbol value cannot be modified within an Operator,
+        False otherwise. Defaults to False.
+    **assumptions
+        Any SymPy assumptions, such as ``nonnegative=True``. Refer to the
+        SymPy documentation for more information.
+    """
+
+    def __new__(cls, *args, **kwargs):
+        return super().__new__(cls, *args, **kwargs)
 
 
 class AbstractTensor(sympy.ImmutableDenseMatrix, Basic, Pickable, Evaluable):

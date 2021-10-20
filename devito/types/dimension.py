@@ -1080,7 +1080,7 @@ class IncrDimension(DerivedDimension):
             return self._min
 
     @cached_property
-    def relaxed_max(self):
+    def symbolic_rmax(self):
         # If not provided return a default relaxed max template
         if self._rmax is not None:
             return self._rmax

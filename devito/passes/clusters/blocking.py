@@ -4,7 +4,7 @@ from devito.ir.clusters import Queue
 from devito.ir.support import (SEQUENTIAL, SKEWABLE, TILABLE, Interval, IntervalGroup,
                                IterationSpace)
 from devito.symbolics import uxreplace, evalmin
-from devito.types import IncrDimension
+from devito.types import IncrDimension, COV, Symbol
 
 from devito.symbolics import xreplace_indices
 
@@ -87,8 +87,10 @@ class Blocking(Queue):
                                _rmax=evalmin(bd + bd.step - 1, bd.root.symbolic_max))
             block_dims.append(bd)
 
-        bd = IncrDimension(d.name, bd, bd, bd + bd.step - 1, 1, size=size,
-                           _rmax=evalmin(bd + bd.step - 1, bd.root.symbolic_max))
+        test = COV(name='bd', cov=evalmin(bd + bd.step - 1, bd.root.symbolic_max))
+
+        bd = IncrDimension(d.name, bd, bd, bd + bd.step - 1, 1, size=size)
+        import pdb;pdb.set_trace()
         block_dims.append(bd)
 
         processed = []

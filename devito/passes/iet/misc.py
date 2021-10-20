@@ -110,7 +110,7 @@ def relax_incr_dimensions(iet, **kwargs):
             rmapper[i.dim.root.symbolic_max] = root_max
             rmapper[i.dim.symbolic_max] = i.symbolic_max
 
-            iter_max = i.dim.relaxed_max.xreplace(rmapper)
+            iter_max = i.dim.symbolic_rmax.xreplace(rmapper)
 
             mapper[i] = i._rebuild(limits=(i.symbolic_min, iter_max, i.step))
 
