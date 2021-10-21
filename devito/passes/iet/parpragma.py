@@ -323,7 +323,6 @@ class PragmaShmTransformer(PragmaSimdTransformer):
             if not candidates:
                 continue
 
-            import pdb;pdb.set_trace()
             # Outer parallelism
             root, partree = self._make_partree(candidates)
             if partree is None or root in mapper:

@@ -307,9 +307,39 @@ class Skewing(Queue):
 
             # Since we are here, prefix is skewable and nested under a
             # SEQUENTIAL loop.
+
+            family = []
+            for i in c.ispace:
+                if i.dim is d:
+                    family = [j for j in c.ispace if j.dim.root is i.dim.root]
+                    
+            # family should be [blk0, blk1, d]
+
             sd = 0
             intervals = []
+
             for i in c.ispace:
+                if i in family:
+                    if level(i.dim) == 3:
+                        rmax = evalmin(i.dim.relaxed_max, i.dim.parent.symbolic_max)
+                        rmax = rmax.xreplace({i.dim.root.symbolic_max: i.dim.root.symbolic_max+skew_dim})
+                        sd = i.dim.func(_rmax=rmax)
+                        intervals.append(Interval(sd, i.lower, i.upper))
+                    elif level(i.dim) == 2:
+                        rmin = evalmax(i.dim.symbolic_min, i.dim.root.symbolic_min + skew_dim)
+                        rmax = i.dim._rmax.xreplace({i.dim.root.symbolic_max: i.dim.root.symbolic_max+skew_dim})
+                        sd = i.dim.func(_rmin=rmin, _rmax=rmax)
+                        intervals.append(Interval(sd, i.lower, i.upper))
+                    else:
+                        intervals.append(i)
+                else:
+                    intervals.append(i)
+
+            import pdb;pdb.set_trace()
+
+            '''
+            for i in c.ispace:
+                import pdb;pdb.set_trace()
                 if i.dim is d and level(d) == 3:  # Skew only at level 0 or 1
                     rmax = evalmin(d.relaxed_max, d.parent.symbolic_max)
                     rmax = rmax.xreplace({d.root.symbolic_max: d.root.symbolic_max+skew_dim})
@@ -323,6 +353,7 @@ class Skewing(Queue):
                     intervals.append(Interval(sd, i.lower, i.upper))
                 else:
                     intervals.append(i)
+            '''
 
             relations = []
             for r in c.ispace.relations:
