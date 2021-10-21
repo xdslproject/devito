@@ -7,13 +7,14 @@ from cached_property import cached_property
 from devito.data import LEFT, RIGHT
 from devito.exceptions import InvalidArgument
 from devito.logger import debug
+from devito.symbolics.manipulation import evalmin
 from devito.tools import Pickable, dtype_to_cstr, is_integer
 from devito.types.args import ArgProvider
 from devito.types.basic import Symbol, DataSymbol, Scalar
 
 __all__ = ['Dimension', 'SpaceDimension', 'TimeDimension', 'DefaultDimension',
            'CustomDimension', 'SteppingDimension', 'SubDimension', 'ConditionalDimension',
-           'dimensions', 'ModuloDimension', 'IncrDimension']
+           'dimensions', 'ModuloDimension', 'IncrDimension', 'RIncrDimension']
 
 
 Thickness = namedtuple('Thickness', 'left right')
@@ -1084,6 +1085,14 @@ class IncrDimension(DerivedDimension):
             return self._max
 
     @cached_property
+    def symbolic_rmin(self):
+        raise NotImplementedError
+
+    @cached_property
+    def symbolic_rmax(self):
+        return evalmin(self._max, self.root.symbolic_max)
+
+    @cached_property
     def symbolic_incr(self):
         try:
             return sympy.Number(self.step)
@@ -1157,6 +1166,30 @@ class IncrDimension(DerivedDimension):
     # Pickling support
     _pickle_args = ['name', 'parent', 'symbolic_min', 'symbolic_max']
     _pickle_kwargs = ['step', 'size']
+
+
+class RIncrDimension(IncrDimension):
+
+    """
+    """
+
+    def __init_finalize__(self, name, parent, _min, _max, rmin=None, rmax=None,
+                          step=None, size=None):
+        super().__init_finalize__(name, parent, _min, _max, step, size)
+        self.rmin = rmin
+        self.rmax = rmax
+
+    @cached_property
+    def symbolic_rmin(self):
+        raise NotImplementedError
+
+    @cached_property
+    def symbolic_rmax(self):
+        # If not provided return a default relaxed max template
+        if self.rmax is not None:
+            return self.rmax
+        else:
+            return evalmin(self._max, self.root.symbolic_max)
 
 
 class CustomDimension(BasicDimension):

@@ -7,7 +7,7 @@ from sympy import Number, Indexed, Symbol, LM, LC
 from sympy.core.add import _addsort
 from sympy.core.mul import _mulsort
 
-from devito.symbolics import MIN
+from devito.symbolics import MIN, MAX
 from devito.symbolics.search import retrieve_indexed, retrieve_functions
 from devito.tools import as_list, as_tuple, flatten, split
 from devito.types.equation import Eq
@@ -328,3 +328,7 @@ def evalmin(a, b):
         return min(a, b)
     except TypeError:
         return MIN(a, b)
+
+
+def evalmax(a, b):
+    raise NotImplementedError
