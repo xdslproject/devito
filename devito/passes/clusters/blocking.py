@@ -5,10 +5,9 @@ from devito.ir.support import (SEQUENTIAL, SKEWABLE, TILABLE, Interval, Interval
                                IterationSpace)
 from devito.symbolics import uxreplace
 from devito.types import IncrDimension
-
 from devito.symbolics import xreplace_indices
 
-__all__ = ['blocking']
+__all__ = ['blocking', 'skewing']
 
 
 def blocking(clusters, options):
@@ -25,19 +24,24 @@ def blocking(clusters, options):
            innermost loop.
         * `blocklevels` (int, 1): 1 => classic loop blocking; 2 for two-level
            hierarchical blocking.
-        * `skewing` (boolean, False): enable/disable loop skewing.
 
-    Notes
-    ------
-    In case of skewing, if 'blockinner' is enabled, the innermost loop is also skewed.
+    Example
+    -------
+        * A typical use case, e.g.
+          .. code-block::
+                            Classical   +blockinner  2-level Hierarchical
+            for x            for xb        for xb         for xbb
+              for y    -->    for yb        for yb         for ybb
+                for z          for x         for zb         for xb
+                                for y         for x          for yb
+                                 for z         for y          for x
+                                                for z          for y
+                                                                for z
     """
     processed = preprocess(clusters, options)
 
     if options['blocklevels'] > 0:
         processed = Blocking(options).process(processed)
-
-    if options['skewing']:
-        processed = Skewing(options).process(processed)
 
     return processed
 
@@ -189,13 +193,30 @@ def decompose(ispace, d, block_dims):
 
     sub_iterators = dict(ispace.sub_iterators)
     sub_iterators.pop(d, None)
-    sub_iterators.update({bd: ispace.sub_iterators.get(d, []) for bd in block_dims})
+    sub_iterators.update({block_dims[-1]: ispace.sub_iterators.get(d, [])})
+    sub_iterators.update({bd: () for bd in block_dims[:-1]})
 
     directions = dict(ispace.directions)
     directions.pop(d)
     directions.update({bd: ispace.directions[d] for bd in block_dims})
 
     return IterationSpace(intervals, sub_iterators, directions)
+
+
+def skewing(clusters, options):
+    """
+    This pass helps to skew accesses and loop bounds as well as perform loop interchange
+    towards wavefront temporal blocking
+    Parameters
+    ----------
+    clusters : tuple of Clusters
+        Input Clusters, subject of the optimization pass.
+    options : dict
+        The optimization options.
+        * `skewinner` (boolean, False): enable/disable loop skewing along the
+           innermost loop.
+    """
+    return Skewing(options).process(clusters)
 
 
 class Skewing(Queue):
@@ -231,6 +252,8 @@ class Skewing(Queue):
 
     """
 
+    template = "%s%d_blk%s"
+
     def __init__(self, options):
         self.skewinner = bool(options['blockinner'])
 
@@ -241,7 +264,6 @@ class Skewing(Queue):
             return clusters
 
         d = prefix[-1].dim
-
         processed = []
         for c in clusters:
             if SKEWABLE not in c.properties[d]:

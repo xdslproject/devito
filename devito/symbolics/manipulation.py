@@ -14,7 +14,7 @@ from devito.types.equation import Eq
 
 __all__ = ['xreplace_indices', 'pow_to_mul', 'as_symbol', 'indexify',
            'split_affine', 'subs_op_args', 'uxreplace', 'aligned_indices',
-           'Uxmapper', 'reuse_if_untouched', 'evalmin']
+           'Uxmapper', 'reuse_if_untouched', 'evalmin', 'evalmax']
 
 
 def uxreplace(expr, rule):
@@ -331,4 +331,11 @@ def evalmin(a, b):
 
 
 def evalmax(a, b):
-    raise NotImplementedError
+    """
+    Simplify max(a, b) if possible.
+    """
+    try:
+        bool(max(a, b))  # Can it be evaluated or simplified?
+        return max(a, b)
+    except TypeError:
+        return MAX(a, b)
