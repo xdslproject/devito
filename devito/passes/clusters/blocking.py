@@ -280,16 +280,26 @@ class Skewing(Queue):
 
         processed = clusters
 
-        processed = self.skew(processed, d)
+        # if self.blocktime:
+        #    processed = self.tempblock(processed, d)
+        # import pdb;pdb.set_trace()
 
-        if self.blocktime:
-            processed = self.tempblock(processed, d)
+        processed = self.skew(processed, d)
 
         return processed
 
     def skew(self, clusters, d):
         processed = []
         for c in clusters:
+            family = []
+            for i in c.ispace:
+                family = [j for j in c.ispace if j.dim.root is d.root]
+            
+            family_dims = [j.dim for j in family]
+
+            if not d is family_dims[-1]:
+                return clusters
+
             if SKEWABLE not in c.properties[d]:
                 return clusters
 
@@ -308,15 +318,11 @@ class Skewing(Queue):
             # Since we are here, prefix is skewable and nested under a
             # SEQUENTIAL loop.
 
-            family = []
-            for i in c.ispace:
-                if i.dim is d:
-                    family = [j for j in c.ispace if j.dim.root is i.dim.root]
-                    
             # family should be [blk0, blk1, d]
 
             sd = 0
             intervals = []
+            mapper = {}
 
             for i in c.ispace:
                 if i in family:
@@ -325,17 +331,18 @@ class Skewing(Queue):
                         rmax = rmax.xreplace({i.dim.root.symbolic_max: i.dim.root.symbolic_max+skew_dim})
                         sd = i.dim.func(_rmax=rmax)
                         intervals.append(Interval(sd, i.lower, i.upper))
+                        mapper.update({i.dim: sd})
                     elif level(i.dim) == 2:
                         rmin = evalmax(i.dim.symbolic_min, i.dim.root.symbolic_min + skew_dim)
                         rmax = i.dim._rmax.xreplace({i.dim.root.symbolic_max: i.dim.root.symbolic_max+skew_dim})
                         sd = i.dim.func(_rmin=rmin, _rmax=rmax)
                         intervals.append(Interval(sd, i.lower, i.upper))
+                        mapper.update({i.dim: sd})
                     else:
                         intervals.append(i)
+                        mapper.update({i.dim: i.dim})
                 else:
                     intervals.append(i)
-
-            import pdb;pdb.set_trace()
 
             '''
             for i in c.ispace:
@@ -355,45 +362,49 @@ class Skewing(Queue):
                     intervals.append(i)
             '''
 
+            print(mapper)
             relations = []
             for r in c.ispace.relations:
-                if d in r and sd:
+                if any(f for f in family_dims) in r and mapper:
                     rl = as_list(r)
-                    newr = [j.xreplace({d: sd}) for j in rl]
+                    newr = [j.xreplace(mapper) for j in rl]
                     relations.append(as_tuple(newr))
                 else:
                     relations.append(r)
 
             assert len(relations) == len(c.ispace.relations)
-            # import pdb;pdb.set_trace()
+
 
             intervals = IntervalGroup(intervals, relations=relations)
 
             sub_iterators = dict(c.ispace.sub_iterators)
 
-            if sd:
-                sub_iterators.pop(d, None)
-                sub_iterators.update({sd: c.ispace.sub_iterators.get(d, [])})
+
+            for f in family_dims[1:]:
+                sub_iterators.pop(f, None)
+                try:
+                    sub_iterators.update({mapper[f]: c.ispace.sub_iterators.get(f, [])})
+                except:
+                    import pdb;pdb.set_trace()
 
             directions = dict(c.ispace.directions)
-            if sd:
-                directions.pop(d)
-                directions.update({sd: c.ispace.directions[d]})
+            for f in family_dims[1:]:
+                directions.pop(f)
+                directions.update({mapper[f]: c.ispace.directions[f]})
 
-            ispace = IterationSpace(intervals, sub_iterators,
-                                    directions)
+            ispace = IterationSpace(intervals, sub_iterators, directions)
 
             exprs = c.exprs
-            if sd:
-                exprs = xreplace_indices(c.exprs, {d: sd - skew_dim})
+            for f in family_dims[1:]:
+                exprs = xreplace_indices(c.exprs, {f: mapper[f] - skew_dim})
 
             properties = dict(c.properties)
 
-            if sd:
-                properties.pop(d)
-                properties.update({sd: c.properties[d]})
+            for f in family_dims[1:]:
+                properties.pop(f)
+                properties.update({mapper[f]: c.properties[f]})
 
-            # import pdb;pdb.set_trace()
+
 
             processed.append(c.rebuild(exprs=exprs, ispace=ispace,
                                        properties=properties))
