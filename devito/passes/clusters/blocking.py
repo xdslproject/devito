@@ -79,19 +79,8 @@ class Blocking(Queue):
 
         d = prefix[-1].dim
 
-        # Create the block Dimensions (in total `self.levels` Dimensions)
         name = self.template % (d.name, self.nblocked[d], '%d')
-
-        bd = IncrDimension(name % 0, d, d.symbolic_min, d.symbolic_max)
-        size = bd.step
-        block_dims = [bd]
-
-        for i in range(1, self.levels):
-            bd = IncrDimension(name % i, bd, bd, bd + bd.step - 1, size=size)
-            block_dims.append(bd)
-
-        bd = IncrDimension(d.name, bd, bd, bd + bd.step - 1, 1, size=size)
-        block_dims.append(bd)
+        block_dims = create_block_dims(name, d, self.levels)
 
         processed = []
         for c in clusters:
@@ -99,7 +88,7 @@ class Blocking(Queue):
                 ispace = decompose(c.ispace, d, block_dims)
 
                 # Use the innermost IncrDimension in place of `d`
-                exprs = [uxreplace(e, {d: bd}) for e in c.exprs]
+                exprs = [uxreplace(e, {d: block_dims[-1]}) for e in c.exprs]
 
                 # The new Cluster properties
                 # TILABLE property is dropped after the blocking.
@@ -140,6 +129,24 @@ def preprocess(clusters, options):
             processed.append(c)
 
     return processed
+
+
+def create_block_dims(name, d, levels):
+    """
+    Create the block Dimensions (in total `self.levels` Dimensions)
+    """
+    bd = IncrDimension(name % 0, d, d.symbolic_min, d.symbolic_max)
+    size = bd.step
+    block_dims = [bd]
+
+    for i in range(1, levels):
+        bd = IncrDimension(name % i, bd, bd, bd + bd.step - 1, size=size)
+        block_dims.append(bd)
+
+    bd = IncrDimension(d.name, bd, bd, bd + bd.step - 1, 1, size=size)
+    block_dims.append(bd)
+
+    return block_dims
 
 
 def decompose(ispace, d, block_dims):
@@ -216,7 +223,13 @@ def skewing(clusters, options):
         * `skewinner` (boolean, False): enable/disable loop skewing along the
            innermost loop.
     """
-    return Skewing(options).process(clusters)
+    processed = Skewing(options).process(clusters)
+
+    if options['blocktime']:
+        processed = TBlocking(options).process(processed)
+        processed = RelaxSkewed(options).process(processed)
+
+    return processed
 
 
 class Skewing(Queue):
@@ -256,6 +269,7 @@ class Skewing(Queue):
 
     def __init__(self, options):
         self.skewinner = bool(options['blockinner'])
+        self.levels = options['blocklevels']
 
         super(Skewing, self).__init__()
 
@@ -297,4 +311,61 @@ class Skewing(Queue):
             processed.append(c.rebuild(exprs=exprs, ispace=ispace,
                                        properties=c.properties))
 
+        return processed
+
+
+class TBlocking(Queue):
+
+    template = "%s%d_blk%s"
+
+    def __init__(self, options):
+        self.nblocked = Counter()
+        super(TBlocking, self).__init__()
+
+    def callback(self, clusters, prefix):
+        if not prefix:
+            return clusters
+
+        d = prefix[-1].dim
+
+        if not d.is_Time:
+            return clusters
+
+        name = self.template % (d.name, self.nblocked[d], '%d')
+        block_dims = create_block_dims(name, d, self.levels)
+
+        processed = []
+        for c in clusters:
+            if d.is_Time:
+                ispace = decompose(c.ispace, d, block_dims)
+
+                # Use the innermost IncrDimension in place of `d`
+                exprs = [uxreplace(e, {d: block_dims[-1]}) for e in c.exprs]
+
+                # The new Cluster properties
+                # TILABLE property is dropped after the blocking.
+                # SKEWABLE is dropped as well, but only from the new
+                # block dimensions.
+                properties = dict(c.properties)
+                properties.pop(d)
+                properties.update({bd: c.properties[d] - {TILABLE} for bd in block_dims})
+
+                processed.append(c.rebuild(exprs=exprs, ispace=ispace,
+                                           properties=properties))
+            else:
+                processed.append(c)
+
+        return processed
+
+
+class RelaxSkewed(Queue):
+
+    def __init__(self, options):
+        self.nblocked = Counter()
+        super(RelaxSkewed, self).__init__()
+
+    def callback(self, clusters, prefix):
+        processed = []
+        for c in clusters:
+            processed.append(c)
         return processed
