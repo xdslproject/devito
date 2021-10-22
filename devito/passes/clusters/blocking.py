@@ -223,11 +223,12 @@ def skewing(clusters, options):
         * `skewinner` (boolean, False): enable/disable loop skewing along the
            innermost loop.
     """
-    processed = Skewing(options).process(clusters)
-
+    processed = clusters
     if options['blocktime']:
         processed = TBlocking(options).process(processed)
-        processed = RelaxSkewed(options).process(processed)
+
+    processed = Skewing(options).process(processed)
+    processed = RelaxSkewed(options).process(processed)
 
     return processed
 
@@ -332,7 +333,7 @@ class TBlocking(Queue):
             return clusters
 
         name = self.template % (d.name, self.nblocked[d], '%d')
-        block_dims = create_block_dims(name, d, self.levels)
+        block_dims = create_block_dims(name, d, 1)
 
         processed = []
         for c in clusters:
@@ -354,7 +355,6 @@ class TBlocking(Queue):
                                            properties=properties))
             else:
                 processed.append(c)
-
         return processed
 
 
