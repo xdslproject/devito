@@ -182,13 +182,11 @@ class TestCodeGenSkewing(object):
     '''
     @pytest.mark.parametrize('expr, expected', [
         (['Eq(u.forward, u + 1)',
-          'Eq(u[t1,x-time+1,y-time+1,z+1],u[t0,x-time+1,y-time+1,z+1]+1)']),
+          'Eq(u[t1,-time+x+1,-time+y+1,z+1],u[t0,-time+x+1,-time+y+1,z+1]+1)']),
         (['Eq(u.forward, v + 1)',
-          'Eq(u[t1,x-time+1,y-time+1,z+1],v[t0,x-time+1,y-time+1,z+1]+1)']),
+          'Eq(u[t1,-time+x+1,-time+y+1,z+1],v[t0,-time+x+1,-time+y+1,z+1]+1)']),
         (['Eq(u, v + 1)',
-          'Eq(u[t0,x-time+1,y-time+1,z+1],v[t0,x-time+1,y-time+1,z+1]+1)']),
-        (['Eq(u, v + 1)',
-          'Eq(u[t0,x-time+1,y-time+1,z-time+1],v[t0,x-time+1,y-time+1,z-time+1]+1)']),
+          'Eq(u[t0,-time+x+1,-time+y+1,z+1],v[t0,-time+x+1,-time+y+1,z+1]+1)'])
     ])
     def test_timeblocking_codegen(self, expr, expected):
         """Tests code generation on skewed indices."""

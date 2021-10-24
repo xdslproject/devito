@@ -183,8 +183,8 @@ def pytest_runtest_call(item):
 # A list of optimization options/pipelines to be used in testing
 # regarding spatial and/or temporal blocking.
 opts_tiling = ['advanced',
-               ('advanced', {'skewing': True}),
-               ('advanced', {'skewing': True, 'blockinner': True})]
+               ('advanced', {'skewing': True, 'blocktime': False}),
+               ('advanced', {'skewing': True, 'blockinner': True, 'blocktime': False})]
 
 
 # Utilities for retrocompatibility

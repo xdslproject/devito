@@ -287,10 +287,10 @@ class Skewing(Queue):
             if d is c.ispace[-1].dim and not self.skewinner:
                 return clusters
 
-            skew_dims = {i.dim for i in c.ispace if SEQUENTIAL in c.properties[i.dim]}
-            if len(skew_dims) > 1:
+            skew_dims = [i.dim for i in c.ispace if SEQUENTIAL in c.properties[i.dim]]
+            if len(skew_dims) > 2:
                 return clusters
-            skew_dim = skew_dims.pop()
+            skew_dim = skew_dims[-1]
 
             # The level of a given Dimension in the hierarchy of block Dimensions, used
             # to skew over the outer level of loops.
@@ -298,12 +298,22 @@ class Skewing(Queue):
 
             # Since we are here, prefix is skewable and nested under a
             # SEQUENTIAL loop.
+
+            skewlevel = 1
             intervals = []
             for i in c.ispace:
-                if i.dim is d and level(d) <= 1:  # Skew only at level 0 or 1
-                    intervals.append(Interval(d, skew_dim, skew_dim))
+                if i.dim is d:
+                    # Skew at skewlevel + 1 if time is blocked
+                    cond1 = len(skew_dims) == 2 and level(d) == skewlevel + 1
+                    # Skew at level <=1 if time is not blocked
+                    cond2 = len(skew_dims) == 1 and level(d) <= skewlevel
+                    if cond1 or cond2:
+                        intervals.append(Interval(d, skew_dim, skew_dim))
+                    else:
+                        intervals.append(i)
                 else:
                     intervals.append(i)
+
             intervals = IntervalGroup(intervals, relations=c.ispace.relations)
             ispace = IterationSpace(intervals, c.ispace.sub_iterators,
                                     c.ispace.directions)
@@ -349,8 +359,7 @@ class TBlocking(Queue):
                 # block dimensions.
                 properties = dict(c.properties)
                 properties.pop(d)
-                properties.update({bd: c.properties[d] - {TILABLE} for bd in block_dims})
-
+                properties.update({bd: c.properties[d] for bd in block_dims})
                 processed.append(c.rebuild(exprs=exprs, ispace=ispace,
                                            properties=properties))
             else:
