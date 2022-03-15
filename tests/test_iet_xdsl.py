@@ -11,7 +11,7 @@ def test_expression():
     # and does not need to be user-facing.
     ctx = MLContext()
     Builtin(ctx)
-    #iet = IET(ctx)
+    # iet = IET(ctx)
 
     # This is a very explicit encoding of the expression tree representing
     # 42 + 3. There are a couple of issues with this encoding:
@@ -54,28 +54,37 @@ def test_example():
     iet = IET(ctx)
 
     mod = ModuleOp.from_region_or_ops([
-        Callable.get("kernel", ["u"], Block.from_callable([iet.i32], lambda u: [
-            Iteration.get(["affine", "sequential"], ("time_m", "time_M", "1"),
-                          Block.from_callable([iet.i32, iet.i32, iet.i32], lambda time, t0, t1: [
-                Iteration.get(["affine", "parallel", "skewable"], ("x_m", "x_M", "1"),
-                              Block.from_callable([iet.i32], lambda x: [
-                    Iteration.get(["affine", "parallel", "skewable", "vector-dim"], ("y_m", "y_M", "1"),
-                                  Block.from_callable([iet.i32], lambda y: [
-                        cst1    := Constant.get(1),
-                        x1      := Addi.get(x, cst1),
-                        y1      := Addi.get(y, cst1),
-                        ut0     := Idx.get(u, t0),
-                        ut0x1   := Idx.get(ut0, x1),
-                        ut0x1y1 := Idx.get(ut0x1, y1),
-                        rhs     := Addi.get(ut0x1y1, cst1),
-                        ut1     := Idx.get(u, t1),
-                        ut1x1   := Idx.get(ut1, x1),
-                        lhs     := Idx.get(ut1x1, y1),
-                        Assign.build([lhs, rhs])
-                    ]))
-                ]))
+        Callable.get(
+            "kernel", ["u"],
+            Block.from_callable([iet.i32], lambda u: [
+                Iteration
+                .get(["affine", "sequential"], ("time_m", "time_M", "1"),
+                     Block.from_callable([
+                         iet.i32, iet.i32, iet.i32
+                     ], lambda time, t0, t1: [
+                         Iteration.
+                         get(["affine", "parallel", "skewable"],
+                             ("x_m", "x_M", "1"),
+                             Block.from_callable([iet.i32], lambda x: [
+                                 Iteration.get(
+                                     [
+                                         "affine",
+                                         "parallel", "skewable", "vector-dim"
+                                     ], ("y_m", "y_M", "1"),
+                                     Block.from_callable([iet.i32], lambda y: [
+                                         cst1 := Constant.get(1), x1 := Addi.
+                                         get(x, cst1), y1 := Addi.get(y, cst1),
+                                         ut0 := Idx.get(u, t0), ut0x1 := Idx.
+                                         get(ut0, x1), ut0x1y1 := Idx.get(
+                                             ut0x1, y1), rhs := Addi
+                                         .get(ut0x1y1, cst1), ut1 := Idx.get(
+                                             u, t1), ut1x1 := Idx.get(ut1, x1),
+                                         lhs := Idx.get(ut1x1, y1),
+                                         Assign.build([lhs, rhs])
+                                     ]))
+                             ]))
+                     ]))
             ]))
-        ]))
     ])
 
     printer = Printer()

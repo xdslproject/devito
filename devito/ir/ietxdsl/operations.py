@@ -88,8 +88,7 @@ class Callable(Operation):
             StringAttr.from_str(name),
             "parameters":
             ArrayAttr.from_list([StringAttr.from_str(p) for p in params])
-        },
-                              regions=[Region.from_block_list([body])])
+        }, regions=[Region.from_block_list([body])])
 
 
 @irdl_op_definition
@@ -110,5 +109,4 @@ class Iteration(Operation):
             ]),
             "properties":
             ArrayAttr.from_list([StringAttr.from_str(p) for p in properties])
-        },
-                               regions=[Region.from_block_list([body])])
+        }, regions=[Region.from_block_list([body])])
