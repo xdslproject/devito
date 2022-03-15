@@ -72,13 +72,15 @@ def test_example():
                                          "parallel", "skewable", "vector-dim"
                                      ], ("y_m", "y_M", "1"),
                                      Block.from_callable([iet.i32], lambda y: [
-                                         cst1 := Constant.get(1), x1 := Addi.
-                                         get(x, cst1), y1 := Addi.get(y, cst1),
-                                         ut0 := Idx.get(u, t0), ut0x1 := Idx.
-                                         get(ut0, x1), ut0x1y1 := Idx.get(
-                                             ut0x1, y1), rhs := Addi
-                                         .get(ut0x1y1, cst1), ut1 := Idx.get(
-                                             u, t1), ut1x1 := Idx.get(ut1, x1),
+                                         cst1 := Constant.get(1),
+                                         x1 := Addi.get(x, cst1),
+                                         y1 := Addi.get(y, cst1),
+                                         ut0 := Idx.get(u, t0),
+                                         ut0x1 := Idx.get(ut0, x1),
+                                         ut0x1y1 := Idx.get(ut0x1, y1),
+                                         rhs := Addi.get(ut0x1y1, cst1),
+                                         ut1 := Idx.get(u, t1),
+                                         ut1x1 := Idx.get(ut1, x1),
                                          lhs := Idx.get(ut1x1, y1),
                                          Assign.build([lhs, rhs])
                                      ]))
