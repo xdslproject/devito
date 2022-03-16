@@ -20,3 +20,5 @@ pytest-runner
 pytest-cov
 xdsl<=0.3.*
 frozenlist<=1.3.*
+filecheck<=0.0.22
+lit<=14.0.*

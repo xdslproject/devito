@@ -1,0 +1,29 @@
+// RUN: devito-opt -p make-simd %s | filecheck %s
+
+module() {
+  iet.callable() ["callable_name" = "kernel", "parameters" = ["u"]] {
+  ^0(%0 : !i32):
+    iet.iteration() ["limits" = ["time_m", "time_M", "1"], "properties" = ["affine", "sequential"], "pragmas" = []] {
+    ^1(%1 : !i32, %2 : !i32, %3 : !i32):
+      iet.iteration() ["limits" = ["x_m", "x_M", "1"], "properties" = ["affine", "parallel", "skewable"], "pragmas" = []] {
+      ^2(%4 : !i32):
+        iet.iteration() ["limits" = ["y_m", "y_M", "1"], "properties" = ["affine", "parallel", "skewable", "vector-dim"], "pragmas" = []] {
+        ^3(%5 : !i32):
+          %6 : !i32 = iet.constant() ["value" = 1 : !i32]
+          %7 : !i32 = iet.addi(%4 : !i32, %6 : !i32)
+          %8 : !i32 = iet.addi(%5 : !i32, %6 : !i32)
+          %9 : !i32 = iet.idx(%0 : !i32, %2 : !i32)
+          %10 : !i32 = iet.idx(%9 : !i32, %7 : !i32)
+          %11 : !i32 = iet.idx(%10 : !i32, %8 : !i32)
+          %12 : !i32 = iet.addi(%11 : !i32, %6 : !i32)
+          %13 : !i32 = iet.idx(%0 : !i32, %3 : !i32)
+          %14 : !i32 = iet.idx(%13 : !i32, %7 : !i32)
+          %15 : !i32 = iet.idx(%14 : !i32, %8 : !i32)
+          iet.assign(%15 : !i32, %12 : !i32)
+        }
+      }
+    }
+  }
+}
+
+// CHECK: iet.iteration() ["limits" = ["y_m", "y_M", "1"], "properties" = ["affine", "parallel", "skewable", "vector-dim"], "pragmas" = ["simd-for"]]{
