@@ -1,7 +1,8 @@
-from devito.ir.ietxdsl import *
+from devito.ir.ietxdsl import Iteration
 from xdsl.pattern_rewriter import RewritePattern, GreedyRewritePatternApplier, \
     op_type_rewrite_pattern, PatternRewriteWalker, PatternRewriter
-import xdsl.dialects.builtin as builtin
+from xdsl.dialects.builtin import ModuleOp, StringAttr
+from dataclasses import dataclass
 
 
 # NOTE: this is WIP and needs refactoring ;)
@@ -30,13 +31,15 @@ class MakeSimdPattern(RewritePattern):
         if (not self.is_parallel_relaxed(parent_op)):
             return
 
-        # TODO how to only check for iteration trees?
-        # NOTE: currently only checking the first child
-        child_ops = iteration.body.blocks[0].ops
+        children_ops = iteration.body.blocks[0].ops
 
+        # TODO this is a bit expensive, is there a way to only match on the lowest
+        #   level operations
         # check if children is parallel as well
-        if (isinstance(child_ops[0], Iteration)
-                and self.is_parallel_relaxed(child_ops[0])):
+        if any([
+            isinstance(op, Iteration) and self.is_parallel_relaxed(op)
+            for op in children_ops
+        ]):
             return
 
         # TODO: insert additional checks
@@ -51,6 +54,6 @@ def construct_walker() -> PatternRewriteWalker:
                                 apply_recursively=False)
 
 
-def make_simd(ctx, op: builtin.ModuleOp):
+def make_simd(ctx, op: ModuleOp):
     walker = construct_walker()
     walker.rewrite_module(op)
