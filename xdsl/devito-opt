@@ -8,6 +8,7 @@ from io import StringIO
 
 from devito.ir.ietxdsl import IET
 from devito.xdslpasses.iet.parpragma import make_simd
+from devito.ir.ietxdsl.cgeneration import CGeneration
 
 from xdsl.parser import Parser
 from xdsl.printer import Printer
@@ -140,6 +141,10 @@ class XdslOptMain:
             printer = Printer(stream=output)
             printer.print_op(prog)
             return output.getvalue()
+        if self.args.target == 'c':
+            cgen = CGeneration()
+            cgen.printModule(prog)
+            return cgen.str()
         if self.args.target == 'mlir':
             try:
                 from xdsl.mlir_converter import MLIRConverter
@@ -189,7 +194,7 @@ arg_parser.add_argument("-o",
 arg_parser.add_argument("-t",
                         "--target",
                         type=str,
-                        choices=["xdsl", "mlir"],
+                        choices=["xdsl", "mlir", "c"],
                         default="xdsl")
 
 arg_parser.add_argument("--disable-verify", default=False, action='store_true')
