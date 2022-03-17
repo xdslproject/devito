@@ -3,6 +3,7 @@ from devito.ir.ietxdsl.operations import *
 
 
 class CGeneration:
+
     def __init__(self):
         self.output = io.StringIO()
         self.indentation = 0
@@ -19,12 +20,11 @@ class CGeneration:
     def dedent(self):
         self.indentation -= 2
 
-
     def print(self, *args, **kwargs):
         indent = True
 
         if 'indent' in kwargs.keys():
-            if kwargs['indent'] == False:
+            if not kwargs['indent']:
                 indent = False
             kwargs.pop('indent')
 
@@ -63,7 +63,8 @@ class CGeneration:
     def printIteration(self, iteration_op: Iteration):
 
         iterator = "x_" + str(len(self.iterator_names))
-        self.iterator_names[iteration_op.regions[0].blocks[0].args[0]] = iterator
+        self.iterator_names[
+            iteration_op.regions[0].blocks[0].args[0]] = iterator
 
         lower_bound = iteration_op.limits.data[0].data
         upper_bound = iteration_op.limits.data[1].data
@@ -79,7 +80,6 @@ class CGeneration:
         self.print("}")
         pass
 
-
     def printResult(self, result):
         if isinstance(result, BlockArgument):
             self.print("a", indent=False, end="")
@@ -93,13 +93,16 @@ class CGeneration:
             return
         if (isinstance(operation, List)):
             for op in operation:
-                if isinstance(op, Constant) or isinstance(op, Addi) or isinstance(op, Idx):
+                if isinstance(op, Constant) or isinstance(
+                        op, Addi) or isinstance(op, Idx):
                     continue
                 self.printOperation(op)
             return
 
         if (isinstance(operation, Constant)):
-            self.print(operation.value.parameters[0].data, indent=False, end='')
+            self.print(operation.value.parameters[0].data,
+                       indent=False,
+                       end='')
             return
 
         if (isinstance(operation, Addi)):
@@ -130,7 +133,5 @@ class CGeneration:
             self.printResult(operation.index)
             self.print("]", indent=False, end="")
             return
-
-
 
         self.print(f"// Operation {operation.name} not supported inprinter")
