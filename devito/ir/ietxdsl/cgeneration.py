@@ -84,7 +84,7 @@ class CGeneration:
 
     def printIteration(self, iteration_op: Iteration):
         ssa_val = iteration_op.body.blocks[0].args[0]
-        iterator = "i_" + str(len(self.iterator_names))
+        iterator = str(iteration_op.arg_name.data)
         SSAValueNames[ssa_val] = iterator
         self.iterator_names[
             iteration_op.regions[0].blocks[0].args[0]] = iterator
@@ -107,6 +107,7 @@ class CGeneration:
         uindices_symbmins = iteration_op.uindices_symbmins
         ssa_val = iteration_op.body.blocks[0].args[0]
         iterator = "i_" + str(len(self.iterator_names))
+        iterator = str(iteration_op.arg_name.data)
         SSAValueNames[ssa_val] = iterator
         self.iterator_names[
             iteration_op.regions[0].blocks[0].args[0]] = iterator
