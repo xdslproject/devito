@@ -74,9 +74,10 @@ class CGeneration:
                        end='',
                        indent=False)
             if n < (len(list(callable_op.types.data)) - 1):
-                self.print(",", end='', indent=False)
+                self.print(",", end=' ', indent=False)
 
-        self.print("){")
+        self.print(")")
+        self.print("{")
         self.indent()
         for each_op in callable_op.body.ops:
             self.printOperation(each_op)
@@ -211,7 +212,7 @@ class CGeneration:
 
         if (isinstance(operation, Muli)):
             self.printResult(operation.input1)
-            self.print(" * ", end='', indent=False)
+            self.print("*", end='', indent=False)
             self.printResult(operation.input2)
             return
 
