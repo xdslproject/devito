@@ -9,7 +9,6 @@ from devito.xdslpasses.iet.parpragma import make_simd
 def test_example():
     ctx = MLContext()
     Builtin(ctx)
-    iet = IET(ctx)
 
     mod = ModuleOp.from_region_or_ops([
         Callable.get(

@@ -26,7 +26,6 @@ def transform_devito_xdsl_string(op: Operator):
 
     ctx = MLContext()
     Builtin(ctx)
-    iet = IET(ctx)
 
     # Those parameters without associated types aren't printed in the Kernel header
     op_param_names = [s._C_name for s in FindSymbols('defines').visit(op)]
