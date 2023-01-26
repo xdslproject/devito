@@ -8,14 +8,15 @@ import devito.mpi.routines as routines  # noqa
 from devito import ModuloDimension, SpaceDimension
 from devito.passes.iet.languages.openmp import OmpRegion
 
-from devito.ir.ietxdsl import (MLContext, IET, Constant, Modi, Idx,
+from devito.ir.ietxdsl import (MLContext, IET, Modi, Idx,
                                Assign, Block, Iteration, IterationWithSubIndices,
                                Statement, PointerCast, Powi, Initialise,
                                StructDecl, FloatConstant)
 from devito.tools.utils import as_tuple
 from devito.types.basic import IndexedData
-from xdsl.dialects.builtin import Builtin, i32
-from xdsl.dialects.arith import Muli, Addi
+from xdsl.ir import Data
+from xdsl.dialects.builtin import Builtin, i32, StringAttr
+from xdsl.dialects.arith import Muli, Addi, Constant
 from xdsl.dialects.func import Call
 
 
@@ -89,6 +90,7 @@ def add_to_block(expr, arg_by_expr, result):
         return
 
     if isinstance(expr, Integer):
+        # import pdb;pdb.set_trace()
         constant = int(expr.evalf())
         arg = Constant.from_int_constant(constant, i32)
         # arg = Constant.get(constant)
@@ -308,9 +310,11 @@ def myVisit(node, block=None, ctx={}):
     if isinstance(node, nodes.Call):
         # Those parameters without associated types aren't printed in the Kernel header
         call_name = node.name
-        call_args = [i._C_name for i in node.arguments]
-        call = Call.get(call_name, [call_args], 'void')
+
+        call_args = [StringAttr.from_str(i._C_name) for i in node.arguments]
         import pdb;pdb.set_trace()
+        call = Call.get(call_name, call_args, 'void')
+
         block.add_ops([call])
         return
 

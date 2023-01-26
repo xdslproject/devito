@@ -33,6 +33,7 @@ class TestOperatorSimple(object):
 
         f.data_with_halo[:] = 1.
 
+        import pdb;pdb.set_trace()
         xdsl_op = XDSLOperator(Eq(f.forward, f[t, x-1] + f[t, x+1] + 1))
         xdsl_op.__class__ = XDSLOperator
 
