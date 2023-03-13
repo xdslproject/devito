@@ -1,6 +1,8 @@
 from devito.ir import ietxdsl
 from devito import Grid, Function, TimeFunction, Eq, Operator, Constant
 
+from xdsl.printer import Printer
+
 from xdsl.pattern_rewriter import PatternRewriteWalker, GreedyRewritePatternApplier
 
 if __name__ == '__main__':
@@ -9,11 +11,8 @@ if __name__ == '__main__':
     u = TimeFunction(name='u', grid=grid)
     eq = Eq(u.forward, u.dx)
     op = Operator([eq])
-    #op.apply(time_M=5)
-
     module = ietxdsl.transform_devito_to_iet_ssa(op)
 
-    from xdsl.printer import Printer
     p = Printer(target=Printer.Target.MLIR)
     p.print(module)
 

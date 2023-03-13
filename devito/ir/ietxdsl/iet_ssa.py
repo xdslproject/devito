@@ -109,7 +109,7 @@ class Initialise(Operation):
 class PointerCast(Operation):
     name: str = "iet.pointercast"
     statement: OpAttr[StringAttr]
-    
+
     arg: Annotated[Operand, Attribute]  # TOOD: Make it Dataobj()!
     result: Annotated[OpResult, memref.MemRefType[Attribute]]
 

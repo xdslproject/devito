@@ -4,7 +4,7 @@ from typing import Dict
 from devito.ir.ietxdsl.iet_ssa import (Callable, Modi, StructDecl, Statement,
                                           Iteration, IterationWithSubIndices,
                                           PointerCast, Initialise, List,
-                                          Powi, Call)
+                                          Powi, Call, For)
 from devito.tools import flatten
 
 from xdsl.ir import SSAValue, BlockArgument
@@ -69,28 +69,29 @@ class CGeneration:
 
         # Print kernels and arguments
         self.print('')
-        import pdb;pdb.set_trace()
         retval = callable_op.attributes['retval'].data
         prefix = callable_op.attributes['prefix'].data
         if prefix != '':
             prefix = prefix + " "
-        name = callable_op.attributes['callable_name'].data
+        # Print FuncOp's symbolic name
+        name = callable_op.sym_name.data
 
         self.print(f"{prefix}{retval} {name}(", end='', indent=False)
         for i, arg in enumerate(arglist):
             # IMPORTANT TOFIX? Here we print a Function like u[..][..][..]
-            SSAValueNames[arg] = callable_op.attributes['parameters'].data[i].data
+            import pdb;pdb.set_trace()
+            SSAValueNames[arg] = callable_op.attributes['c_names'].data[i].data
         # TODO: fix this workaround
         # need separate loop because only header parameters have types
-        for i, (op_type, op_qual) in enumerate(zip(callable_op.attributes['types'].data,
-                callable_op.attributes['qualifiers'].data)): # noqa
+        for i, (op_type, op_qual) in enumerate(zip(callable_op.attributes['c_typenames'].data,
+                callable_op.attributes['c_typeqs'].data)): # noqa
 
             self.print(op_type.data, end='', indent=False)
             self.print(op_qual.data, end=' ', indent=False)
-            self.print(callable_op.attributes['header_parameters'].data[i].data,
+            self.print(callable_op.attributes['h_names'].data[i].data,
                        end='',
                        indent=False)
-            if i < (len(list(callable_op.attributes['types'].data)) - 1):
+            if i < (len(list(callable_op.attributes['c_typenames'].data)) - 1):
                 self.print(", ", end='', indent=False)
 
         self.print(")\n{")
@@ -140,27 +141,30 @@ class CGeneration:
         self.print(");", indent=False)
         pass
 
-    def printIteration(self, iteration_op: Iteration):
+    def printFor(self, iteration_op: For):
         # not used?
         ssa_val = iteration_op.body.blocks[0].args[0]
-        iterator = str(iteration_op.attributes['arg_name'].data)
+        iterator = str(iteration_op.attributes['ivar'].data)
         SSAValueNames[ssa_val] = iterator
 
         self.iterator_names[
             iteration_op.regions[0].blocks[0].args[0]] = iterator
 
-        lower_bound = iteration_op.attributes['limits'].data[0].data
-        upper_bound = iteration_op.attributes['limits'].data[1].data
-        increment = iteration_op.attributes['limits'].data[2].data
+        lower_bound = iteration_op.attributes['lb'].data
+        upper_bound = iteration_op.attributes['ub'].data
+        increment = iteration_op.attributes['step'].data
 
+        import pdb;pdb.set_trace()
         self.print(f"for (int {iterator} = {lower_bound}; ", end='')
         self.print(f"{iterator} <= {upper_bound}; ", end='', indent=False)
         self.print(f"{iterator} += {increment})", indent=False)
         self.print("{")
         self.indent()
+
         for op in iteration_op.body.ops:
-            if isinstance(op, (Iteration, Initialise, Statement, memref.Store)):
+            if isinstance(op, (For, Initialise, Statement, memref.Store)):
                 self.printOperation(op)
+
         self.dedent()
         self.print("}")
         pass
@@ -233,9 +237,14 @@ class CGeneration:
             return
 
         if (isinstance(operation, Constant)):
-            self.print(operation.value.parameters[0].data,
-                       indent=False,
-                       end='')
+            import pdb;pdb.set_trace()
+            try:
+                operation.attributes['iet_c_name']
+                self.print(operation.value.parameters[0].data,
+                        indent=False,
+                        end='')
+            except KeyError:
+                pass
             return
 
         if (isinstance(operation, Addi)):
@@ -284,8 +293,12 @@ class CGeneration:
             self.printIterationWithSubIndices(operation)
             return
 
-        if (isinstance(operation, Iteration)):
-            self.printIteration(operation)
+        # if (isinstance(operation, Iteration)):
+        #     self.printFor(operation)
+        #     return
+
+        if (isinstance(operation, For)):
+            self.printFor(operation)
             return
 
         if (isinstance(operation, Initialise)):

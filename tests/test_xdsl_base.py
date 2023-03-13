@@ -23,7 +23,7 @@ def test_create_xdsl_operator():
 
     from xdsl.printer import Printer
     printer = Printer(target=Printer.Target.MLIR)
-    printer.print_op(xdsl_op)
+    printer.print(xdsl_op)
     assert False
     # import pdb;pdb.set_trace()
     # printer.print_op(mod)
@@ -35,7 +35,8 @@ def test_devito_operator():
     grid = Grid(shape=(3,))
     u = Function(name='u', grid=grid)
     eq = Eq(u, u + 1)
-    xdsl_op = Operator([eq])
+    xdsl_op = XDSLOperator([eq])
+    xdsl_op.__class__ = XDSLOperator
     xdsl_op.apply()
 
     op = Operator([eq])
@@ -47,7 +48,7 @@ def test_devito_operator():
 
     from xdsl.printer import Printer
     printer = Printer(target=Printer.Target.MLIR)
-    printer.print_op(xdsl_op)
+    printer.print(xdsl_op)
     assert False
     # import pdb;pdb.set_trace()
     # printer.print_op(mod)

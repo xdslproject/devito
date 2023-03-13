@@ -1,15 +1,18 @@
 # definitions pulled out from GenerateXDSL jupyter notebook
 import ctypes
 import numpy
-from sympy import Indexed, Integer, Symbol, Add, Eq, Mod, Pow, Mul, Float
 import cgen
 
+from sympy import Indexed, Integer, Symbol, Add, Eq, Mod, Pow, Mul, Float
 from typing import Any
 
-import devito.ir.iet.nodes as nodes
-
 from devito import SpaceDimension
+import devito.types
+import devito.ir.iet.nodes as nodes
 from devito.passes.iet.languages.openmp import OmpRegion
+
+from xdsl.dialects import memref, arith, builtin, llvm
+from xdsl.dialects.experimental import math
 
 from devito.ir.ietxdsl import (MLContext, IET, Constant, Modi, Block, Statement, PointerCast, Powi, Initialise,
                                StructDecl, Call)
@@ -22,13 +25,11 @@ from xdsl.irdl import AnyOf, Operation
 from xdsl.dialects.builtin import (ContainerOf, Float16Type, Float32Type,
                                    Float64Type, Builtin, i32, f32)
 
+from xdsl.dialects import memref, arith, builtin, llvm
 from xdsl.dialects.arith import Muli, Addi
 from devito.ir.ietxdsl import iet_ssa
+from devito.logger import perf
 
-from xdsl.dialects import memref, arith, builtin, llvm
-from xdsl.dialects.experimental import math
-
-import devito.types
 
 floatingPointLike = ContainerOf(AnyOf([Float16Type, Float32Type, Float64Type]))
 
@@ -256,19 +257,19 @@ def myVisit(node, block: Block, ssa_vals={}):
         b = Block.from_arg_types([i32])
         r = []
         expr = node.expr
-        import pdb;pdb.set_trace()
         if node.init:
             expr_name = expr.args[0]
             add_to_block(expr.args[1], {Symbol(s): a for s, a in ssa_vals.items()}, r)
 
-            # init = Initialise.get(r[-1].results[0], r[-1].results[0], str(expr_name))
             block.add_ops(r)
+            # import pdb;pdb.set_trace()
+            r[-1].attributes['iet_c_name'] = builtin.StringAttr(str(expr_name))
+
             ssa_vals[str(expr_name)] = r[-1].results[0]
         else:
             add_to_block(expr, {Symbol(s): a for s, a in ssa_vals.items()}, r)
             block.add_ops(r)
         return
-
 
     if isinstance(node, nodes.ExpressionBundle):
         assert len(node.children) == 1
@@ -294,7 +295,7 @@ def myVisit(node, block: Block, ssa_vals={}):
         # get start, end ssa values
         start_ssa_val = ssa_vals[start.name]
         end_ssa_val = ssa_vals[end.name]
-        
+
         step_op = arith.Constant.from_int_and_width(step, i32)
 
         block.add_op(step_op)
@@ -305,11 +306,18 @@ def myVisit(node, block: Block, ssa_vals={}):
         subindices = len(node.uindices)
 
         # construct iet for operation
-        loop = iet_ssa.For.get(start_ssa_val, end_ssa_val, step_op, subindices, props, pragmas)
+        loop = iet_ssa.For.get(start_ssa_val, end_ssa_val, step_op, subindices, props,
+                               pragmas)
 
-        # extend context to include loop index
+        # Dump attributes necessary for c printing
+        loop.attributes['ivar'] = builtin.StringAttr(str(dim))
+        loop.attributes['lb'] = builtin.StringAttr(str(node.limits[0]))
+        loop.attributes['ub'] = builtin.StringAttr(str(node.limits[1]))
+        loop.attributes['step'] = builtin.StringAttr(str(node.limits[2]))
+
+        # Extend context to include loop index
         ssa_vals[node.index] = loop.block.args[0]
-        
+
         # TODO: add subindices to ctx
         for i, uindex in enumerate(node.uindices):
             ssa_vals[uindex.name] = loop.block.args[i+1]
@@ -353,6 +361,7 @@ def myVisit(node, block: Block, ssa_vals={}):
         return
 
     if isinstance(node, nodes.PointerCast):
+        perf(f"Lowering a {node.__class__}:")
         statement = node.ccode
         arg = ssa_vals[node.function._C_name]
         pointer_cast = PointerCast.get(

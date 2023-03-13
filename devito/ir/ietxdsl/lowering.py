@@ -52,7 +52,7 @@ class LowerIetForToScfFor(RewritePattern):
                 body
             )
         )
-        
+
 
 class LowerIetForToScfParallel(RewritePattern):
     @op_type_rewrite_pattern

@@ -147,9 +147,28 @@ def _op_to_func(op: Operator):
 
     func_op = func.FuncOp.from_region(str(op.name), arg_types, [], Region.from_block_list([block]))
 
-    func_op.attributes['param_names'] = builtin.ArrayAttr([
-        builtin.StringAttr(str(param._C_name)) for param in op.parameters
+    # Add attributes for c printing
+    import pdb;pdb.set_trace();
+
+    func_op.attributes['c_names'] = builtin.ArrayAttr([
+        builtin.StringAttr(i._C_name) for i in op_symbols
     ])
+
+    func_op.attributes['h_names'] = builtin.ArrayAttr([
+        builtin.StringAttr(i._C_name) for i in list(op.parameters)
+    ])
+
+    func_op.attributes['c_typenames'] = builtin.ArrayAttr([
+        builtin.StringAttr(i._C_typename) for i in list(op.parameters)
+    ])
+
+    func_op.attributes['c_typeqs'] = builtin.ArrayAttr([
+        builtin.StringAttr(i._C_type_qualifier) for i in list(op.parameters)
+    ])
+
+    func_op.attributes['prefix'] = builtin.StringAttr(str(prefix))
+
+    func_op.attributes['retval'] = builtin.StringAttr(str(retv))
 
     return func_op
 
