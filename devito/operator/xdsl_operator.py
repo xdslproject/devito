@@ -2,6 +2,8 @@ from devito import Operator
 from devito.ir.ietxdsl import transform_devito_to_iet_ssa, iet_to_standard_mlir
 from devito.logger import perf
 
+import os, shlex, sys
+
 import tempfile
 
 import subprocess
@@ -15,6 +17,22 @@ __all__ = ['XDSLOperator']
 
 
 class XDSLOperator(Operator):
+    """
+    HOW TO BACKDOOR JIT COMPILATION WITH XdslOperator:
+
+    run `DUMP_MLIR=1 <devito command>`
+
+    Observe the line
+    > printed unoptimized mlir module to /run/user/1000/tmpml2ti805.so.iet.mlir
+    in the program output
+
+    Copy and edit the file however you like, you can see further debugging info in `debug.c`
+
+    Once you are satisfied, run `JIT_BACKDOOR=/path/to/your/source.mlir <devito command>`
+
+    Make sure that the debug.c file is located in the directory where you invoke this command
+    so that we can find it and link it with the mlir code.
+    """
 
     def __new__(cls, expressions, **kwargs):
         self = super(XDSLOperator, cls).__new__(cls, expressions, **kwargs)
@@ -44,17 +62,53 @@ class XDSLOperator(Operator):
             f = self._tf.name
 
             try:
-                res = subprocess.run(
-                    #f'tee {f}.iet.mlir |'
-                    #f'cat /run/user/1000/tmp7lgpw9x1.so.iet.mlir | '
-                    f'mlir-opt -cse -loop-invariant-code-motion | '
-                    f'mlir-opt -convert-scf-to-cf -convert-cf-to-llvm -convert-arith-to-llvm -convert-math-to-llvm -convert-func-to-llvm -reconcile-unrealized-casts | '
-                    f'mlir-translate --mlir-to-llvmir | '
-                    f'clang -O3 -shared -xir - -o {self._tf.name}',
-                    shell=True,
-                    input=module_str,
-                    text=True
-                )
+                nixos_compiler_prefix = ""
+                # detect nixos
+                if 'NIX_STORE' in os.environ:
+                    # use steam-run to get around problems with unwrapped clang binaries
+                    # make sure you have steam-run in your environment
+                    # > nix-shell -p steam-run
+                    nixos_compiler_prefix = "steam-run "
+
+                # JIT_BACKDOOR contains the path to the mlir file we should use
+                backdoor = os.environ.get('JIT_BACKDOOR')
+                
+                # pre-compile debug.o because of some difficulties 
+                # encountered with clang on NixOs :)
+                if not os.path.exists('debug.o'):
+                    if not os.path.exists('debug.c'):
+                        print("ERROR: Please make sure you have either debug.c or debug.o in the directory where you invode devito!")
+                        sys.exit(1)
+                    else:
+                        print("Compiling debug.o from debug.c")
+                        cc = os.environ.get('CC', 'gcc')
+                        subprocess.run([cc, '-c', 'debug.c', '-o', 'debug.o'])
+
+
+                if backdoor is not None:
+                    res = subprocess.run(
+                        f'cat {shlex.quote(backdoor)} | '
+                        f'mlir-opt -cse -loop-invariant-code-motion | '
+                        f'mlir-opt -convert-scf-to-cf -convert-cf-to-llvm -convert-arith-to-llvm -convert-math-to-llvm -convert-func-to-llvm -reconcile-unrealized-casts | '
+                        f'mlir-translate --mlir-to-llvmir > llvm.ll && '
+                        + nixos_compiler_prefix+ f' clang -O3 -shared llvm.ll debug.o -o {self._tf.name}',
+                        shell=True,
+                        text=True
+                    )
+
+                else:
+                    if 'DUMP_MLIR' in os.environ:
+                        print(f"printed unoptimized mlir module to {f}.iet.mlir")
+                    res = subprocess.run(
+                        (f'tee {f}.iet.mlir |' if 'DUMP_MLIR' in os.environ else '') +
+                        f'mlir-opt -cse -loop-invariant-code-motion | '
+                        f'mlir-opt -convert-scf-to-cf -convert-cf-to-llvm -convert-arith-to-llvm -convert-math-to-llvm -convert-func-to-llvm -reconcile-unrealized-casts | '
+                        f'mlir-translate --mlir-to-llvmir | '
+                        + nixos_compiler_prefix+ f'steam-run clang -O3 -shared -xir - -o {self._tf.name}',
+                        shell=True,
+                        input=module_str,
+                        text=True
+                    )
                 assert res.returncode == 0
             except Exception as ex:
                 print("error")
