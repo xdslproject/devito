@@ -6,18 +6,19 @@ from dataclasses import dataclass
 
 from xdsl.dialects.builtin import (IntegerType, StringAttr, ArrayAttr, OpAttr,
                                    ContainerOf, IndexType, Float16Type, Float32Type,
-                                   Float64Type, AnyIntegerAttr, FloatAttr, f32, IntAttr)
-from xdsl.dialects.arith import Constant
-from xdsl.dialects.func import Return
+                                   Float64Type, AnyIntegerAttr, f32, IntAttr)
 
-from xdsl.dialects import arith, builtin, memref, llvm
+from xdsl.dialects import builtin, memref, llvm
 
-from xdsl.irdl import irdl_op_definition, Operand, AnyOf, SingleBlockRegion, irdl_attr_definition, Attribute, ParametrizedAttribute
-from xdsl.ir import MLContext, Operation, Block, Region, OpResult, SSAValue, Attribute, Dialect
+from xdsl.irdl import (irdl_op_definition, Operand, AnyOf, SingleBlockRegion,
+                       irdl_attr_definition, ParametrizedAttribute)
+from xdsl.ir import (MLContext, Operation, Block, Region, OpResult,
+                     SSAValue, Attribute, Dialect)
 
 
 signlessIntegerLike = ContainerOf(AnyOf([IntegerType, IndexType]))
 floatingPointLike = ContainerOf(AnyOf([Float16Type, Float32Type, Float64Type]))
+
 
 # TODO: remove
 @dataclass
@@ -37,6 +38,7 @@ class IET:
         self.ctx.register_op(StructDecl)
         self.ctx.register_op(For)
         self.f32 = floatingPointLike
+
 
 @irdl_attr_definition
 class Profiler(ParametrizedAttribute):

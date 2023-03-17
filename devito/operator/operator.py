@@ -246,6 +246,7 @@ class Operator(Callable):
         kwargs['lower'] = cls._lower
 
         # [Eq] -> [LoweredEq]
+        # import pdb;pdb.set_trace()
         expressions = cls._lower_exprs(expressions, **kwargs)
 
         # [LoweredEq] -> [Clusters]

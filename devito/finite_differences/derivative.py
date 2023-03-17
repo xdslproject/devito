@@ -350,7 +350,7 @@ class Derivative(sympy.Derivative, Differentiable):
             pass
 
         # If True, the derivative will be fully expanded as a sum of products,
-        # otherwise an IndexSum will returned
+        # otherwise an IndexSum will be returned
         expand = kwargs.get('expand', True)
 
         # Step 2: Evaluate FD of the new expression

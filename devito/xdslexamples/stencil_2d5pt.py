@@ -31,7 +31,7 @@ sigma = .25
 dt = sigma * dx * dy / nu
 
 so = args.space_order
-to = 1
+to = 2
 
 # Initialise u
 init_value = 10

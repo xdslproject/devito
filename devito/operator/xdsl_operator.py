@@ -28,11 +28,11 @@ class XDSLOperator(Operator):
         It is ensured that JIT compilation will only be performed once per
         Operator, reagardless of how many times this method is invoked.
         """
-        #ccode = transform_devito_xdsl_string(self)
-        #self.ccode = ccode
+        # ccode = transform_devito_xdsl_string(self)
+        # self.ccode = ccode
 
         with self._profiler.timer_on('jit-compile'):
-            
+            perf("***Lowering a Devito Operator to a ModuleOp")
             module_obj = transform_devito_to_iet_ssa(self)
 
             iet_to_standard_mlir(module_obj)
@@ -62,10 +62,10 @@ class XDSLOperator(Operator):
             #print(res.stderr)
 
         elapsed = self._profiler.py_timers['jit-compile']
-        
+
         perf("XDSLOperator `%s` jit-compiled `%s` in %.2f s with `mlir-opt`" %
                     (self.name, self._tf.name, elapsed))
-        
+
     @property
     def _soname(self):
         return self._tf.name
