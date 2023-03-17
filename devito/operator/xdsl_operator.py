@@ -104,7 +104,7 @@ class XDSLOperator(Operator):
                         f'mlir-opt -cse -loop-invariant-code-motion | '
                         f'mlir-opt -convert-scf-to-cf -convert-cf-to-llvm -convert-arith-to-llvm -convert-math-to-llvm -convert-func-to-llvm -reconcile-unrealized-casts | '
                         f'mlir-translate --mlir-to-llvmir | '
-                        + nixos_compiler_prefix+ f'steam-run clang -O3 -shared -xir - -o {self._tf.name}',
+                        + nixos_compiler_prefix+ f' clang -O3 -shared -xir - -o {self._tf.name}',
                         shell=True,
                         input=module_str,
                         text=True
