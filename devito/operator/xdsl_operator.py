@@ -18,20 +18,24 @@ __all__ = ['XDSLOperator']
 
 class XDSLOperator(Operator):
     """
-    HOW TO BACKDOOR JIT COMPILATION WITH XdslOperator:
 
-    run `DUMP_MLIR=1 <devito command>`
+    How to backdoor JIT COMPILATION WITH XDSLOperator:
+
+    ```
+    `DUMP_MLIR=1 <devito command>`
 
     Observe the line
-    > printed unoptimized mlir module to /run/user/1000/tmpml2ti805.so.iet.mlir
+    > printed unoptimized mlir module to /run/user/1000/hash.so.iet.mlir
     in the program output
 
-    Copy and edit the file however you like, you can see further debugging info in `debug.c`
+    Copy and edit the file however you like.
+    Check the debugging info in `debug.c`
 
+    To rerun, pass the .mlir file as an env var arg to JIT_BACKDOOR:
     Once you are satisfied, run `JIT_BACKDOOR=/path/to/your/source.mlir <devito command>`
 
-    Make sure that the debug.c file is located in the directory where you invoke this command
-    so that we can find it and link it with the mlir code.
+    Make sure that the debug.c file is located in the directory where you invoke the
+    python script command so that we can find it and link it with the mlir code.
     """
 
     def __new__(cls, expressions, **kwargs):
@@ -50,9 +54,10 @@ class XDSLOperator(Operator):
         # self.ccode = ccode
 
         with self._profiler.timer_on('jit-compile'):
-            perf("***Lowering a Devito Operator to a ModuleOp")
+            perf("***\nLowering a Devito Operator to a ModuleOp")
             module_obj = transform_devito_to_iet_ssa(self)
 
+            perf("***\nLowering from IET_SSA to standard MLIR")
             iet_to_standard_mlir(module_obj)
 
             module_str = StringIO()
@@ -72,7 +77,7 @@ class XDSLOperator(Operator):
 
                 # JIT_BACKDOOR contains the path to the mlir file we should use
                 backdoor = os.environ.get('JIT_BACKDOOR')
-                
+
                 # pre-compile debug.o because of some difficulties 
                 # encountered with clang on NixOs :)
                 if not os.path.exists('debug.o'):
@@ -80,10 +85,9 @@ class XDSLOperator(Operator):
                         print("ERROR: Please make sure you have either debug.c or debug.o in the directory where you invode devito!")
                         sys.exit(1)
                     else:
-                        print("Compiling debug.o from debug.c")
+                        perf("Compiling debug.o from debug.c")
                         cc = os.environ.get('CC', 'gcc')
                         subprocess.run([cc, '-c', 'debug.c', '-o', 'debug.o'])
-
 
                 if backdoor is not None:
                     res = subprocess.run(
@@ -97,10 +101,11 @@ class XDSLOperator(Operator):
                     )
 
                 else:
-                    if 'DUMP_MLIR' in os.environ:
-                        print(f"printed unoptimized mlir module to {f}.iet.mlir")
+                    dump_mlir = 'DUMP_MLIR' in os.environ or True
+                    if dump_mlir:
+                        perf(f"Saved/printed unoptimized mlir module to {f}.iet.mlir")
                     res = subprocess.run(
-                        (f'tee {f}.iet.mlir |' if 'DUMP_MLIR' in os.environ else '') +
+                        (f'tee {f}.iet.mlir |' if dump_mlir else '') +
                         f'mlir-opt -cse -loop-invariant-code-motion | '
                         f'mlir-opt -convert-scf-to-cf -convert-cf-to-llvm -convert-arith-to-llvm -convert-math-to-llvm -convert-func-to-llvm -reconcile-unrealized-casts | '
                         f'mlir-translate --mlir-to-llvmir | '
@@ -109,16 +114,16 @@ class XDSLOperator(Operator):
                         input=module_str,
                         text=True
                     )
+                # Subprocess completed succesfully
                 assert res.returncode == 0
             except Exception as ex:
                 print("error")
                 raise ex
-            #print(res.stderr)
 
         elapsed = self._profiler.py_timers['jit-compile']
 
         perf("XDSLOperator `%s` jit-compiled `%s` in %.2f s with `mlir-opt`" %
-                    (self.name, self._tf.name, elapsed))
+             (self.name, self._tf.name, elapsed))
 
     @property
     def _soname(self):

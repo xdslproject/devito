@@ -105,27 +105,17 @@ def transform_devito_xdsl_string(op: Operator):
 
 
 def _op_to_func(op: Operator):
+
     # Visit the Operator body
     assert isinstance(op.body, CallableBody)
 
-
-    # Scan an Operator
-    # Those parameters without associated types aren't printed in the Kernel header
-    # # import pdb;pdb.set_trace()
-    op_symbols = FindSymbols('defines').visit(op)
-    op_param_names = [s._C_name for s in op_symbols]
-    op_header_params = [i._C_name for i in list(op.parameters)]
-    op_types = [i._C_typename for i in list(op.parameters)]
-    op_type_qs = [i._C_type_qualifier for i in list(op.parameters)]
-    prefix = '-'.join(op.prefix)
-    retv = str(op.retval)
-
-    # # import pdb;pdb.set_trace()
-
-    # Game is here we start a dict from op params, focus
+    # Get arg types after conversion
     arg_types = get_arg_types(op.parameters)
-    # b = Block.from_arg_types([i32] * len(op_param_names))
+
+    # New block for Callable/callable body
     block = Block.from_arg_types(arg_types)
+
+    # Create a dict for mapping var names to SSAValues
     ssa_val_dict = {param._C_name: val for param, val in zip(op.parameters, block.args)}
 
     # Add Casts
@@ -157,11 +147,14 @@ def _op_to_func(op: Operator):
 def transform_devito_to_iet_ssa(op: Operator):
     # Check for the existence of funcs in the operator (print devito metacalls)
     op_funcs = [value for _, value in op._func_table.items()]
-    # Print calls
+
+    # Create a kernel callable
     call_obj = _op_to_func(op)
 
     # After finishing kernels, now we check the rest of the functions
     module = builtin.ModuleOp.from_region_or_ops([call_obj])
+
+    # op_funcs stemming from MPI
     for op_func in op_funcs:
         op = op_func.root
         name = op.name
@@ -173,7 +166,7 @@ def transform_devito_to_iet_ssa(op: Operator):
         op_type_qs = [i._C_type_qualifier for i in list(op.parameters)]
         prefix = '-'.join(op.prefix)
         retval = str(op.retval)
-        # import pdb;pdb.set_trace()
+
         b = Block.from_arg_types([i32] * len(op_param_names))
         d = {name: register for name, register in zip(op_param_names, b.args)}
 

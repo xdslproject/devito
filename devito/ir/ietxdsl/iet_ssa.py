@@ -138,11 +138,11 @@ class Initialise(Operation):
 
 @irdl_op_definition
 class PointerCast(Operation):
+
     name: str = "iet.pointercast"
     statement: OpAttr[StringAttr]
     shape_indices: OpAttr[ArrayAttr[IntAttr]]
-    
-    arg: Annotated[Operand, Dataobj]  # TOOD: Make it Dataobj()!
+    arg: Annotated[Operand, Dataobj]
     result: Annotated[OpResult, memref.MemRefType[Attribute]]
 
     @staticmethod

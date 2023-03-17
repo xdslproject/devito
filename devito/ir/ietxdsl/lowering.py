@@ -5,11 +5,13 @@ from xdsl.dialects.experimental import math
 
 from devito.ir.ietxdsl import iet_ssa
 
-from xdsl.pattern_rewriter import RewritePattern, PatternRewriter, GreedyRewritePatternApplier, op_type_rewrite_pattern, PatternRewriteWalker
+from xdsl.pattern_rewriter import (RewritePattern, PatternRewriter, GreedyRewritePatternApplier,
+                                   op_type_rewrite_pattern, PatternRewriteWalker)
 
 
 def _generate_subindices(subindices: int, block: Block,
                          rewriter: PatternRewriter):
+    # TODO: Add high-level example
     # keep track of the what argument we should replace with what
     arg_changes = []
 
@@ -42,7 +44,10 @@ class ConvertScfForArgsToIndex(RewritePattern):
 
     @op_type_rewrite_pattern
     def match_and_rewrite(self, op: scf.For, rewriter: PatternRewriter, /):
-        # TODO: properly figure out why we enter an infinite loop with recursive rewrites here:
+        # Casting `int`` to `index`` and adds Constant(1) as a shift offset to
+        # accommodate `<=` to `<`
+        # TODO: properly figure out why we enter an infinite loop with recursive rewrites
+        # here:
         if isinstance(op.lb.typ, builtin.IndexType):
             return
         # increment upper bound
@@ -66,10 +71,11 @@ class ConvertScfParallelArgsToIndex(RewritePattern):
     @op_type_rewrite_pattern
     def match_and_rewrite(self, op: scf.ParallelOp, rewriter: PatternRewriter,
                           /):
-        # TODO: properly figure out why we enter an infinite loop with recursive rewrites here:
+        # TODO: properly figure out why we enter an infinite loop with recursive rewrites
+        # here:
         if isinstance(op.lowerBound[0].typ, builtin.IndexType):
             return
-        # increment upper bound
+        # Increment upper bound
         cst1 = arith.Constant.from_int_and_width(1, builtin.i32)
         rewriter.insert_op_before_matched_op(cst1)
         for ub in op.upperBound:
@@ -79,7 +85,7 @@ class ConvertScfParallelArgsToIndex(RewritePattern):
                 op.operands.index(ub), 
                 new_ub.result,
             )
-        
+
         for val in (*op.lowerBound, *op.upperBound, *op.step):
             if isinstance(val.typ, builtin.IndexType):
                 continue
@@ -114,9 +120,9 @@ class ConvertForLoopVarToIndex(RewritePattern):
 
 class LowerIetForToScfFor(RewritePattern):
     """
-    This lowers ALL `iet.for` loops it finds to *sequential* scf.for loops
+    This lowers all `iet.for` loops to *sequential* `scf.for` loops
 
-    It does not care if the loop is declared "parellell".
+    It does not care if the loop is declared "parallel".
     """
 
     @op_type_rewrite_pattern
@@ -140,6 +146,9 @@ class LowerIetForToScfParallel(RewritePattern):
 
     @op_type_rewrite_pattern
     def match_and_rewrite(self, op: iet_ssa.For, rewriter: PatternRewriter, /):
+        """
+        TODO: Add high-level pseudo example
+        """
         if op.parallelism_property != 'parallel':
             return
 
@@ -147,6 +156,7 @@ class LowerIetForToScfParallel(RewritePattern):
 
         assert op.subindices.data == 0
 
+        # Recurse also takes account of nested parallel loops
         lb, ub, step, new_body = self.recurse_scf_parallel([op.lb], [op.ub],
                                                            [op.step], body,
                                                            rewriter)
@@ -171,6 +181,7 @@ class LowerIetForToScfParallel(RewritePattern):
         inner_for = body.ops[1]
         # re-use step
         step = inner_for.step
+        # TODO: clean/review
         if isinstance(inner_for.step, OpResult) and isinstance(
                 inner_for.step.op, arith.Constant):
             if inner_for.step.op.value.value.data == steps[
@@ -183,6 +194,7 @@ class LowerIetForToScfParallel(RewritePattern):
         lbs.append(inner_for.lb)
         ubs.append(inner_for.ub)
 
+        # Ensure block args stay in the innermost block
         new_body = inner_for.body.detach_block(0)
         for arg in body.args:
             new_body.insert_arg(arg.typ, arg.index)
@@ -213,7 +225,7 @@ class DropIetComments(RewritePattern):
 class LowerIetPointerCastAndDataObject(RewritePattern):
     dimensions: list[SSAValue] = field(default_factory=list)
     """
-    This pass converts the pointer cast into an `getelementptr` operation.
+    This pass converts the pointer cast into an `llvm.GetElementPtrOp` operation.
     """
 
     @op_type_rewrite_pattern
@@ -223,18 +235,18 @@ class LowerIetPointerCastAndDataObject(RewritePattern):
         # if you hit this ping anton lydike :D (I should know what to do)
         assert len(self.dimensions) == 0, "can only convert one pointer cast!"
 
-        # grab the type the pointercast returns (memref type)
+        # Grab the type the pointercast returns (memref type)
         memref_typ = op.result.typ
         assert isinstance(memref_typ, memref.MemRefType)
 
         # u_vec_size_ptr_addr : llvm.ptr<llvm.ptr<i32>>
         u_vec_size_ptr_addr = llvm.GetElementPtrOp.get(
             op.arg,
-            [0, 1],
+            [0, 1],  # Second element of struct
             result_type=llvm.LLVMPointerType.typed(
                 llvm.LLVMPointerType.typed(builtin.i32)),
         )
-        # dereference the ptr ptr to get a normal pointer
+        # dereference the `ptr<ptr>` to get a `ptr`
         # u_vec_size_ptr : llvm.ptr<i32>
         u_vec_size_ptr = llvm.LoadOp.get(u_vec_size_ptr_addr)
 
@@ -257,10 +269,10 @@ class LowerIetPointerCastAndDataObject(RewritePattern):
             new_ops += [ptr_to_size_i, load]
             self.dimensions.append(load.dereferenced_value)
 
-        # insert ops to load dimensions
+        # Insert ops to load dimensions
         rewriter.insert_op_before_matched_op(new_ops)
 
-        # now lower the actual pointer cast
+        # Now lower the actual pointer cast
         rewriter.replace_matched_op(
             [
                 # this is (u_vec + 0)
@@ -282,6 +294,7 @@ class LowerIetPointerCastAndDataObject(RewritePattern):
 class CleanupDanglingIetDatatypes(RewritePattern):
 
     @op_type_rewrite_pattern
+    # Transforms `dataobj` and `profilers` to llvm.ptr
     def match_and_rewrite(self, op: func.FuncOp, rewriter: PatternRewriter, /):
         for i, arg_typ in enumerate(op.function_type.inputs.data):
             if isinstance(arg_typ, iet_ssa.Dataobj):
@@ -310,8 +323,8 @@ class LowerMemrefLoadToLLvmPointer(RewritePattern):
 
     Why we need to convert from memref.load to llvm.load?
 
-    Memerefs are much more complex than a pointer to contiguous memory.
-    Since we are just given a pointer to contigous memory, we think it's
+    `Memref`s are much more complex than a pointer to contiguous memory.
+    Since we are just given a pointer to contiguous memory, we think it's
     easiest to manually compute these linear_offsets for accesses.
     """
     ptr_lowering: LowerIetPointerCastAndDataObject

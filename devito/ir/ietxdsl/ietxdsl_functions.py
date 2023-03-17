@@ -264,7 +264,7 @@ def myVisit(node, block: Block, ssa_vals={}):
             node, cgen.Statement), f'Argument must be subclass of Node, found: {node}'
         assert bool_node or comment_node or statement_node
     except:
-        print("fail!")
+        print("Not a Devito node or comment")
 
     if hasattr(node, 'is_Callable') and node.is_Callable:
         return
@@ -287,7 +287,6 @@ def myVisit(node, block: Block, ssa_vals={}):
             add_to_block(expr, {Symbol(s): a for s, a in ssa_vals.items()}, r)
             block.add_ops(r)
         return
-
 
     if isinstance(node, nodes.ExpressionBundle):
         assert len(node.children) == 1
@@ -313,7 +312,6 @@ def myVisit(node, block: Block, ssa_vals={}):
         # get start, end ssa values
         start_ssa_val = ssa_vals[start.name]
         end_ssa_val = ssa_vals[end.name]
-        
         step_op = arith.Constant.from_int_and_width(step, i32)
 
         block.add_op(step_op)
@@ -324,19 +322,21 @@ def myVisit(node, block: Block, ssa_vals={}):
         subindices = len(node.uindices)
 
         # construct iet for operation
-        loop = iet_ssa.For.get(start_ssa_val, end_ssa_val, step_op, subindices, props, pragmas)
+        loop = iet_ssa.For.get(start_ssa_val, end_ssa_val, step_op, subindices,
+                               props, pragmas)
 
         # extend context to include loop index
         ssa_vals[node.index] = loop.block.args[0]
-        
-        # TODO: add subindices to ctx
+
+        # Add subindices to lookup dict
         for i, uindex in enumerate(node.uindices):
             ssa_vals[uindex.name] = loop.block.args[i+1]
 
-        # visit the iteration body, adding ops to the loop body
+        # Visit the iteration body, adding ops to the loop body
+        # TODO: assert somehow the underlying structure of children
         myVisit(node.children[0][0], loop.block, ssa_vals)
 
-        # add loop to program
+        # Add loop to program
         block.add_op(loop)
         return
 
@@ -374,16 +374,18 @@ def myVisit(node, block: Block, ssa_vals={}):
     if isinstance(node, nodes.PointerCast):
         statement = node.ccode
 
-        assert node.defines[0]._C_name == node.obj._C_name, "This should not happen"
+        # Sanity check, maybe drop
+        assert node.defines[0] is node.obj
 
         # We want to know the dimensions of the u_vec->data result
         # we assume that the result will always be of dim:
         # (u_vec->size[i]) for some i
         # we further assume, that node.function.symbolic_shape
-        # is always (u_vec->size[0], u_vec->size[1], ... ,u_vec->size[rank])  
+        # is always (u_vec->size[0], u_vec->size[1], ... ,u_vec->size[rank])
         # this means that this pretty hacky way works to get the indices of the dims
         # in `u_vec->size`
-        shape = (node.function.symbolic_shape.index(shape) for shape in node.castshape)
+        # TODO: RENAME/REVAMP
+        shape = tuple(node.function.symbolic_shape.index(shape) for shape in node.castshape)
 
         arg = ssa_vals[node.function._C_name]
         pointer_cast = PointerCast.get(
@@ -460,10 +462,13 @@ def myVisit(node, block: Block, ssa_vals={}):
         block.add_ops([comment])
         return
 
-    #raise TypeError(f'Unsupported type of node: {type(node)}, {vars(node)}')
+    # raise TypeError(f'Unsupported type of node: {type(node)}, {vars(node)}')
 
 
 def get_arg_types(symbols):
+    """
+    Convert ctypes to mlir types
+    """
     processed = []
     for symbol in symbols:
         if isinstance(symbol, IndexedData):
@@ -486,6 +491,7 @@ def get_arg_types(symbols):
             processed.append(i32)
 
     return processed
+
 
 def memref_type_from_indexed_data(d: IndexedData):
     stype = dtypes_to_xdsltypes[d.dtype]
