@@ -1,5 +1,3 @@
-from matplotlib.pyplot import pause # noqa
-import matplotlib.pyplot as plt
 import numpy as np
 
 from devito import (Grid, Eq, TimeFunction, Operator, norm,
