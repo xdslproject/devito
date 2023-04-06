@@ -55,7 +55,7 @@ MAIN_MLIR_FILE_PIPELINE := "builtin.module(canonicalize, convert-scf-to-cf, conv
 %.cpu.o: PIPELINE = $(CPU_PIPELINE) 
 %.cpu.o: XDSL_PIPE = $(XDSL_CPU_PIPELINE)
 %.cpu.o: %.mlir 
-	xdsl-opt $< -t mlir -p $(XDSL_PIPE) | mlir-opt --pass-pipeline=$(PIPELINE) | mlir-translate --mlir-to-llvmir | $(CC) -x ir -c -o $@ - -O3 -march=native
+	xdsl-opt $< -t mlir -p $(XDSL_PIPE) | mlir-opt --pass-pipeline=$(PIPELINE) | mlir-translate --mlir-to-llvmir | sed -e 's/ptr %0, ptr %1/ptr noalias %0, ptr noalias %1/' | (echo 'target datalayout = "e-m:e-p270:32:32-p271:32:32-p272:64:64-i64:64-f80:128-n8:16:32:64-S128"' && echo 'target triple = "x86_64-unknown-linux-gnu"' ; cat) | opt -O3 -mcpu=znver3 -S --enable-unsafe-fp-math | $(CC) -x ir -c -o $@ - -O3 -march=native -ffast-math
 	
 # this compiles the main file to object
 %.main.o: %.main.mlir
@@ -84,6 +84,5 @@ clean:
 	rm -f *.data
 	rm -f *.out
 
-
 aaa: 3d_diff.out
-	aaa
+	echo aaa
