@@ -563,11 +563,10 @@ def generate_launcher_base(module: builtin.ModuleOp,
 "builtin.module"() ({{
     "func.func"() ({{
         %num_bytes = arith.constant {size_in_bytes} : index
-        %byte_ref = func.call @load_input(%num_bytes) : (index) -> memref<{size_in_bytes}xi8>
 
         %cst0 = arith.constant 0 : index
 
-        %t0 = memref.view %byte_ref[%cst0][] : memref<{size_in_bytes}xi8> to memref<{memref_type}>
+        %t0 = memref.alloc() : memref<{memref_type}>
         %t1 = memref.alloc() : memref<{memref_type}>
 
         %time_start = func.call @timer_start() : () -> i64
@@ -575,8 +574,6 @@ def generate_launcher_base(module: builtin.ModuleOp,
         func.call @myfunc(%t0, %t1) : (memref<{memref_type}>, memref<{memref_type}>) -> ()
 
         func.call @timer_end(%time_start) : (i64) -> ()
-
-        func.call @dump_memref_{dtype}_rank_{rank}(%t1) : (memref<{memref_type}>) -> ()
 
         func.return
 
