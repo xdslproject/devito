@@ -215,7 +215,7 @@ class ExtractDevitoStencilConversion:
             builtin.IndexType()
         )
         try:
-            step = arith.Constant.from_int_and_width(int(dim.symbolic_incr),
+            step = arith.Constant.from_int_and_width(int(dim.symbolic_incr) * 2,
                                                      builtin.IndexType())
             step.result.name = "step"
         except:
@@ -361,9 +361,14 @@ class _DevitoStencilToStencilStencil(RewritePattern):
     def match_and_rewrite(self, op: iet_ssa.Stencil, rewriter: PatternRewriter, /):
         rank = len(op.shape.data)
 
-        data = iet_ssa.LoadSymbolic.get('data', memref.MemRefType.from_element_type_and_shape(
-            memref.MemRefType.from_element_type_and_shape(op.field_type, [-1] * rank), [op.time_buffers.value.data]
-        ))
+        t0 = iet_ssa.LoadSymbolic.get('t0',
+            memref.MemRefType.from_element_type_and_shape(op.field_type, [-1] * rank)
+        )
+
+        t1 = iet_ssa.LoadSymbolic.get('t1',
+            memref.MemRefType.from_element_type_and_shape(op.field_type, [-1] * rank)
+        )
+
         lb = stencil.IndexAttr.get(*list(-halo_elm.data[0].value.data for halo_elm in op.halo.data))
         ub = stencil.IndexAttr.get(*list(shape_elm.value.data + halo_elm.data[1].value.data for shape_elm, halo_elm in zip(op.shape.data, op.halo.data)))
 
@@ -371,56 +376,45 @@ class _DevitoStencilToStencilStencil(RewritePattern):
             tuple(e.value.data for e in (ub - lb).array.data), op.field_type
         )
 
-        fields = list(
-            iet_ssa.GetField.get(data, t_idx, field_t, lb, ub)
-            for t_idx in (*op.input_indices, op.output)
-        )
-        # name the resulting fields
-        for field in fields:
-            field.field.name = f"{field.t_index.name}_w_size"
+        ext_load0 = stencil.ExternalLoadOp.get(t0, res_type=field_type_to_dynamic_shape_type(field_t))
+        cast0 = stencil.CastOp.get(ext_load0, lb, ub, field_t)
+        ext_load1 = stencil.ExternalLoadOp.get(t1, res_type=field_type_to_dynamic_shape_type(field_t))
+        cast1 = stencil.CastOp.get(ext_load1, lb, ub, field_t)
 
-        loads = list(
-            stencil.LoadOp.get(field)
-            for field in fields[:-1]
-        )
+        load0 = stencil.LoadOp.get(cast0)
+        load1 = stencil.LoadOp.get(cast1)
 
         rewriter.replace_matched_op([
             iet_ssa.Statement.get("// get data obj"),
-            data,
+            t1,
+            t0,
             iet_ssa.Statement.get("// get individual fields"),
-            *fields,
             iet_ssa.Statement.get("// stencil loads"),
-            *loads,
+            ext_load0,
+            cast0,
+            ext_load1,
+            cast1,
+            load0,
             out0 := stencil.ApplyOp.get(
-                loads, copy_block(op.body.blocks[0])
+                [load0], copy_block(op.body.blocks[0])
             ),
             stencil.StoreOp.get(
                 out0,
-                fields[-1],
+                cast1,
                 stencil.IndexAttr.get(*([0] * len(op.halo))),
                 stencil.IndexAttr.get(*op.shape.data),
             ),
+            load1,
             out1 := stencil.ApplyOp.get(
-                loads, op.body.detach_block(0)
+                [load1], op.body.detach_block(0)
             ),
             stencil.StoreOp.get(
                 out1,
-                fields[-1],
+                cast0,
                 stencil.IndexAttr.get(*([0] * len(op.halo))),
                 stencil.IndexAttr.get(*op.shape.data),
             )
         ])
-
-
-class _LowerGetField(RewritePattern):
-    @op_type_rewrite_pattern
-    def match_and_rewrite(self, op: iet_ssa.GetField, rewriter: PatternRewriter, /):
-        rewriter.replace_matched_op([
-            idx := arith.IndexCastOp.get(op.t_index, builtin.IndexType()),
-            ref := memref.Load.get(op.data, [idx]),
-            field := stencil.ExternalLoadOp.get(ref, res_type=field_type_to_dynamic_shape_type(op.field.typ)),
-            field_w_size := stencil.CastOp.get(field, op.lb, op.ub, op.field.typ)
-        ], [field_w_size.result])
 
 
 def field_type_to_dynamic_shape_type(t: stencil.FieldType):
@@ -494,7 +488,6 @@ class _LowerLoadSymbolidToFuncArgs(RewritePattern):
 def convert_devito_stencil_to_xdsl_stencil(module):
     grpa = GreedyRewritePatternApplier([
         _DevitoStencilToStencilStencil(),
-        _LowerGetField(),
         DropIetComments(),
         LowerIetForToScfFor(),
         ConvertScfForArgsToIndex(),
@@ -550,7 +543,7 @@ def generate_launcher_base(module: builtin.ModuleOp,
     PatternRewriteWalker(grpa).rewrite_module(module)
     f = module.ops[0]
     assert isinstance(f, func.FuncOp)
-    dtype: str = f.function_type.inputs.data[0].element_type.element_type.name
+    dtype: str = f.function_type.inputs.data[0].element_type.name
 
     t_dims = f.function_type.inputs.data[0].shape.data[0].value.data
 
@@ -572,22 +565,17 @@ def generate_launcher_base(module: builtin.ModuleOp,
         %byte_ref = func.call @load_input(%num_bytes) : (index) -> memref<{size_in_bytes}xi8>
 
         %cst0 = arith.constant 0 : index
-        %cst1 = arith.constant 1 : index
 
         %t0 = memref.view %byte_ref[%cst0][] : memref<{size_in_bytes}xi8> to memref<{memref_type}>
         %t1 = memref.alloc() : memref<{memref_type}>
-        %ref = memref.alloc() : memref<{t_dims}xmemref<{memref_type}>>
-
-        "memref.store"(%t0, %ref, %cst0) : (memref<{memref_type}>, memref<2xmemref<{memref_type}>>, index) -> ()
-        "memref.store"(%t1, %ref, %cst1) : (memref<{memref_type}>, memref<2xmemref<{memref_type}>>, index) -> ()
 
         %time_start = func.call @timer_start() : () -> i64
 
-        func.call @myfunc(%ref) : (memref<{t_dims}xmemref<{memref_type}>>) -> ()
+        func.call @myfunc(%t0, %t1) : (memref<{memref_type}>, memref<{memref_type}>) -> ()
 
         func.call @timer_end(%time_start) : (i64) -> ()
 
-        func.call @dump_memref_{dtype}_rank_{rank}(%t{last_time_m}) : (memref<{memref_type}>) -> ()
+        func.call @dump_memref_{dtype}_rank_{rank}(%t1) : (memref<{memref_type}>) -> ()
 
         func.return
 
@@ -600,6 +588,6 @@ def generate_launcher_base(module: builtin.ModuleOp,
 
     func.func private @timer_end(i64) -> ()
 
-    func.func private @myfunc(memref<{t_dims}xmemref<{memref_type}>>) -> ()
+    func.func private @myfunc(memref<{memref_type}>, memref<{memref_type}>) -> ()
 }}) : () -> ()
 """
