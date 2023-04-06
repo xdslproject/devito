@@ -181,7 +181,7 @@ struct i8_memref_r_1 load_input(size_t length) {
 }
 
 
-i64 timer_start() {
+float timer_start() {
   // return epoch in ms
   struct timespec t;
   clock_gettime(CLOCK_MONOTONIC, &t);
@@ -192,9 +192,9 @@ i64 timer_start() {
   return (float)(secs + nsecs)/1e6;
 }
 
-void timer_end(i64 start) {
+void timer_end(float start) {
   // print time elapsed time
-  i64 end = timer_start();
+  float end = timer_start();
   printf("End of time is: %.2f \n", end);
   float elapsed_time = (float)(end - start);
   printf("Elapsed time is: %.2f secs\n", (float) elapsed_time);

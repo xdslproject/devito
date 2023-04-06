@@ -569,11 +569,11 @@ def generate_launcher_base(module: builtin.ModuleOp,
         %t0 = memref.alloc() : memref<{memref_type}>
         %t1 = memref.alloc() : memref<{memref_type}>
 
-        %time_start = func.call @timer_start() : () -> i64
+        %time_start = func.call @timer_start() : () -> f32
 
         func.call @myfunc(%t0, %t1) : (memref<{memref_type}>, memref<{memref_type}>) -> ()
 
-        func.call @timer_end(%time_start) : (i64) -> ()
+        func.call @timer_end(%time_start) : (f32) -> ()
 
         func.return
 
@@ -582,9 +582,9 @@ def generate_launcher_base(module: builtin.ModuleOp,
     func.func private @dump_memref_{dtype}_rank_{rank}(memref<{memref_type}>) -> ()
     func.func private @load_input(index) -> memref<{size_in_bytes}xi8>
 
-    func.func private @timer_start() -> i64
+    func.func private @timer_start() -> f32
 
-    func.func private @timer_end(i64) -> ()
+    func.func private @timer_end(f32) -> ()
 
     func.func private @myfunc(memref<{memref_type}>, memref<{memref_type}>) -> ()
 }}) : () -> ()
