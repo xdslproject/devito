@@ -296,6 +296,17 @@ def _get_dim_offsets(idx: Indexed, t_offset: int) -> tuple:
 def is_int(val: SSAValue):
     return isinstance(val.typ, builtin.IntegerType)
 
+def copy_block(block):
+    value_mapper = {}
+    block_mapper = {}
+    new_block = Block()
+    block_mapper[block] = new_block
+    for idx, block_arg in enumerate(block.args):
+        new_block.insert_arg(block_arg.typ, idx)
+        value_mapper[block_arg] = new_block.args[idx]
+    for op in block.ops:
+        new_block.add_op(op.clone(value_mapper, block_mapper))
+    return new_block
 
 def is_float(val: SSAValue):
     return val.typ in (builtin.f32, builtin.f64)
@@ -372,6 +383,7 @@ class _DevitoStencilToStencilStencil(RewritePattern):
             stencil.LoadOp.get(field)
             for field in fields[:-1]
         )
+
         rewriter.replace_matched_op([
             iet_ssa.Statement.get("// get data obj"),
             data,
@@ -379,11 +391,20 @@ class _DevitoStencilToStencilStencil(RewritePattern):
             *fields,
             iet_ssa.Statement.get("// stencil loads"),
             *loads,
-            out := stencil.ApplyOp.get(
+            out0 := stencil.ApplyOp.get(
+                loads, copy_block(op.body.blocks[0])
+            ),
+            stencil.StoreOp.get(
+                out0,
+                fields[-1],
+                stencil.IndexAttr.get(*([0] * len(op.halo))),
+                stencil.IndexAttr.get(*op.shape.data),
+            ),
+            out1 := stencil.ApplyOp.get(
                 loads, op.body.detach_block(0)
             ),
             stencil.StoreOp.get(
-                out,
+                out1,
                 fields[-1],
                 stencil.IndexAttr.get(*([0] * len(op.halo))),
                 stencil.IndexAttr.get(*op.shape.data),
