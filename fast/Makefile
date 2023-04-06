@@ -19,7 +19,7 @@ MEMREF_TO_LLVM_PASS ?= convert-memref-to-llvm
 
 # No openmp pipeline
 # CPU_PIPELINE := "builtin.module(canonicalize, cse, loop-invariant-code-motion,  canonicalize, cse, convert-scf-to-cf, convert-math-to-llvm, convert-arith-to-llvm{index-bitwidth=64}, convert-func-to-llvm, convert-cf-to-llvm{index-bitwidth=64}, $(MEMREF_TO_LLVM_PASS){index-bitwidth=64}, reconcile-unrealized-casts, canonicalize, cse)"
-CPU_PIPELINE := "builtin.module(canonicalize, cse, loop-invariant-code-motion, canonicalize, cse, convert-scf-to-cf, convert-math-to-llvm, convert-arith-to-llvm{index-bitwidth=64}, convert-func-to-llvm, convert-cf-to-llvm{index-bitwidth=64}, expand-strided-metadata,$(MEMREF_TO_LLVM_PASS){index-bitwidth=64}, reconcile-unrealized-casts, canonicalize, cse)"
+CPU_PIPELINE := "builtin.module(canonicalize, cse, loop-invariant-code-motion, convert-scf-to-openmp, canonicalize, cse, convert-scf-to-cf, convert-math-to-llvm, convert-arith-to-llvm{index-bitwidth=64}, convert-openmp-to-llvm, convert-func-to-llvm, convert-cf-to-llvm{index-bitwidth=64}, expand-strided-metadata,$(MEMREF_TO_LLVM_PASS){index-bitwidth=64}, reconcile-unrealized-casts, canonicalize, cse)"
 
 GPU_PIPELINE := "builtin.module(test-math-algebraic-simplification,scf-parallel-loop-tiling{parallel-loop-tile-sizes=1024,1,1}, canonicalize, func.func(gpu-map-parallel-loops), convert-parallel-loops-to-gpu, lower-affine, gpu-kernel-outlining,func.func(gpu-async-region),canonicalize,convert-arith-to-llvm{index-bitwidth=64},${MEMREF_TO_LLVM_PASS}{index-bitwidth=64},convert-scf-to-cf,convert-cf-to-llvm{index-bitwidth=64},gpu.module(convert-gpu-to-nvvm,reconcile-unrealized-casts,canonicalize,gpu-to-cubin),gpu-to-llvm,canonicalize)"
 
@@ -85,3 +85,5 @@ clean:
 	rm -f *.out
 
 
+aaa: 3d_diff.out
+	aaa
