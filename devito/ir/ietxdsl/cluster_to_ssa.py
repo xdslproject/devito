@@ -361,16 +361,17 @@ class _DevitoStencilToStencilStencil(RewritePattern):
     def match_and_rewrite(self, op: iet_ssa.Stencil, rewriter: PatternRewriter, /):
         rank = len(op.shape.data)
 
+        lb = stencil.IndexAttr.get(*list(-halo_elm.data[0].value.data for halo_elm in op.halo.data))
+        ub = stencil.IndexAttr.get(*list(shape_elm.value.data + halo_elm.data[1].value.data for shape_elm, halo_elm in zip(op.shape.data, op.halo.data)))
+        sizes = tuple(e.value.data for e in (ub - lb).array.data)
+
         t0 = iet_ssa.LoadSymbolic.get('t0',
-            memref.MemRefType.from_element_type_and_shape(op.field_type, [-1] * rank)
+            memref.MemRefType.from_element_type_and_shape(op.field_type, sizes)
         )
 
         t1 = iet_ssa.LoadSymbolic.get('t1',
-            memref.MemRefType.from_element_type_and_shape(op.field_type, [-1] * rank)
+            memref.MemRefType.from_element_type_and_shape(op.field_type, sizes)
         )
-
-        lb = stencil.IndexAttr.get(*list(-halo_elm.data[0].value.data for halo_elm in op.halo.data))
-        ub = stencil.IndexAttr.get(*list(shape_elm.value.data + halo_elm.data[1].value.data for shape_elm, halo_elm in zip(op.shape.data, op.halo.data)))
 
         field_t = stencil.FieldType.from_shape(
             tuple(e.value.data for e in (ub - lb).array.data), op.field_type
