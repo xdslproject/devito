@@ -121,12 +121,12 @@ if len(shape) == 3:
     if args.plot:
         plot_3dfunc(u)
 
-devito_norm = norm(u)
-print("Init linalg norm 0 (inlined) :", norm(u))
-print("Init linalg norm 0 :", np.linalg.norm(u.data[0]))
-print("Init linalg norm 1 :", np.linalg.norm(u.data[1]))
-print("Init linalg norm 2 :", np.linalg.norm(u.data[2]))
-print("Norm of initial data:", np.linalg.norm(u.data[:]))
+# devito_norm = norm(u)
+# print("Init linalg norm 0 (inlined) :", norm(u))
+print("Init linalg norm 0 :", np.linalg.norm(u.data[0]),
+      "Init linalg norm 1 :", np.linalg.norm(u.data[1]),
+      "Init linalg norm 2 :", np.linalg.norm(u.data[2]),
+      "Norm of initial data:", np.linalg.norm(u.data[:]))
 
 configuration['mpi'] = 0
 u2.data[:] = u.data[:]
@@ -140,6 +140,9 @@ if len(shape) == 3:
     if args.plot:
         plot_3dfunc(u)
 
+# import os
+
+# os.environ['DEVITO_MPI'] = '1'
 #devito_output = u.data[:]
 print("After Operator 1: Devito norm:", np.linalg.norm(u.data[:]))
 print("Devito linalg norm 0:", np.linalg.norm(u.data[0]))
@@ -147,7 +150,7 @@ print("Devito linalg norm 1:", np.linalg.norm(u.data[1]))
 print("Devito linalg norm 2:", np.linalg.norm(u.data[2]))
 
 # Reset initial data
-configuration['mpi'] = 0
+# configuration['mpi'] = 0
 u.data[:] = u2.data[:]
 configuration['mpi'] = 'basic'
 #v[:, ..., :] = 1
@@ -168,4 +171,3 @@ print(f"xdsl output norm: {norm(xdsl_output)}")
 print("XDSL output linalg norm 0:", np.linalg.norm(u.data[0]))
 print("XDSL output linalg norm 1:", np.linalg.norm(u.data[1]))
 print("XDSL output linalg norm 2:", np.linalg.norm(u.data[2]))
-print("devito-norm:", devito_norm)
