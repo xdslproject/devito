@@ -6,6 +6,7 @@ import argparse
 import numpy as np
 
 from devito import Grid, TimeFunction, Eq, solve, Operator, Constant, norm, XDSLOperator
+from devito.operator.wgpu_operator import WGPUOperator
 from examples.cfd import init_hat
 from fast.bench_utils import plot_2dfunc
 
@@ -23,6 +24,7 @@ parser.add_argument("-bls", "--blevels", default=2, type=int, nargs="+",
                     help="Block levels")
 parser.add_argument("-plot", "--plot", default=False, type=bool, help="Plot2D")
 parser.add_argument("-devito", "--devito", default=False, type=bool, help="Devito run")
+parser.add_argument("-wgpu", "--wgpu", default=False, type=bool, help="WGPU run")
 parser.add_argument("-xdsl", "--xdsl", default=False, type=bool, help="xDSL run")
 args = parser.parse_args()
 
@@ -57,6 +59,14 @@ if args.devito:
     op = Operator([eq_stencil], name='DevitoOperator', opt=('advanced', {'par-tile': (32,4,8)}))
     op.apply(time=nt, dt=dt, a=nu)
     print("Devito Field norm is:", norm(u))
+
+    if args.plot:
+        plot_2dfunc(u)
+
+if args.wgpu:
+    op = WGPUOperator([eq_stencil], name='WGPUOperator', opt=('advanced', {'par-tile': (32,4,8)}))
+    op.apply(time=nt, dt=dt, a=nu)
+    print("WGPU Field norm is:", norm(u))
 
     if args.plot:
         plot_2dfunc(u)

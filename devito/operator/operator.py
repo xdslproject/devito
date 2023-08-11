@@ -146,7 +146,7 @@ class Operator(Callable):
         kwargs = parse_kwargs(**kwargs)
         
         # Terrible hack, but necessary because devito is cursed.
-        is_xdsl = 'xdsl' in cls.__name__.lower()
+        is_xdsl = 'xdsl' in cls.__name__.lower() or 'wgpu' in cls.__name__.lower()
         # Save _build and _lower classes
         _build = cls._build
 

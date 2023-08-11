@@ -7,6 +7,7 @@ import numpy as np
 
 from devito import (Grid, TimeFunction, Eq, solve, Operator, Constant,
                     norm, XDSLOperator)
+from devito.operator.wgpu_operator import WGPUOperator
 from fast.bench_utils import plot_3dfunc
 
 parser = argparse.ArgumentParser(description='Process arguments.')
@@ -23,6 +24,7 @@ parser.add_argument("-bls", "--blevels", default=2, type=int, nargs="+",
                     help="Block levels")
 parser.add_argument("-plot", "--plot", default=False, type=bool, help="Plot3D")
 parser.add_argument("-devito", "--devito", default=False, type=bool, help="Devito run")
+parser.add_argument("-wgpu", "--wgpu", default=False, type=bool, help="WGPU run")
 parser.add_argument("-xdsl", "--xdsl", default=False, type=bool, help="xDSL run")
 args = parser.parse_args()
 
@@ -60,6 +62,17 @@ if args.devito:
     # Apply the operator for a number of timesteps
     op.apply(time=nt, dt=dt, a=nu)
     print("Devito Field norm is:", norm(u))
+    if args.plot:
+        plot_3dfunc(u)
+
+if args.wgpu:
+    # Reset field
+    u.data[:, :, :, :] = 0
+    u.data[:, :, :, int(nz/2)] = 1
+    xdslop = WGPUOperator([eq_stencil], name='xDSLOperator')
+    # Apply the xdsl operator for a number of timesteps
+    xdslop.apply(time=nt, dt=dt, a=nu)
+    print("XDSL Field norm is:", norm(u))
     if args.plot:
         plot_3dfunc(u)
 
