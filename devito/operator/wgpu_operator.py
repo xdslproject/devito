@@ -25,8 +25,6 @@ from devito.tools import OrderedSet, as_tuple, flatten, filter_sorted
 from devito.types import Evaluable, TimeFunction
 from devito.types.mlir_types import ptr_of, f32
 
-from mpi4py import MPI
-
 from xdsl.ir import MLContext
 from xdsl.tools.command_line_tool import get_all_dialects
 from xdsl.passes import ModulePass
