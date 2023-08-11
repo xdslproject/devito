@@ -99,7 +99,7 @@ class XDSLOperator(Operator):
         #ccode = transform_devito_xdsl_string(self)
         #self.ccode = ccode
         with self._profiler.timer_on('jit-compile'):
-            is_mpi = os.environ.get("DEVITO_MPI", 0) != '0'
+            is_mpi = os.environ.get("DEVITO_MPI", '0') != '0'
             is_gpu = os.environ.get("DEVITO_PLATFORM", None) == 'nvidiaX'
             is_omp = os.environ.get("DEVITO_LANGUAGE", None) == 'openmp'
 
