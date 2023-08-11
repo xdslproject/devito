@@ -1,6 +1,9 @@
 from math import prod
 import timeit
 from typing import cast
+
+from cffi import FFI
+from wgpu.backends.rs_ffi import lib as wgpulib
 from devito import Operator
 from devito.ir.ietxdsl import transform_devito_to_iet_ssa, iet_to_standard_mlir, finalize_module_with_globals
 from devito.logger import perf
@@ -115,6 +118,7 @@ class WGPUOperator(Operator):
                     gpuargs.append(buf)
                 with self._profiler.timer_on('wgpu-apply'):
                     res = interpreter.run_ssacfg_region(func.body, gpuargs)
+                    wgpulib.wgpuDevicePoll(wgpuf.device._internal, True, FFI.NULL)
                 e = self._profiler.py_timers['wgpu-apply']
                 c_double_p = ctypes.POINTER(ctypes.c_double)
                 ctypes.cast(args[-1], c_double_p).contents.value = e
