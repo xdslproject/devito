@@ -61,7 +61,7 @@ if args.devito:
     op = Operator([eq_stencil], name='DevitoOperator', opt=('advanced', {'par-tile': (32,4,8)}))
     # Apply the operator for a number of timesteps
     op.apply(time=nt, dt=dt, a=nu)
-    print("Devito Field norm is:", norm(u))
+    print("Devito Field norm is:", np.linalg.norm(u.data))
     if args.plot:
         plot_3dfunc(u)
 
@@ -69,10 +69,10 @@ if args.wgpu:
     # Reset field
     u.data[:, :, :, :] = 0
     u.data[:, :, :, int(nz/2)] = 1
-    xdslop = WGPUOperator([eq_stencil], name='xDSLOperator')
-    # Apply the xdsl operator for a number of timesteps
-    xdslop.apply(time=nt, dt=dt, a=nu)
-    print("XDSL Field norm is:", norm(u))
+    wgpuop = WGPUOperator([eq_stencil], name='WGPUOperator')
+    # Apply the wgpu operator for a number of timesteps
+    wgpuop.apply(time=nt, dt=dt, a=nu)
+    print("WGPU Field norm is:", np.linalg.norm(u.data))
     if args.plot:
         plot_3dfunc(u)
 
@@ -80,9 +80,9 @@ if args.xdsl:
     # Reset field
     u.data[:, :, :, :] = 0
     u.data[:, :, :, int(nz/2)] = 1
-    xdslop = XDSLOperator([eq_stencil], name='xDSLOperator')
+    wgpuop = XDSLOperator([eq_stencil], name='xDSLOperator')
     # Apply the xdsl operator for a number of timesteps
-    xdslop.apply(time=nt, dt=dt, a=nu)
-    print("XDSL Field norm is:", norm(u))
+    wgpuop.apply(time=nt, dt=dt, a=nu)
+    print("XDSL Field norm is:", np.linalg.norm(u.data))
     if args.plot:
         plot_3dfunc(u)
