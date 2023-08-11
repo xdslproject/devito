@@ -58,7 +58,7 @@ init_hat(field=u.data[0], dx=dx, dy=dy, value=1.)
 if args.devito:
     op = Operator([eq_stencil], name='DevitoOperator', opt=('advanced', {'par-tile': (32,4,8)}))
     op.apply(time=nt, dt=dt, a=nu)
-    print("Devito Field norm is:", norm(u))
+    print("Devito Field norm is:", np.linalg.norm(u.data))
 
     if args.plot:
         plot_2dfunc(u)
@@ -66,7 +66,7 @@ if args.devito:
 if args.wgpu:
     op = WGPUOperator([eq_stencil], name='WGPUOperator', opt=('advanced', {'par-tile': (32,4,8)}))
     op.apply(time=nt, dt=dt, a=nu)
-    print("WGPU Field norm is:", norm(u))
+    print("WGPU Field norm is:", np.linalg.norm(u.data))
 
     if args.plot:
         plot_2dfunc(u)
@@ -77,4 +77,4 @@ init_hat(field=u.data[0], dx=dx, dy=dy, value=1.)
 if args.xdsl:
     xdslop = XDSLOperator([eq_stencil], name='XDSLOperator')
     xdslop.apply(time=nt, dt=dt, a=nu)
-    print("XDSL Field norm is:", norm(u))
+    print("XDSL Field norm is:", np.linalg.norm(u.data))

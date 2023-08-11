@@ -5,6 +5,7 @@ import numpy as np
 
 from devito import (TimeFunction, Eq, Operator, solve, norm,
                     XDSLOperator, configuration, Grid)
+from devito.operator.wgpu_operator import WGPUOperator
 from examples.seismic import RickerSource
 from examples.seismic import Model, TimeAxis, plot_image
 from fast.bench_utils import plot_3dfunc
@@ -29,6 +30,7 @@ parser.add_argument("-bls", "--blevels", default=1, type=int, nargs="+",
 parser.add_argument("-plot", "--plot", default=False, type=bool, help="Plot2D")
 parser.add_argument("-devito", "--devito", default=False, type=bool, help="Devito run")
 parser.add_argument("-xdsl", "--xdsl", default=False, type=bool, help="xDSL run")
+parser.add_argument("-wgpu", "--wgpu", default=False, type=bool, help="xDSL run")
 args = parser.parse_args()
 
 
@@ -72,7 +74,7 @@ stencil = Eq(u.forward, solve(pde, u.forward))
 # print("Init Devito linalg norm 0 :", np.linalg.norm(u.data[0]))
 # print("Init Devito linalg norm 1 :", np.linalg.norm(u.data[1]))
 # print("Init Devito linalg norm 2 :", np.linalg.norm(u.data[2]))
-# print("Norm of initial data:", norm(u))
+# print("Norm of initial data:", np.linalg.norm(u.data))
 
 configuration['mpi'] = 0
 u2.data[:] = u.data[:]
@@ -106,10 +108,26 @@ if args.devito:
     if len(shape) == 3 and args.plot:
         plot_3dfunc(u)
 
-    print("Devito norm:", norm(u))
+    print("Devito norm:", np.linalg.norm(u.data))
     # print("Devito linalg norm 0:", np.linalg.norm(u.data[0]))
     # print("Devito linalg norm 1:", np.linalg.norm(u.data[1]))
     # print("Devito linalg norm 2:", np.linalg.norm(u.data[2]))
+
+
+if args.wgpu:
+
+    # Run more with no sources now (Not supported in xdsl)
+    xdslop = WGPUOperator([stencil], name='WGPUOperator')
+    xdslop.apply(time=nt, dt=dt)
+
+    if len(shape) == 3 and args.plot:
+        plot_3dfunc(u)
+
+    print("XDSL norm:", np.linalg.norm(u.data))
+
+    # print("XDSL output norm 0:", np.linalg.norm(u.data[0]))
+    # print("XDSL output norm 1:", np.linalg.norm(u.data[1]))
+    # print("XDSL output norm 2:", np.linalg.norm(u.data[2]))
 
 
 if args.xdsl:
@@ -121,7 +139,7 @@ if args.xdsl:
     if len(shape) == 3 and args.plot:
         plot_3dfunc(u)
 
-    print("XDSL norm:", norm(u))
+    print("XDSL norm:", np.linalg.norm(u.data))
 
     # print("XDSL output norm 0:", np.linalg.norm(u.data[0]))
     # print("XDSL output norm 1:", np.linalg.norm(u.data[1]))

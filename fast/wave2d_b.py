@@ -5,6 +5,7 @@ import numpy as np
 
 from devito import (TimeFunction, Eq, Operator, solve, norm,
                     XDSLOperator, configuration, Grid)
+from devito.operator.wgpu_operator import WGPUOperator
 from examples.seismic import RickerSource
 from examples.seismic import Model, TimeAxis, plot_image
 from fast.bench_utils import plot_2dfunc
@@ -29,6 +30,7 @@ parser.add_argument("-bls", "--blevels", default=1, type=int, nargs="+",
 parser.add_argument("-plot", "--plot", default=False, type=bool, help="Plot2D")
 parser.add_argument("-devito", "--devito", default=False, type=bool, help="Devito run")
 parser.add_argument("-xdsl", "--xdsl", default=False, type=bool, help="xDSL run")
+parser.add_argument("-wgpu", "--wgpu", default=False, type=bool, help="xDSL run")
 args = parser.parse_args()
 
 
@@ -94,6 +96,24 @@ if args.devito:
     # Run more with no sources now (Not supported in xdsl)
     # op1 = Operator([stencil], name='DevitoOperator', subs=grid.spacing_map)
     op1 = Operator([stencil], name='DevitoOperator')
+    op1.apply(time=nt, dt=dt)
+
+    configuration['mpi'] = 0
+    ub.data[:] = u.data[:]
+    configuration['mpi'] = mpiconf
+
+    if len(shape) == 2 and args.plot:
+        plot_2dfunc(u)
+
+    print("Devito norm:", norm(u))
+    # print("Devito linalg norm 0:", np.linalg.norm(u.data[0]))
+    # print("Devito linalg norm 1:", np.linalg.norm(u.data[1]))
+    # print("Devito linalg norm 2:", np.linalg.norm(u.data[2]))
+
+if args.wgpu:
+    # Run more with no sources now (Not supported in xdsl)
+    # op1 = Operator([stencil], name='DevitoOperator', subs=grid.spacing_map)
+    op1 = WGPUOperator([stencil], name='WGPUOperator')
     op1.apply(time=nt, dt=dt)
 
     configuration['mpi'] = 0
