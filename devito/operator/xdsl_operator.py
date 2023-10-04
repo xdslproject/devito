@@ -48,8 +48,11 @@ double timer_end(double start) {
 
 CFLAGS = "-O3 -march=native -mtune=native -lmlir_c_runner_utils"
 
-MLIR_CPU_PIPELINE = '"builtin.module(canonicalize, cse, loop-invariant-code-motion, canonicalize, cse, loop-invariant-code-motion,cse,canonicalize,fold-memref-alias-ops,expand-strided-metadata, loop-invariant-code-motion,lower-affine,convert-scf-to-cf,convert-math-to-llvm,convert-func-to-llvm{use-bare-ptr-memref-call-conv},finalize-memref-to-llvm,canonicalize,cse)"'
-MLIR_OPENMP_PIPELINE = '"builtin.module(canonicalize, cse, loop-invariant-code-motion, fold-memref-alias-ops, loop-invariant-code-motion, lower-affine, finalize-memref-to-llvm, loop-invariant-code-motion, canonicalize, cse, convert-scf-to-openmp, finalize-memref-to-llvm, convert-scf-to-cf, convert-func-to-llvm{use-bare-ptr-memref-call-conv}, convert-openmp-to-llvm, convert-math-to-llvm, reconcile-unrealized-casts, canonicalize, cse)"'
+
+def MLIR_CPU_PIPELINE(openmp: bool):
+    return ('"builtin.module(canonicalize, cse, loop-invariant-code-motion, fold-memref-alias-ops, loop-invariant-code-motion, lower-affine, finalize-memref-to-llvm, loop-invariant-code-motion, canonicalize, cse, '
+            f'{"convert-scf-to-openmp, " if openmp else ""}'
+            'finalize-memref-to-llvm, convert-scf-to-cf, convert-func-to-llvm{use-bare-ptr-memref-call-conv}, convert-openmp-to-llvm, convert-math-to-llvm, reconcile-unrealized-casts, canonicalize, cse)"')
 MLIR_GPU_PIPELINE = lambda block_sizes: f'"builtin.module(test-math-algebraic-simplification,scf-parallel-loop-tiling{{parallel-loop-tile-sizes={block_sizes}}},func.func(gpu-map-parallel-loops),convert-parallel-loops-to-gpu,lower-affine, canonicalize,cse, fold-memref-alias-ops, gpu-launch-sink-index-computations, gpu-kernel-outlining, canonicalize{{region-simplify}},cse,fold-memref-alias-ops,expand-strided-metadata,lower-affine,canonicalize,cse,func.func(gpu-async-region),canonicalize,cse,convert-arith-to-llvm{{index-bitwidth=64}},convert-scf-to-cf,convert-cf-to-llvm{{index-bitwidth=64}},canonicalize,cse,convert-func-to-llvm{{use-bare-ptr-memref-call-conv}},gpu.module(convert-gpu-to-nvvm,reconcile-unrealized-casts,canonicalize,gpu-to-cubin),gpu-to-llvm,canonicalize,cse)"'
 
 XDSL_CPU_PIPELINE = lambda nb_tiled_dims: f'"stencil-shape-inference,convert-stencil-to-ll-mlir{{tile-sizes={",".join(["64"]*nb_tiled_dims)}}},printf-to-llvm"'
@@ -120,13 +123,11 @@ class XDSLOperator(Operator):
             to_tile = len(list(filter(lambda s : str(s) in ["x", "y", "z"], self.dimensions)))-1
 
             xdsl_pipeline = XDSL_CPU_PIPELINE(to_tile)
-            mlir_pipeline = MLIR_CPU_PIPELINE
 
             block_sizes: list[int] = [min(target, self._jit_kernel_constants.get(f"{dim}_size", 1)) for target, dim in zip([32, 4, 8], ["x", "y", "z"])]
             block_sizes = ','.join(str(bs) for bs in block_sizes)
 
-            if is_omp:
-                mlir_pipeline = MLIR_OPENMP_PIPELINE
+            mlir_pipeline = MLIR_CPU_PIPELINE(is_omp)
 
             if is_mpi:
                 shape, mpi_rank = self.mpi_shape
