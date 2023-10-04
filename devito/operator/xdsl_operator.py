@@ -21,8 +21,6 @@ from devito.tools import OrderedSet, as_tuple, flatten, filter_sorted
 from devito.types import Evaluable, TimeFunction
 from devito.types.mlir_types import ptr_of, f32
 
-from mpi4py import MPI
-
 from xdsl.printer import Printer
 
 __all__ = ['XDSLOperator']
@@ -102,9 +100,10 @@ class XDSLOperator(Operator):
         #ccode = transform_devito_xdsl_string(self)
         #self.ccode = ccode
         with self._profiler.timer_on('jit-compile'):
-            is_mpi = MPI.Is_initialized()
+            is_mpi = self._options['mpi']
+            # TODO This one is less clear from what I see in self._options..
             is_gpu = os.environ.get("DEVITO_PLATFORM", None) == 'nvidiaX'
-            is_omp = os.environ.get("DEVITO_LANGUAGE", None) == 'openmp'
+            is_omp = self._options['openmp']
 
             if is_mpi and is_gpu:
                 raise RuntimeError("Cannot run MPI+GPU for now!")
