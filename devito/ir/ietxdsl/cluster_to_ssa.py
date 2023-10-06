@@ -184,7 +184,7 @@ class ExtractDevitoStencilConversion:
             else:
                 raise ValueError("Expected float or int as pow args!")
 
-            op = op_cls.get(base, ex)
+            op = op_cls(base, ex)
             self.block.add_op(op)
             return op.result
 

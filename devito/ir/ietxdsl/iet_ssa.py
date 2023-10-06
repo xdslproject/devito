@@ -364,7 +364,7 @@ class For(IRDLOperation):
 
     subindices: IntAttr = attr_def(IntAttr)
 
-    properties: ArrayAttr[builtin.StringAttr] = attr_def(ArrayAttr[builtin.StringAttr])
+    props: ArrayAttr[builtin.StringAttr] = attr_def(ArrayAttr[builtin.StringAttr])
     pragmas: ArrayAttr[builtin.StringAttr] = attr_def(ArrayAttr[builtin.StringAttr])
 
     def subindice_ssa_vals(self) -> tuple[SSAValue, ...]:
@@ -380,7 +380,7 @@ class For(IRDLOperation):
         Return either "parallel" or "sequential" (or None),
         depending on the properties present
         """
-        for attr in self.properties.data:
+        for attr in self.props.data:
             if attr.data in ('parallel', 'sequential'):
                 return attr.data
         return None
@@ -405,7 +405,7 @@ class For(IRDLOperation):
         for i in range(subindices):
             body.blocks[0].args[i+1].name_hint = f"{loop_var_name[0]}{i}"
 
-        return For.build(
+        return For(
             operands=[lb, ub, step],
             attributes={
                 'subindices': IntAttr(subindices),
