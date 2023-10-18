@@ -42,12 +42,7 @@ to = args.time_order
 
 print("dx %s, dy %s, dz %s" % (dx, dy, dz))
 
-topology = None
-#xDSL only handles 2D domain decomposition right now
-if args.xdsl:
-    topology = ('*', '*', 1)
-
-grid = Grid(shape=(nx, ny, nz), extent=(2., 2., 2.), topology=topology)
+grid = Grid(shape=(nx, ny, nz), extent=(2., 2., 2.))
 u = TimeFunction(name='u', grid=grid, space_order=so)
 
 a = Constant(name='a')
