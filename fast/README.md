@@ -4,40 +4,36 @@ This folder is where benchmarking and correctness checks will happen in.
 
 ## Structure
 
-Each benchmark has a `name`, and it's devito definition is stored in `name.py`.
+Each benchmark has a `name`, and it's devito definition is stored in a python script `<name>.py`.
+Those are:
 
-All intermediate files discussed in this section are valid `make` targets, to enable partial compilation and result inspection.
+- wave2d_b
+- wave3d_b
+- diffusion_2D
+- diffusion_3D
 
-Running this file with `-xdsl` will generate all the stencil source files and input data.
-The initial data will be stored in `<name>.input.data`, the stencil source in `<name>.main.mlir` and the "driver" file containing the main and timers in `<name>.mlir`.
+Slurm batch files are provided to reproduce the experiments from the paper on ARCHER2 in slurm-jobs.
 
-The kernel file is then compiled to either `<name>.cpu.o` or `<name>.gpu.o`. This is controllable using the `MODE` variabe: `make 2d5pt.out MODE=gpu`
-
-The main file is compiled to `main.o`, and the `interop.c` file is compiled to `<name>.interop.o`, to read the `<name>.input.data` file and write to the correct output.
-
-The `<name>.out` file, the actual executable, is then compiled from these three object files.
-
-Running devito and saving the output in `<name>.devito.data` is also a valid makefile target.
-
-Finally, the `<name>.bench` will run both devito and the stencil version and compare the results.
+- `diffusion-X.slurm` / `wave-X.slurm` run the corresponding script distributed among X nodes.
 
 ## Usage
 
-Passing options to the benchmark files is done with the `BENCH_OPTS="..."` variable for make.
+Each python script has:
+- a `-d` flag, expecting the size of the grid on which to execute the stencil operators.
+- a `-nt` flag, expecting the number of iterations to execute.
+- a `-so` flag, expecting a space discretization order. we used 2, 4 and 8 in our experiments.
 
-`make -B 2d5pt.bench BENCH_OPTS="-d 100 100 -nt 100" MODE=CPU`
-`make -B 3d_diff.bench BENCH_OPTS="-d 100 100 100 -nt 100" MODE=CPU`
+To run the Devito implementation, run the script with `--devito 1`.
 
+To run the xDSL implementation, run the script with `--xdsl 1`.
 
-To conclude, running the `2d5pt` example on `gpu` and compare the results, use:
+⚠️ Because of runtime environment incompabilities, please always run each implementation seprately to measure performance.
 
-`make 2d5pt.bench BENCH_OPTS="-d 1000 1000 -nt 1000" MODE=gpu`
+`setup_wave2d.py` and `setup_wave3d.py` are provided to set up the necessary data to run the corresponding scripts. Run them first with the same `-d <size> -so <space-order>` to generate the expected files.
 
-Current modes are: `cpu`(default), `openmp`, `gpu` and `mpi`
+TODO: put data comparison in-place when using devito and xdsl?
 
-## ToDos:
-
-- Controlling devito omp flags / gpu usage is currently not done in the `Makefile`
+To plot the final values, run the script with `--plot 1`.
 
 ## Passing environment variables to devito/omp
 
@@ -46,7 +42,6 @@ Prefixing the `make` command with `NAME=val` will make the variable `NAME` avail
 Example:
 
 ```bash
-DEVITO_ARCH=gcc DEVITO_LANGUAGE=openmp DEVITO_LOGGING=DEBUG python 3d_diff.py -d 300 300 300 -nt 300 -xdsl
-DEVITO_ARCH=gcc DEVITO_LANGUAGE=openmp DEVITO_LOGGING=DEBUG python 3d_diff.py -d 300 300 300 -nt 300
-make 3d_diff.bench BENCH_OPTS="-d 300 300 300 -nt 300" MODE=cpu
+DEVITO_ARCH=gcc DEVITO_LANGUAGE=openmp DEVITO_LOGGING=DEBUG python diffusion_3D.py -d 300 300 300 -nt 300 --xdsl 1
+DEVITO_ARCH=gcc DEVITO_LANGUAGE=openmp DEVITO_LOGGING=DEBUG python diffusion_3D.py -d 300 300 300 -nt 300 --devito 1
 ```
