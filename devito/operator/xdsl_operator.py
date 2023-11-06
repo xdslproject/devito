@@ -2,7 +2,6 @@ import os
 import subprocess
 import ctypes
 import tempfile
-import numpy as np
 
 from math import ceil
 from collections import OrderedDict, namedtuple
@@ -19,10 +18,11 @@ from devito.ir.clusters import ClusterGroup, clusterize
 from devito.ir.equations import LoweredEq, lower_exprs
 from devito.ir.iet import (Callable, CInterface, EntryFunction, FindSymbols, MetaCall,
                            derive_parameters, iet_build)
-from devito.ir.ietxdsl import transform_devito_to_iet_ssa, iet_to_standard_mlir, finalize_module_with_globals
+from devito.ir.ietxdsl import finalize_module_with_globals
 from devito.ir.stree import stree_build
 from devito.ir.support import AccessMode, SymbolRegistry
-from devito.ir.ietxdsl.cluster_to_ssa import (ExtractDevitoStencilConversion,           convert_devito_stencil_to_xdsl_stencil)
+from devito.ir.ietxdsl.cluster_to_ssa import (ExtractDevitoStencilConversion,
+                                              convert_devito_stencil_to_xdsl_stencil)
 from devito.logger import debug, info, perf, warning, is_log_enabled_for
 from devito.operator.operator import IRs
 from devito.operator.profiling import AdvancedProfilerVerbose, create_profile
@@ -31,15 +31,13 @@ from devito.passes import (Graph, lower_index_derivatives, generate_implicit,
                            generate_macros, minimize_symbols, unevaluate)
 from devito.passes.iet import CTarget
 from devito.symbolics import estimate_cost
-from devito.tools import (DAG, OrderedSet, Signer, ReducerMap, as_tuple, flatten,
-                          filter_sorted, frozendict, is_integer, split, timed_pass,
-                          timed_region, contains_val)
+from devito.tools import (DAG, OrderedSet, ReducerMap, as_tuple, flatten, filter_sorted,
+                          frozendict, is_integer, split, timed_pass, contains_val)
 from devito.types import Evaluable, TimeFunction, Grid
 from devito.types.mlir_types import ptr_of, f32
 from devito.mpi import MPI
 
 from xdsl.printer import Printer
-
 
 
 __all__ = ['XDSLOperator']
@@ -75,9 +73,9 @@ XDSL_GPU_PIPELINE = "stencil-shape-inference,convert-stencil-to-ll-mlir{target=g
 XDSL_MPI_PIPELINE = lambda decomp, nb_tiled_dims: f'"dmp-decompose{decomp},canonicalize-dmp,convert-stencil-to-ll-mlir{{tile-sizes={",".join(["64"]*nb_tiled_dims)}}},dmp-to-mpi{{mpi_init=false}},lower-mpi,printf-to-llvm"'
 
 
-
 class XDSLOperator(Operator):
 
+    # Drop redundant headers/includes/globals
     #_default_headers = [('_POSIX_C_SOURCE', '200809L')]
     #_default_includes = ['stdlib.h', 'math.h', 'sys/time.h']
     #_default_globals = []
@@ -86,9 +84,11 @@ class XDSLOperator(Operator):
 
     def __new__(cls, expressions, **kwargs):
         self = super(XDSLOperator, cls).__new__(cls, expressions, **kwargs)
+        # TOADD comment on this
         delete = not os.getenv("XDSL_SKIP_CLEAN", False)
         self._tf = tempfile.NamedTemporaryFile(prefix="devito-jit-", suffix='.so', delete=delete)
-        self._interop_tf = tempfile.NamedTemporaryFile(prefix="devito-jit-interop-", suffix=".o", delete=delete)
+        self._interop_tf = tempfile.NamedTemporaryFile(prefix="devito-jit-interop-",
+                                                       suffix=".o", delete=delete)
         self._make_interop_o()
         self.__class__ = cls
         return self
@@ -140,7 +140,7 @@ class XDSLOperator(Operator):
             Printer(stream=module_str).print(self._module)
             module_str = module_str.getvalue()
 
-            to_tile = len(list(filter(lambda s : str(s) in ["x", "y", "z"], self.dimensions)))-1
+            to_tile = len(list(filter(lambda s: str(s) in ["x", "y", "z"], self.dimensions)))-1
 
             xdsl_pipeline = XDSL_CPU_PIPELINE(to_tile)
             mlir_pipeline = MLIR_CPU_PIPELINE
@@ -179,7 +179,8 @@ class XDSLOperator(Operator):
             source_file = open(source_name, "w")
             source_file.write(module_str)
             source_file.close()
-            # compile IR using xdsl-opt | mlir-opt | mlir-translate | clang
+
+            # Compile IR using xdsl-opt | mlir-opt | mlir-translate | clang
             try:
                 cflags = CFLAGS
                 cc = "clang"
