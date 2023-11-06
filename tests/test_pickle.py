@@ -449,7 +449,8 @@ class TestBasic(object):
         assert np.all(new_rec.coordinates.data == [[0.], [1.], [2.]])
 
 
-@pytest.mark.xfail(reason="Cannot deal with pickling the Operator until XDSLoperator is revamped")
+@pytest.mark.xfail(reason="Cannot deal with pickling the Operator "
+                   "until XDSLoperator is revamped")
 @pytest.mark.parametrize('pickle', [pickle0, pickle1])
 class TestOperator(object):
 
