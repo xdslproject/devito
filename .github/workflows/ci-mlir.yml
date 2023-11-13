@@ -5,11 +5,13 @@ name: CI - MLIR-based Testing
 
 on:
   # Trigger the workflow on push or pull request,
-  # but only for the main branch
+  # but only for the master branch
   push:
     branches:
-      - main
+      - master
   pull_request:
+    branches:
+      - master
   workflow_dispatch:
 
 jobs:
@@ -41,11 +43,12 @@ jobs:
     - name: Upgrade pip
       run: |
         pip install --upgrade pip
-    - name: Install the package locally and nbval
+
+    - name: Install requirements and xDSL
       run: |
-        # Change directory so that xdsl-opt can be found during installation.
-        cd xdsl
         pip install -r requirements.txt
+        pip install xdsl
+
     - name: Cache binaries
       id: cache-binary
       uses: actions/cache@v3
@@ -84,11 +87,13 @@ jobs:
           -DCMAKE_BUILD_TYPE=Release \
           -DLLVM_ENABLE_ASSERTIONS=OFF \
           -DLLVM_BINUTILS_INCDIR=/usr/include
+
     - name: MLIR Build
       if: steps.cache-binary.outputs.cache-hit != 'true'
       run: |
         cd llvm-project/build
         cmake --build . --target mlir-opt mlir-cpu-runner
+
     - name: Test with pytest and generate code coverage
       run: |
         cd xdsl

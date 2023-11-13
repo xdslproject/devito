@@ -7,6 +7,8 @@ import numpy as np
 
 from devito import (Grid, TimeFunction, Eq, solve, Operator, Constant,
                     norm, XDSLOperator, configuration)
+from devito.logger import info, warning
+
 from fast.bench_utils import plot_3dfunc
 
 parser = argparse.ArgumentParser(description='Process arguments.')
@@ -42,7 +44,7 @@ dt = sigma * dx * dz * dy / nu
 so = args.space_order
 to = args.time_order
 
-print("dx %s, dy %s, dz %s" % (dx, dy, dz))
+# print("dx %s, dy %s, dz %s" % (dx, dy, dz))
 
 grid = Grid(shape=(nx, ny, nz), extent=(2., 2., 2.))
 u = TimeFunction(name='u', grid=grid, space_order=so)
@@ -89,4 +91,7 @@ if args.xdsl:
         plot_3dfunc(u)
 
 if args.xdsl and args.devito:
-    print("Max error: ", np.max(np.abs(u.data - devito_out.data)))
+    assert np.isclose(norm(u), norm(devito_out), rtol=1e-5)
+    max_error = np.max(np.abs(u.data - devito_out.data))
+    assert np.isclose(norm(u), norm(devito_out), rtol=1e-5)
+   
