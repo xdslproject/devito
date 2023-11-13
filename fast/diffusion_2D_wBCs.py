@@ -93,4 +93,4 @@ if args.xdsl:
 if args.xdsl and args.devito:
     assert np.isclose(norm(u), norm(devito_out), rtol=1e-5)
     max_error = np.max(np.abs(u.data - devito_out.data))
-    assert np.isclose(norm(u), norm(devito_out), rtol=1e-5)
+    print("Max error: ", max_error)

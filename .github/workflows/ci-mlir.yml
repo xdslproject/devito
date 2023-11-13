@@ -24,10 +24,11 @@ jobs:
     env:
       LLVM_SYMBOLIZER_PATH: /usr/lib/llvm-11/bin/llvm-symbolizer
       MLIR-Version: 04fc02e583b06b846315904a55af9c273c8b20b9
+
     steps:
-    - uses: actions/checkout@v3
-      with:
-        path: xdsl
+    - name: Checkout Devito
+      uses: actions/checkout@v3
+
 
     - name: Install native dependencies
       uses: awalsh128/cache-apt-pkgs-action@latest
@@ -46,8 +47,8 @@ jobs:
 
     - name: Install requirements and xDSL
       run: |
-        pip install -r requirements.txt
-        pip install xdsl
+        pip install -e .[tests]
+        pip install xdsl==0.14
 
     - name: Cache binaries
       id: cache-binary
@@ -94,26 +95,12 @@ jobs:
         cd llvm-project/build
         cmake --build . --target mlir-opt mlir-cpu-runner
 
+    - name: ADD TO PATH
+      run: |
+        cd xdsl
+        # Add mlir-opt to the path
+        export PATH=$PATH:${GITHUB_WORKSPACE}/llvm-project/build/bin/
+
     - name: Test with pytest and generate code coverage
       run: |
-        cd xdsl
-        pytest -W error --cov --cov-config=.coveragerc .
-    - name: Execute lit tests
-      run: |
-        cd xdsl
-        # Add mlir-opt to the path
-        export PATH=$PATH:${GITHUB_WORKSPACE}/llvm-project/build/bin/
-        lit -v tests/filecheck/ -DCOVERAGE
-        lit -v docs/Toy/examples/ -DCOVERAGE
-    - name: Test MLIR dependent examples/tutorials
-      run: |
-        cd xdsl
-        # Add mlir-opt to the path
-        export PATH=$PATH:${GITHUB_WORKSPACE}/llvm-project/build/bin/
-        pytest --nbval docs/mlir_interoperation.ipynb --maxfail 1 -vv
-    - name: Combine coverage data
-      run: |
-        cd xdsl
-        coverage combine --append
-        coverage report
-        coverage xml
+        pytest -W error -m "not parallel" -k "not adjoint" tests/
