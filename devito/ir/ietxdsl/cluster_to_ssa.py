@@ -180,7 +180,7 @@ class ExtractDevitoStencilConversion:
             else:
                 raise ValueError("Expected float or int as pow args!")
 
-            op = op_cls.get(base, ex)
+            op = op_cls(base, ex)
             self.block.add_op(op)
             return op.result
 
@@ -378,7 +378,7 @@ class MakeFunctionTimed(RewritePattern):
         assert ret is not None
 
         rewriter.insert_op_before([
-            timers := iet_ssa.LoadSymbolic.get('timers', llvm.LLVMPointerType.typed(builtin.f64)),
+            timers := iet_ssa.LoadSymbolic.get('timers', llvm.LLVMPointerType.opaque()),
             t1 := func.Call('timer_end', [t0], [builtin.f64]),
             llvm.StoreOp(t1, timers),
         ], ret)
@@ -452,7 +452,7 @@ class _DevitoStencilToStencilStencil(RewritePattern):
                     stencil.IndexAttr.get(*([0] * rank)),
                     stencil.IndexAttr.get(*op.shape),
                 ),
-                scf.Yield.get(op.output, *op.input_indices),
+                scf.Yield(op.output, *op.input_indices),
             ]
         )
 
