@@ -81,9 +81,9 @@ MLIR_OPENMP_PIPELINE = '"builtin.module(canonicalize, cse, loop-invariant-code-m
 # gpu-launch-sink-index-computations seemed to have no impact
 MLIR_GPU_PIPELINE = lambda block_sizes: f'"builtin.module(test-math-algebraic-simplification,scf-parallel-loop-tiling{{parallel-loop-tile-sizes={block_sizes}}},func.func(gpu-map-parallel-loops),convert-parallel-loops-to-gpu,lower-affine, canonicalize,cse, fold-memref-alias-ops, gpu-launch-sink-index-computations, gpu-kernel-outlining, canonicalize{{region-simplify}},cse,fold-memref-alias-ops,expand-strided-metadata,lower-affine,canonicalize,cse,func.func(gpu-async-region),canonicalize,cse,convert-arith-to-llvm{{index-bitwidth=64}},convert-scf-to-cf,convert-cf-to-llvm{{index-bitwidth=64}},canonicalize,cse,convert-func-to-llvm{{use-bare-ptr-memref-call-conv}},nvvm-attach-target{{O=3 ftz fast chip=sm_{get_nvidia_cc()}}},gpu.module(convert-gpu-to-nvvm,canonicalize,cse),gpu-to-llvm,gpu-module-to-binary,canonicalize,cse)"'
 
-XDSL_CPU_PIPELINE = lambda nb_tiled_dims: f'"stencil-shape-inference,convert-stencil-to-ll-mlir{{{generate_tiling_arg(nb_tiled_dims)}}},printf-to-llvm,canonicalize"'
-XDSL_GPU_PIPELINE = "stencil-shape-inference,convert-stencil-to-ll-mlir{target=gpu},reconcile-unrealized-casts,printf-to-llvm,canonicalize"
-XDSL_MPI_PIPELINE = lambda decomp, nb_tiled_dims: f'"distribute-stencil{decomp},canonicalize-dmp,convert-stencil-to-ll-mlir{{{generate_tiling_arg(nb_tiled_dims)}}},dmp-to-mpi{{mpi_init=false}},lower-mpi,printf-to-llvm,canonicalize"'
+XDSL_CPU_PIPELINE = lambda nb_tiled_dims: f'"stencil-shape-inference,stencil-unroll{{unroll-factor=8,1}},convert-stencil-to-ll-mlir{{{generate_tiling_arg(nb_tiled_dims)}}},printf-to-llvm,canonicalize"'
+XDSL_GPU_PIPELINE = "stencil-shape-inference,stencil-unroll{{unroll-factor=8,1}},convert-stencil-to-ll-mlir{target=gpu},reconcile-unrealized-casts,printf-to-llvm,canonicalize"
+XDSL_MPI_PIPELINE = lambda decomp, nb_tiled_dims: f'"distribute-stencil{decomp},canonicalize-dmp,stencil-unroll{{unroll-factor=8,1}},convert-stencil-to-ll-mlir{{{generate_tiling_arg(nb_tiled_dims)}}},dmp-to-mpi{{mpi_init=false}},lower-mpi,printf-to-llvm,canonicalize"'
 
 
 class XDSLOperator(Operator):
