@@ -636,20 +636,14 @@ class XdslAdvOperator(XdslnoopOperator):
 
                 # xdsl-opt, get xDSL IR
                 # TODO: Remove quotes in pipeline; currently workaround with [1:-1]
-                xdsl = xDSLOptMain(args=[source_name, "-p", xdsl_pipeline[1:-1]])
+                xdsl = xDSLOptMain(args=[source_name, "--allow-unregistered-dialect", "-p", xdsl_pipeline[1:-1]+f',mlir-opt{{arguments="--mlir-print-op-generic","-p",{mlir_pipeline}}}'])
                 out = io.StringIO()
                 with redirect_stdout(out):
                     xdsl.run()
 
-                # mlir-opt
-                mlir_cmd = f'mlir-opt -p {mlir_pipeline}'
-                out = self.compile(mlir_cmd, out.getvalue())
-
-                # Printer().print(out)
-
                 mlir_translate_cmd = 'mlir-translate --mlir-to-llvmir'
-                out = self.compile(mlir_translate_cmd, out)
-                # Printer().print(out)
+                out = self.compile(mlir_translate_cmd, out.getvalue())
+                Printer().print(out)
 
                 # Compile with clang and get LLVM-IR
                 clang_cmd = f'{cc} {cflags} -o {self._tf.name} {self._interop_tf.name} -xir -'  # noqa
