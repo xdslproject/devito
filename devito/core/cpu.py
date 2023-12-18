@@ -636,7 +636,11 @@ class XdslAdvOperator(XdslnoopOperator):
 
                 # xdsl-opt, get xDSL IR
                 # TODO: Remove quotes in pipeline; currently workaround with [1:-1]
-                xdsl = xDSLOptMain(args=[source_name, "--allow-unregistered-dialect", "-p", xdsl_pipeline[1:-1]+f',mlir-opt{{arguments="--mlir-print-op-generic","-p",{mlir_pipeline}}}'])
+                xdsl = xDSLOptMain(args=[source_name,
+                                         "--allow-unregistered-dialect",
+                                         "-p",
+                                         xdsl_pipeline[1:-1] +
+                                         f',mlir-opt{{arguments="--mlir-print-op-generic","-p",{mlir_pipeline}}}'])  # noqa
                 out = io.StringIO()
                 with redirect_stdout(out):
                     xdsl.run()
