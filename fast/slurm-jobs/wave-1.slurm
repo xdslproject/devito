@@ -20,11 +20,11 @@
 #    process/thread pinning may be incorrect leading to poor performance
 export SRUN_CPUS_PER_TASK=$SLURM_CPUS_PER_TASK
 
-export TMPDIR=/work/d011/d011/shared/temp/
+export TMPDIR=/mnt/lustre/a2fs-nvme/work/d011/d011/shared/temp/
 
-export SHARED=/work/d011/d011/shared
+export SHARED=/mnt/lustre/a2fs-nvme/work/d011/d011/shared
 module use $SHARED/modules
-module load sc-23
+module load sc-23/props-nvme
 module load cray-mpich
 
 
