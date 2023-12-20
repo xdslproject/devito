@@ -9,7 +9,6 @@ from devito.tools import as_tuple
 import argparse
 np.set_printoptions(threshold=np.inf)
 
-
 parser = argparse.ArgumentParser(description='Process arguments.')
 
 parser.add_argument("-d", "--shape", default=(16, 16, 16), type=int, nargs="+",
