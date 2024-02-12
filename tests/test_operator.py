@@ -1883,7 +1883,6 @@ class TestLoopScheduling(object):
         op0 = Operator(eqns0, opt=('xdsl', {'openmp': True}))
         op0.apply()
 
-
         class DummyBarrier(sympy.Function, Barrier):
             pass
 

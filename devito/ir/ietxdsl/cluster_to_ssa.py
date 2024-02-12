@@ -18,7 +18,7 @@ from xdsl.pattern_rewriter import (
 )
 
 # ------------- devito imports -------------#
-from devito import Grid, SteppingDimension, TimeDimension
+from devito import Grid, SteppingDimension, TimeDimension, Eq
 from devito.ir.equations import LoweredEq
 from devito.symbolics import retrieve_indexed, retrieve_function_carriers
 from devito.logger import perf
@@ -71,7 +71,7 @@ class ExtractDevitoStencilConversion:
 
         # Get offsets and shift all time values so that for all accesses at t + n, n>=0.
         rindexeds = retrieve_indexed(eq.rhs)
-        lindexeds = retrieve_indexed(eq.rhs)
+        lindexeds = retrieve_indexed(eq.lhs)
 
         if rindexeds[0].function.is_TimeFunction:
             if rindexeds[0].function.time_dim.is_Stepping:
@@ -81,19 +81,27 @@ class ExtractDevitoStencilConversion:
 
         # emit return
         offsets = _get_dim_offsets(eq.lhs, self.time_offs)
+        import pdb;pdb.set_trace()
       
         # Get the time_size
         func_carriers = retrieve_function_carriers(eq)
+
+        buffer_accesses = set()
+        for i in func_carriers:
+            buffer_accesses.add(i.indices[0])
 
         try:
             time_size = max(d.function.time_size for d in func_carriers)
         except AttributeError:
             print("Function does not have time_size")
-        
-        
+
+        if time_size != len(buffer_accesses):
+            time_size = len(buffer_accesses)
+
         # Build the for loop
         perf("Build Time Loop")
         loop = self._build_iet_for(grid.stepping_dim, time_size)
+        import pdb;pdb.set_trace()
 
         # build stencil
         perf("Initialize a stencil Op")
@@ -108,18 +116,14 @@ class ExtractDevitoStencilConversion:
         self.block.add_op(stencil_op)
         self.block = stencil_op.block
 
-        # dims -> ssa vals
-        perf("Apply time offsets")
-        time_offset_to_field: dict[str, SSAValue] = {}
-        for i in range(time_size - 1):
-            time_offset_to_field[i] = stencil_op.block.args[i]
+
 
         # reset loaded values
         self.loaded_values: dict[tuple[int, ...], SSAValue] = dict()
 
         # add all loads into the stencil
         perf("Add stencil Loads")
-        self._add_access_ops(retrieve_indexed(eq.rhs), time_offset_to_field)
+        self._add_access_ops(eq, stencil_op, time_size)
 
         # add math
         perf("Visiting math equations")
@@ -210,8 +214,23 @@ class ExtractDevitoStencilConversion:
 
 
     def _add_access_ops(
-        self, reads: list[Indexed], time_offset_to_field: dict[int, SSAValue]
+        self, eq: Eq, stencil_op: iet_ssa.Stencil, time_size: int
     ):
+
+        import pdb;pdb.set_trace()
+        # dims -> ssa vals
+        perf("Apply time offsets")
+        time_offset_to_field: dict[str, SSAValue] = {}
+        for i in range(time_size):
+            time_offset_to_field[i] = stencil_op.block.args[i]
+
+
+        # Get reads of the RHS
+        writes = retrieve_indexed(eq.lhs)
+        reads = retrieve_indexed(eq.rhs)
+
+        # import pdb;pdb.set_trace()
+
         for read in reads:
             """
             AccessOp:
@@ -222,6 +241,8 @@ class ExtractDevitoStencilConversion:
             """
             # get the compile time constant offsets for this read
             offsets = _get_dim_offsets(read, self.time_offs)
+
+            # import pdb;pdb.set_trace()
             
             if offsets in self.loaded_values:
                 continue
@@ -303,7 +324,9 @@ class ExtractDevitoStencilConversion:
 def _get_dim_offsets(idx: Indexed, t_offset: int) -> tuple:
     # shift all time values so that for all accesses at t + n, n>=0.
     # time_offs = min(int(i - d) for i, d in zip(idx.indices, idx.function.dimensions))
-    halo = ((t_offset, 0), *idx.function.halo[1:])
+    import pdb;pdb.set_trace()
+    # halo = ((t_offset, 0), *idx.function.halo[1:])
+    halo = (idx.function.halo)
 
     try:
         return tuple(
