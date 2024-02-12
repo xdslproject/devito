@@ -18,7 +18,7 @@ from xdsl.pattern_rewriter import (
 )
 
 # ------------- devito imports -------------#
-from devito import Grid, SteppingDimension
+from devito import Grid, SteppingDimension, TimeDimension
 from devito.ir.equations import LoweredEq
 from devito.symbolics import retrieve_indexed, retrieve_function_carriers
 from devito.logger import perf
@@ -69,14 +69,27 @@ class ExtractDevitoStencilConversion:
         # (for derivative regions)
         halo = [function.halo[d] for d in grid.dimensions]
 
-        # Shift all time values so that for all accesses at t + n, n>=0.
-        
-        indexeds = retrieve_indexed(eq.rhs)
-        self.time_offs = int(indexeds[0].indices[0] - grid.stepping_dim)
-       
+        # Get offsets and shift all time values so that for all accesses at t + n, n>=0.
+        rindexeds = retrieve_indexed(eq.rhs)
+        lindexeds = retrieve_indexed(eq.rhs)
+
+        if rindexeds[0].function.is_TimeFunction:
+            if rindexeds[0].function.time_dim.is_Stepping:
+                self.time_offs = int(rindexeds[0].indices[0] - grid.stepping_dim)
+            else:
+                self.time_offs = int(rindexeds[0].indices[0] - grid.time_dim)
+
+        # emit return
+        offsets = _get_dim_offsets(eq.lhs, self.time_offs)
+      
         # Get the time_size
         func_carriers = retrieve_function_carriers(eq)
-        time_size = max(d.function.time_size for d in func_carriers)
+
+        try:
+            time_size = max(d.function.time_size for d in func_carriers)
+        except AttributeError:
+            print("Function does not have time_size")
+        
         
         # Build the for loop
         perf("Build Time Loop")
@@ -97,9 +110,9 @@ class ExtractDevitoStencilConversion:
 
         # dims -> ssa vals
         perf("Apply time offsets")
-        time_offset_to_field: dict[str, SSAValue] = {
-            i: stencil_op.block.args[i] for i in range(time_size - 1)
-        }
+        time_offset_to_field: dict[str, SSAValue] = {}
+        for i in range(time_size - 1):
+            time_offset_to_field[i] = stencil_op.block.args[i]
 
         # reset loaded values
         self.loaded_values: dict[tuple[int, ...], SSAValue] = dict()
@@ -112,12 +125,10 @@ class ExtractDevitoStencilConversion:
         perf("Visiting math equations")
         rhs_result = self._visit_math_nodes(eq.rhs)
 
-        # emit return
-        offsets = _get_dim_offsets(eq.lhs, self.time_offs)
-
         assert (
             offsets[0] == time_size - 1
         ), "result should be written to last time buffer"
+
         assert all(
             o == 0 for o in offsets[1:]
         ), f"can only write to offset [0,0,0], given {offsets[1:]}"
@@ -216,6 +227,8 @@ class ExtractDevitoStencilConversion:
                 continue
 
             # Assume time dimension is first dimension
+            assert read.function.is_TimeFunction
+
             t_offset = offsets[0]
             space_offsets = offsets[1:]
 
