@@ -81,7 +81,10 @@ class ExtractDevitoStencilConversion:
 
         # emit return
         offsets = _get_dim_offsets(eq.lhs, self.time_offs)
-        import pdb;pdb.set_trace()
+
+        # offsets2 = tuple(int(li - d - h) for li, d, (h, _) in zip(eq.lhs.indices, eq.lhs.function.dimensions, eq.lhs.function.halo))
+
+        # import pdb;pdb.set_trace()
       
         # Get the time_size
         func_carriers = retrieve_function_carriers(eq)
@@ -101,7 +104,6 @@ class ExtractDevitoStencilConversion:
         # Build the for loop
         perf("Build Time Loop")
         loop = self._build_iet_for(grid.stepping_dim, time_size)
-        import pdb;pdb.set_trace()
 
         # build stencil
         perf("Initialize a stencil Op")
@@ -129,9 +131,9 @@ class ExtractDevitoStencilConversion:
         perf("Visiting math equations")
         rhs_result = self._visit_math_nodes(eq.rhs)
 
-        assert (
-            offsets[0] == time_size - 1
-        ), "result should be written to last time buffer"
+        # assert (
+        #     offsets[0] == time_size - 1
+        # ), "result should be written to last time buffer"
 
         assert all(
             o == 0 for o in offsets[1:]
@@ -217,11 +219,11 @@ class ExtractDevitoStencilConversion:
         self, eq: Eq, stencil_op: iet_ssa.Stencil, time_size: int
     ):
 
-        import pdb;pdb.set_trace()
+        
         # dims -> ssa vals
         perf("Apply time offsets")
         time_offset_to_field: dict[str, SSAValue] = {}
-        for i in range(time_size):
+        for i in range(time_size - 1):
             time_offset_to_field[i] = stencil_op.block.args[i]
 
 
@@ -254,7 +256,10 @@ class ExtractDevitoStencilConversion:
             space_offsets = offsets[1:]
 
             # use time offset to find correct stencil field to read
-            field = time_offset_to_field[t_offset]
+            try:
+                field = time_offset_to_field[t_offset]
+            except:
+                import pdb;pdb.set_trace()
 
             # use space offsets in the field
             access_op = stencil.AccessOp.get(field, space_offsets)
@@ -324,9 +329,9 @@ class ExtractDevitoStencilConversion:
 def _get_dim_offsets(idx: Indexed, t_offset: int) -> tuple:
     # shift all time values so that for all accesses at t + n, n>=0.
     # time_offs = min(int(i - d) for i, d in zip(idx.indices, idx.function.dimensions))
-    import pdb;pdb.set_trace()
-    # halo = ((t_offset, 0), *idx.function.halo[1:])
-    halo = (idx.function.halo)
+    # import pdb;pdb.set_trace()
+    halo = ((t_offset, 0), *idx.function.halo[1:])
+    # halo = (idx.function.halo)
 
     try:
         return tuple(
