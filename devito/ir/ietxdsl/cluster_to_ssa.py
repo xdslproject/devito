@@ -90,11 +90,11 @@ class ExtractDevitoStencilConversion:
         rbufs = set()
         bufs = set()
 
-        for i in retrieve_function_carriers(eq):
+        for i in func_carriers:
             bufs.add(i.indices[0])
-        for i in retrieve_function_carriers(eq.lhs):
+        for i in lindexeds:
             lbufs.add(i.indices[0])
-        for i in retrieve_function_carriers(eq.rhs):
+        for i in rindexeds:
             rbufs.add(i.indices[0])
 
         rbufs = sorted(rbufs)
@@ -118,6 +118,7 @@ class ExtractDevitoStencilConversion:
 
         perf("Initialize a stencil Op")
         stencil_op = iet_ssa.Stencil.get(
+            # Redundant, used for debugging
             loop.subindice_ssa_vals(),
             inputs,
             output,
