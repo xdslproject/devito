@@ -33,7 +33,7 @@ from devito.ir.ietxdsl.lowering import LowerIetForToScfFor
 
 class ExtractDevitoStencilConversion:
     """
-    Lower Devito equations to the stencil dialect
+    A class to Lower Devito equations to the stencil dialect
     """
 
     eqs: list[LoweredEq]
@@ -49,7 +49,7 @@ class ExtractDevitoStencilConversion:
     def _convert_eq(self, eq: LoweredEq):
         # Convert a Devito equation to a func.func op
         # an equation may look like this:
-        #  u[x+1,y+1,z] = (u[x,y,z+1] + u[x+2,y+2,z+1]) / 2
+        # u[x+1,y+1,z] = (u[x,y,z+1] + u[x+2,y+2,z+1]) / 2
         if isinstance(eq.lhs, Symbol):
             return func.FuncOp.external(eq.lhs.name, [], [builtin.i32])
         assert isinstance(eq.lhs, Indexed)
@@ -57,12 +57,12 @@ class ExtractDevitoStencilConversion:
         outermost_block = Block([])
         self.block = outermost_block
 
-        # u(t, x, y)
+        # Get the function we write to
         function = eq.lhs.function
         mlir_type = dtypes_to_xdsltypes[function.dtype]
         grid: Grid = function.grid
 
-        # Get the halo of the grid.dimensions
+        # Get the halo of the grid.dimensions (space only)
         # e.g [(2, 2), (2, 2)] for the 2D case
         # Do not forget the issue with Devito adding an extra point!
         # Check 'def halo_setup' for more
@@ -81,34 +81,46 @@ class ExtractDevitoStencilConversion:
 
         # emit return
         offsets = _get_dim_offsets(eq.lhs, self.time_offs)
-
-        # offsets2 = tuple(int(li - d - h) for li, d, (h, _) in zip(eq.lhs.indices, eq.lhs.function.dimensions, eq.lhs.function.halo))
-
-        # import pdb;pdb.set_trace()
-      
+     
         # Get the time_size
         func_carriers = retrieve_function_carriers(eq)
 
-        buffer_accesses = set()
-        for i in func_carriers:
-            buffer_accesses.add(i.indices[0])
+        
+        lbufs = set()
+        rbufs = set()
+        bufs = set()
+
+        for i in retrieve_function_carriers(eq):
+            bufs.add(i.indices[0])
+        for i in retrieve_function_carriers(eq.lhs):
+            lbufs.add(i.indices[0])
+        for i in retrieve_function_carriers(eq.rhs):
+            rbufs.add(i.indices[0])
+
+        rbufs = sorted(rbufs)
 
         try:
             time_size = max(d.function.time_size for d in func_carriers)
         except AttributeError:
             print("Function does not have time_size")
 
-        if time_size != len(buffer_accesses):
-            time_size = len(buffer_accesses)
-
         # Build the for loop
         perf("Build Time Loop")
         loop = self._build_iet_for(grid.stepping_dim, time_size)
 
-        # build stencil
+        bufs = sorted(bufs)
+        mapper = {}
+        for key, value in zip(bufs, loop.subindice_ssa_vals()):
+            mapper[key] = value
+
+        inputs = list([mapper[i] for i in rbufs])
+        output = mapper[sorted(lbufs)[0]]
+
         perf("Initialize a stencil Op")
         stencil_op = iet_ssa.Stencil.get(
             loop.subindice_ssa_vals(),
+            inputs,
+            output,
             grid.shape_local,
             halo,
             time_size,
@@ -214,11 +226,8 @@ class ExtractDevitoStencilConversion:
         else:
             raise NotImplementedError(f"Unknown math: {node}", node)
 
-
     def _add_access_ops(
-        self, eq: Eq, stencil_op: iet_ssa.Stencil, time_size: int
-    ):
-
+        self, eq: Eq, stencil_op: iet_ssa.Stencil, time_size: int):
         
         # dims -> ssa vals
         perf("Apply time offsets")
@@ -259,7 +268,8 @@ class ExtractDevitoStencilConversion:
             try:
                 field = time_offset_to_field[t_offset]
             except:
-                import pdb;pdb.set_trace()
+                print("Time offset not computed correctly!")
+                # import pdb;pdb.set_trace()
 
             # use space offsets in the field
             access_op = stencil.AccessOp.get(field, space_offsets)
@@ -269,8 +279,7 @@ class ExtractDevitoStencilConversion:
             self.loaded_values[offsets] = access_op.res
 
     def _build_iet_for(
-        self, dim: SteppingDimension, subindices: int
-    ) -> iet_ssa.For:
+        self, dim: SteppingDimension, subindices: int) -> iet_ssa.For:
         # Build a for loop in the custom iet_ssa.py using lower-upper bound and step
         lb = iet_ssa.LoadSymbolic.get(dim.symbolic_min._C_name, builtin.IndexType())
         ub = iet_ssa.LoadSymbolic.get(dim.symbolic_max._C_name, builtin.IndexType())
@@ -290,7 +299,7 @@ class ExtractDevitoStencilConversion:
         return loop
 
     def convert(self) -> builtin.ModuleOp:
-        # Lower equations to a ModuleOp
+        # Lower all equations (self.eqs) to a ModuleOp
         return builtin.ModuleOp(
             Region([Block([self._convert_eq(eq) for eq in self.eqs])])
         )

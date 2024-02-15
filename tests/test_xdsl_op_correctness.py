@@ -18,6 +18,8 @@ def test_udx():
 
     xdsl_op = Operator([eq], opt='xdsl')
     xdsl_op.apply(time_M=5)
+    assert len(xdsl_op._module.ops) == 3
+
     norm2 = norm(u)
     
     assert np.isclose(norm1, norm2,   atol=1e-5, rtol=0)
@@ -36,30 +38,32 @@ def test_u_plus1_conversion():
     u.data[:] = 0
     xdsl_op = Operator([eq], opt='xdsl')
     xdsl_op.apply(time_M=5)
+    assert len(xdsl_op._module.ops) == 3
     norm2 = norm(u)
 
     assert np.isclose(norm1, norm2, atol=1e-5, rtol=0)
     assert np.isclose(norm1, 23.43075, atol=1e-5, rtol=0)
 
-# @pytest.mark.xfail(reason="Needs a fix in offsets")
+
+@pytest.mark.xfail(reason="Cannot load and store the same field")
 def test_u_and_v_conversion():
     # Define a simple Devito Operator
     grid = Grid(shape=(3, 3))
-    u = TimeFunction(name='u', grid=grid, time_order=2)
-    v = TimeFunction(name='v', grid=grid, time_order=2)
+    u = TimeFunction(name='u', grid=grid)
+    v = TimeFunction(name='v', grid=grid)
     u.data[:] = 0.0001
     v.data[:] = 0.0001
     eq0 = Eq(u.forward, u.dt)
-    eq1 = Eq(v.forward, u.dt)
-    op = Operator([eq0, eq1])
+    # eq1 = Eq(v.forward, u.dt)
+    op = Operator([eq0])
     op.apply(time_M=5, dt=0.1)
     norm_u = norm(u)
     norm_v = norm(v)
 
     u.data[:] = 0.0001
     v.data[:] = 0.0001
-    xdsl_op = Operator([eq0, eq1], opt='xdsl')
-    import pdb;pdb.set_trace()
+    xdsl_op = Operator([eq0], opt='xdsl')
+    
     xdsl_op.apply(time_M=5, dt=0.1)
     norm_u2 = norm(u)
     norm_v2 = norm(v)

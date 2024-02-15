@@ -415,6 +415,8 @@ class Stencil(IRDLOperation):
     @staticmethod
     def get(
         time_indices: Sequence[SSAValue | Operation],
+        inputs: Sequence[SSAValue | Operation],
+        output: Sequence[SSAValue | Operation],
         shape: Sequence[int],
         halo: Sequence[Sequence[int]],
         time_buffers: int,
@@ -424,8 +426,9 @@ class Stencil(IRDLOperation):
         assert len(halo) == len(shape)
         assert all(len(inner) == 2 for inner in halo)
 
-        *inputs, output = time_indices
+        *inputs2, output2 = time_indices
         assert len(time_indices) == time_buffers
+
         block = Block(
             arg_types=[
                 stencil.TempType(len(shape), typ)
