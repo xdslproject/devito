@@ -269,7 +269,7 @@ class ExtractDevitoStencilConversion:
                 field = time_offset_to_field[t_offset]
             except:
                 print("Time offset not computed correctly!")
-                # import pdb;pdb.set_trace()
+                import pdb;pdb.set_trace()
 
             # use space offsets in the field
             access_op = stencil.AccessOp.get(field, space_offsets)
