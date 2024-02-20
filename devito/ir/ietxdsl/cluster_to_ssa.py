@@ -54,6 +54,7 @@ class ExtractDevitoStencilConversion:
             return func.FuncOp.external(eq.lhs.name, [], [builtin.i32])
         assert isinstance(eq.lhs, Indexed)
 
+        import pdb;pdb.set_trace()
         outermost_block = Block([])
         self.block = outermost_block
 
@@ -116,6 +117,7 @@ class ExtractDevitoStencilConversion:
         inputs = list([mapper[i] for i in rbufs])
         output = mapper[sorted(lbufs)[0]]
 
+        import pdb;pdb.set_trace()
         perf("Initialize a stencil Op")
         stencil_op = iet_ssa.Stencil.get(
             # Redundant, used for debugging
@@ -137,6 +139,7 @@ class ExtractDevitoStencilConversion:
 
         # add all loads into the stencil
         perf("Add stencil Loads")
+        import pdb;pdb.set_trace()
         self._add_access_ops(eq, stencil_op, time_size)
 
         # add math
@@ -232,7 +235,8 @@ class ExtractDevitoStencilConversion:
         # dims -> ssa vals
         perf("Apply time offsets")
         time_offset_to_field: dict[str, SSAValue] = {}
-        for i in range(time_size - 1):
+        # for i in range(time_size - 1):
+        for i in range(time_size):
             time_offset_to_field[i] = stencil_op.block.args[i]
 
 
@@ -478,6 +482,9 @@ class _DevitoStencilToStencilStencil(RewritePattern):
             load_op.res.name_hint = field.name_hint + "_temp"
             input_temps.insert(0, load_op.res)
 
+        import pdb;pdb.set_trace()
+        from devito.tools import OrderedSet
+        yield_args = tuple(OrderedSet(op.output, *op.input_indices))
         rewriter.replace_matched_op(
             [
                 out := stencil.ApplyOp.get(
@@ -491,7 +498,7 @@ class _DevitoStencilToStencilStencil(RewritePattern):
                     stencil.IndexAttr.get(*([0] * rank)),
                     stencil.IndexAttr.get(*op.shape),
                 ),
-                scf.Yield(op.output, *op.input_indices),
+                scf.Yield(*yield_args),
             ]
         )
 

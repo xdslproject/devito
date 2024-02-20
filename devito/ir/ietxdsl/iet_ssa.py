@@ -429,10 +429,14 @@ class Stencil(IRDLOperation):
         *inputs2, output2 = time_indices
         assert len(time_indices) == time_buffers
 
+        
         block = Block(
             arg_types=[
                 stencil.TempType(len(shape), typ)
-            ] * (time_buffers - 1))
+            # ] * (time_buffers - 1))
+            ] * (time_buffers))
+
+        import pdb;pdb.set_trace()
 
         for block_arg, idx_arg in zip(block.args, reversed(inputs)):
             name = SSAValue.get(idx_arg).name_hint
