@@ -132,7 +132,6 @@ class ExtractDevitoStencilConversion:
         self.block = stencil_op.block
 
 
-
         # reset loaded values
         self.loaded_values: dict[tuple[int, ...], SSAValue] = dict()
 

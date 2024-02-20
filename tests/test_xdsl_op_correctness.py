@@ -74,22 +74,26 @@ def test_u_and_v_conversion():
     assert np.isclose(norm_v, 292.49646, atol=1e-5, rtol=0)
 
 
-@pytest.mark.xfail(reason="Cannot load and store the same field")
+# @pytest.mark.xfail(reason="Cannot load and store the same field")
 def test_u_simple():
+    value = 0.0001
+
     # Define a simple Devito Operator
     grid = Grid(shape=(3, 3))
-    u = TimeFunction(name='u', grid=grid)
-    u.data[:] = 0.0001
+    u = TimeFunction(name='u', grid=grid, time_order=0)
+    u.data[:] = value
+    import pdb;pdb.set_trace()
     eq0 = Eq(u, u + 1)
     op = Operator([eq0])
     op.apply(time_M=5, dt=0.1)
-    import pdb;pdb.set_trace()
     norm_u = norm(u)
 
-    u.data[:] = 0.0001
+    u.data[:] = value
     xdsl_op = Operator([eq0], opt='xdsl')
     xdsl_op.apply(time_M=5, dt=0.1)
     norm_u2 = norm(u)
+
+    import pdb;pdb.set_trace()
 
     assert np.isclose(norm_u, norm_u2, atol=1e-5, rtol=0)
     assert np.isclose(norm_u, 26.565891, atol=1e-5, rtol=0)
