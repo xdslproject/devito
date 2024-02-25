@@ -68,6 +68,28 @@ def test_xdsl_III():
     assert type(ops[9] == Return)
 
 
+def test_u_simple():
+    value = 0.0001
+
+    # Define a simple Devito Operator
+    grid = Grid(shape=(3, 3))
+    u = TimeFunction(name="u", grid=grid, time_order=0)
+    u.data[:] = value
+    
+    eq0 = Eq(u, u + 1)
+    op = Operator([eq0])
+    op.apply(time_M=5)
+    norm_u = norm(u)
+
+    u.data[:] = value
+    xdsl_op = Operator([eq0], opt="xdsl")
+    xdsl_op.apply(time_M=5)
+    norm_u2 = norm(u)
+
+    assert np.isclose(norm_u, norm_u2, atol=1e-5, rtol=0)
+    assert np.isclose(norm_u, 18.0003, atol=1e-5, rtol=0)
+
+
 def test_diffusion_2D():
     # Define a simple Devito Operator
     grid = Grid(shape=(3, 3))
