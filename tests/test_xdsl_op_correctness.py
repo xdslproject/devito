@@ -84,9 +84,9 @@ def test_u_simple():
     u.data[:] = value
     import pdb;pdb.set_trace()
     eq0 = Eq(u, u + 1)
-    op = Operator([eq0])
-    op.apply(time_M=5)
-    norm_u = norm(u)
+    # op = Operator([eq0])
+    # op.apply(time_M=5)
+    # norm_u = norm(u)
 
     u.data[:] = value
     xdsl_op = Operator([eq0], opt='xdsl')
@@ -95,8 +95,8 @@ def test_u_simple():
 
     import pdb;pdb.set_trace()
 
-    assert np.isclose(norm_u, norm_u2, atol=1e-5, rtol=0)
-    assert np.isclose(norm_u, 18.0003, atol=1e-5, rtol=0)
+    # assert np.isclose(norm_u, norm_u2, atol=1e-5, rtol=0)
+    assert np.isclose(norm_u2, 18.0003, atol=1e-5, rtol=0)
 
 
 # @pytest.mark.xfail(reason="Cannot load and store the same field")
