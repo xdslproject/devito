@@ -3,6 +3,8 @@ import pytest
 
 from devito import Grid, TimeFunction, Eq, Operator, solve
 
+import xdsl.dialects.llvm as llvm
+
 from xdsl.dialects.scf import For, Yield
 from xdsl.dialects.arith import Addi
 from xdsl.dialects.func import Call, Return
@@ -61,13 +63,14 @@ def test_acoustic_3D(shape, so, to, nt):
     assert Printer().print(op1._module) == Printer().print(op2._module)
 
 
-def test_xdsl_III():
+@pytest.mark.parametrize('opt', ['xdsl-noop', 'xdsl'])
+def test_xdsl_III(opt):
     # Define a simple Devito Operator
     grid = Grid(shape=(5, 5, 5))
     u = TimeFunction(name='u', grid=grid)
 
     eq = Eq(u.forward, u + 1)
-    op = Operator([eq], opt='xdsl-noop')
+    op = Operator([eq], opt=opt)
     op.apply(time_M=1)
 
     assert (u.data[1, :] == 1.).all()
@@ -80,20 +83,19 @@ def test_xdsl_III():
     assert isinstance(op._module.regions[0].blocks[0].ops.first.body.blocks[0]._args[2].type, LLVMPointerType)  # noqa
 
     ops = list(op._module.regions[0].blocks[0].ops.first.body.blocks[0].ops)
-    assert type(ops[5] == Addi)
-    assert type(ops[6] == For)
 
-    import pdb;pdb.set_trace()
-    # scffor_ops = list(ops[6].regions[0].blocks[0].ops)
+    assert type(ops[4]) is Addi
+    assert type(ops[5]) is For
+    assert type(ops[6]) is Call
+    assert type(ops[7]) is llvm.StoreOp
+    assert type(ops[8]) is Return
 
-    # assert isinstance(scffor_ops[0], LoadOp)
-    # assert isinstance(scffor_ops[1], ApplyOp)
-    # assert isinstance(scffor_ops[2], StoreOp)
-    # assert isinstance(scffor_ops[3], Yield)
+    scffor_ops = list(ops[5].regions[0].blocks[0].ops)
 
-    assert type(ops[7] == Call)
-    assert type(ops[8] == StoreOp)
-    assert type(ops[9] == Return)
+    assert isinstance(scffor_ops[0], LoadOp)
+    assert isinstance(scffor_ops[1], ApplyOp)
+    assert isinstance(scffor_ops[2], StoreOp)
+    assert isinstance(scffor_ops[3], Yield)
 
 
 def test_diffusion_2D():

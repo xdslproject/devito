@@ -9,6 +9,7 @@ from xdsl.dialects.func import Call, Return
 from xdsl.dialects.stencil import FieldType, ApplyOp, LoadOp, StoreOp
 from xdsl.dialects.llvm import LLVMPointerType
 
+import xdsl.dialects.llvm as llvm
 
 def test_xdsl_I():
     # Define a simple Devito Operator
@@ -53,19 +54,18 @@ def test_xdsl_III():
     assert isinstance(op._module.regions[0].blocks[0].ops.first.body.blocks[0]._args[2].type, LLVMPointerType)  # noqa
 
     ops = list(op._module.regions[0].blocks[0].ops.first.body.blocks[0].ops)
-    assert type(ops[5] == Addi)
-    assert type(ops[6] == For)
+    assert type(ops[5]) is For
+    assert type(ops[6]) is Call
 
-    # scffor_ops = list(ops[6].regions[0].blocks[0].ops)
+    scffor_ops = list(ops[5].regions[0].blocks[0].ops)
 
-    # assert isinstance(scffor_ops[0], LoadOp)
-    # assert isinstance(scffor_ops[1], ApplyOp)
-    # assert isinstance(scffor_ops[2], StoreOp)
-    # assert isinstance(scffor_ops[3], Yield)
+    assert isinstance(scffor_ops[0], LoadOp)
+    assert isinstance(scffor_ops[1], ApplyOp)
+    assert isinstance(scffor_ops[2], StoreOp)
+    assert isinstance(scffor_ops[3], Yield)
 
-    assert type(ops[7] == Call)
-    assert type(ops[8] == StoreOp)
-    # assert type(ops[9] == Return)
+    assert type(ops[7]) is llvm.StoreOp
+    assert type(ops[8]) is Return
 
 
 def test_diffusion_2D():
