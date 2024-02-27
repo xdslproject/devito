@@ -279,6 +279,7 @@ class XdslnoopOperator(Cpu64OperatorMixin, CoreOperator):
         op._dtype, op._dspace = irs.clusters.meta
         op._profiler = profiler
 
+        # Here happens the actual xdsl lowering
         module = cls._lower_stencil(irs.expressions)
         op._module = module
 

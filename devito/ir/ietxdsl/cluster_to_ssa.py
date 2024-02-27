@@ -58,6 +58,7 @@ class ExtractDevitoStencilConversion:
     loaded_values: dict[tuple[int, ...], SSAValue]
     time_offs: int
 
+
     def _convert_eq(self, eq: LoweredEq):
         """
         This converts a Devito LoweredEq to a func.func op implementing it.
@@ -129,6 +130,7 @@ class ExtractDevitoStencilConversion:
         # a time size of 3, then u(t-2, ...) is identified as u(t, 1).
 
         # We store a list of those here to help the following steps.
+        # This helps to get first view of all buffers for all functions
         self.time_buffers = [(f, i) for f in functions for i in range(f.time_size)]
 
         # Also, store the output function's time buffer of this equation
@@ -140,7 +142,6 @@ class ExtractDevitoStencilConversion:
 
         # Create a function with the fields as arguments
         xdsl_func = func.FuncOp("apply_kernel", (fields_types, []))
-
         # Define nice argument names to try and stay sane while debugging
         # And store in self.function_args a mapping from time_buffers to their
         # corresponding function arguments.
@@ -159,8 +160,8 @@ class ExtractDevitoStencilConversion:
     def _visit_math_nodes(self, dim: SteppingDimension, node: Expr, output_indexed:Indexed) -> SSAValue:
         # Handle Indexeds
         if isinstance(node, Indexed):
+            # Get offsets relative to output_indexed (i.e. LHS)
             space_offsets = [node.indices[d] - output_indexed.indices[d] for d in node.function.space_dimensions]
-            # import pdb; pdb.set_trace()
             temp = self.apply_temps[(node.function, (node.indices[dim] - dim) % node.function.time_size)]
             access = stencil.AccessOp.get(temp, space_offsets)
             return access.res
@@ -222,21 +223,24 @@ class ExtractDevitoStencilConversion:
         else:
             raise NotImplementedError(f"Unknown math: {node}", node)
 
-    def _build_step_body(self, dim: SteppingDimension, eq:LoweredEq) -> None:
-        loop_temps = {
-            (f, t): stencil.LoadOp.get(a).res
-            for (f, t), a in self.block_args.items()
-            if (f, t) != self.out_time_buffer
-        }
+    def _build_step_body(self, dim: SteppingDimension, eq: LoweredEq) -> None:
+
+        loop_temps = {}
+        for (f, t), a in self.block_args.items():
+            if (f, t) != self.out_time_buffer:
+                loop_temps.update({(f, t): stencil.LoadOp.get(a).res})
+
         for (f,t), a in loop_temps.items():
             a.name_hint = f"{f.name}_t{t}_temp"        
 
         output_function = self.out_time_buffer[0]
         shape = output_function.grid.shape_local
+
+        result_types=[stencil.TempType(len(shape), element_type=dtypes_to_xdsltypes[output_function.dtype])]
         apply = stencil.ApplyOp.get(
             loop_temps.values(),
             Block(arg_types=[a.type for a in loop_temps.values()]),
-            result_types=[stencil.TempType(len(shape), element_type=dtypes_to_xdsltypes[output_function.dtype])]
+            result_types=result_types
         )
 
         # Give names to stencil.apply's block arguments
@@ -249,7 +253,10 @@ class ExtractDevitoStencilConversion:
 
         with ImplicitBuilder(apply.region.block):
             stencil.ReturnOp.get([self._visit_math_nodes(dim, eq.rhs, eq.lhs)])
-            
+
+        # TODO Think about multiple outputs
+        assert(len(apply.res)) == 1
+
         stencil.StoreOp.get(
             apply.res[0],
             self.block_args[self.out_time_buffer],
@@ -257,15 +264,11 @@ class ExtractDevitoStencilConversion:
             stencil.IndexAttr.get(*shape),
         )
 
-    def _build_step_loop(
-        self,
-        dim: SteppingDimension,
-        eq: LoweredEq,
-    ) -> scf.For:
+    def _build_step_loop(self, dim: SteppingDimension, eq: LoweredEq) -> scf.For:
         # Bounds and step boilerpalte
         lb = iet_ssa.LoadSymbolic.get(dim.symbolic_min._C_name, builtin.IndexType())
         ub = iet_ssa.LoadSymbolic.get(dim.symbolic_max._C_name, builtin.IndexType())
-        one = arith.Constant.from_int_and_width(1, builtin.IndexType())
+
         try:
             step = arith.Constant.from_int_and_width(
                 int(dim.symbolic_incr), builtin.IndexType()
@@ -275,9 +278,12 @@ class ExtractDevitoStencilConversion:
             raise ValueError("step must be int!")
 
         iter_args = list(self.function_args.values())
+
         # Create the for loop
-        loop = scf.For(lb, arith.Addi(ub, one), step, iter_args, Block(arg_types=[builtin.IndexType(), *(a.type for a in iter_args)]))
-        loop.body.block.args[0].name_hint = "time"
+        loop = scf.For(lb, arith.Addi(ub, step), step, iter_args, Block(arg_types=[builtin.IndexType(), *(a.type for a in iter_args)]))
+        
+        assert dim.root is eq.lhs.function.time_dim.root
+        loop.body.block.args[0].name_hint = dim.root.name # dim.root.name is 'time'
 
         self.block_args = {(f,t) : loop.body.block.args[1+i] for i, (f,t) in enumerate(self.time_buffers)}
         for ((f,t), arg) in self.block_args.items():
