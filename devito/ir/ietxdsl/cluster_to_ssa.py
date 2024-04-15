@@ -109,23 +109,6 @@ class ExtractDevitoStencilConversion:
         #  u[x+1,y+1,z] = (u[x,y,z+1] + u[x+2,y+2,z+1]) / 2
         # assert isinstance(eq.lhs, Indexed)
 
-        # Get all functions used in the equations
-        functions = OrderedSet(*(f.function for eq in eqs for f in retrieve_function_carriers(eq)))
-        self.time_buffers = [(f, i) for f in functions for i in range(f.time_size)]
-        # For each used time_buffer, define a stencil.field type for the function .
-        fields_types = [field_from_function(f) for (f, _) in self.time_buffers]
-        # Create a function with the fields as arguments
-        # print(kwargs)
-        name = kwargs.get('name', 'Kernel')
-        xdsl_func = func.FuncOp(name, (fields_types, []))
-
-        # Define nice argument names to try and stay sane while debugging
-        # And store in self.function_args a mapping from time_buffers to their
-        # corresponding function arguments.
-        self.function_args = {}
-        for i, (f, t) in enumerate(self.time_buffers):
-            xdsl_func.body.block.args[i].name_hint = f"{f.name}_vec_{t}"
-            self.function_args[(f,t)] = xdsl_func.body.block.args[i]
         eq = eqs[0]
         # Get the left hand side, called "output function" here because it tells us
         # Where to write the results of each step.
@@ -147,15 +130,11 @@ class ExtractDevitoStencilConversion:
         output_time_offset = (eq.lhs.indices[step_dim] - step_dim) % eq.lhs.function.time_size
         self.out_time_buffer = (output_function, output_time_offset)
 
+        self._build_step_loop(step_dim, eq)
+        # func wants a return
+        func.Return()
 
-
-
-        with ImplicitBuilder(xdsl_func.body.block):
-            self._build_step_loop(step_dim, eq)
-            # func wants a return
-            func.Return()
-
-        return xdsl_func
+        return
 
     def _visit_math_nodes(self, dim: SteppingDimension, node: Expr, output_indexed:Indexed) -> SSAValue:
         # Handle Indexeds
@@ -250,7 +229,7 @@ class ExtractDevitoStencilConversion:
 
         with ImplicitBuilder(apply.region.block):
             stencil.ReturnOp.get([self._visit_math_nodes(dim, eq.rhs, eq.lhs)])
-            
+
         stencil.StoreOp.get(
             apply.res[0],
             self.block_args[self.out_time_buffer],
@@ -291,10 +270,32 @@ class ExtractDevitoStencilConversion:
             scf.Yield(*yield_args)
 
     def convert(self, eqs: Iterable[Eq], **kwargs) -> builtin.ModuleOp:
-        # Lower equations to a ModuleOp
-        return builtin.ModuleOp(
-            Region([Block([self._convert_eq(eqs, **kwargs)])])
-        )
+        module = builtin.ModuleOp(Region([block := Block([])]))
+        with ImplicitBuilder(block):
+            # Get all functions used in the equations
+            functions = OrderedSet(
+                *(f.function for eq in eqs for f in retrieve_function_carriers(eq))
+            )
+            self.time_buffers = [(f, i) for f in functions for i in range(f.time_size)]
+            # For each used time_buffer, define a stencil.field type for the function .
+            fields_types = [field_from_function(f) for (f, _) in self.time_buffers]
+            # Create a function with the fields as arguments
+            # print(kwargs)
+            name = kwargs.get("name", "Kernel")
+            xdsl_func = func.FuncOp(name, (fields_types, []))
+
+            # Define nice argument names to try and stay sane while debugging
+            # And store in self.function_args a mapping from time_buffers to their
+            # corresponding function arguments.
+            self.function_args = {}
+            for i, (f, t) in enumerate(self.time_buffers):
+                xdsl_func.body.block.args[i].name_hint = f"{f.name}_vec_{t}"
+                self.function_args[(f, t)] = xdsl_func.body.block.args[i]
+
+            with ImplicitBuilder(xdsl_func.body.block):
+                self._convert_eq(eqs, **kwargs)
+            # Lower equations to a ModuleOp
+        return module
 
     def _ensure_same_type(self, *vals: SSAValue):
         if all(isinstance(val.type, builtin.IntegerAttr) for val in vals):
