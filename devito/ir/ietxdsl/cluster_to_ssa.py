@@ -130,7 +130,32 @@ class ExtractDevitoStencilConversion:
         output_time_offset = (eq.lhs.indices[step_dim] - step_dim) % eq.lhs.function.time_size
         self.out_time_buffer = (output_function, output_time_offset)
 
-        self._build_step_loop(step_dim, eq)
+        # Bounds and step boilerpalte
+        lb = iet_ssa.LoadSymbolic.get(step_dim.symbolic_min._C_name, builtin.IndexType())
+        ub = iet_ssa.LoadSymbolic.get(step_dim.symbolic_max._C_name, builtin.IndexType())
+        one = arith.Constant.from_int_and_width(1, builtin.IndexType())
+        try:
+            step = arith.Constant.from_int_and_width(
+                int(step_dim.symbolic_incr), builtin.IndexType()
+            )
+            step.result.name_hint = "step"
+        except:
+            raise ValueError("step must be int!")
+
+        iter_args = list(self.function_args.values())
+        # Create the for loop
+        loop = scf.For(lb, arith.Addi(ub, one), step, iter_args, Block(arg_types=[builtin.IndexType(), *(a.type for a in iter_args)]))
+        loop.body.block.args[0].name_hint = "time"
+
+        self.block_args = {(f,t) : loop.body.block.args[1+i] for i, (f,t) in enumerate(self.time_buffers)}
+        for ((f,t), arg) in self.block_args.items():
+            arg.name_hint = f"{f.name}_t{t}"
+
+        with ImplicitBuilder(loop.body.block):
+            self._build_step_body(step_dim, eq)
+            # Swap buffers through scf.yield
+            yield_args = [self.block_args[(f, (t+1)%f.time_size)] for (f, t) in self.block_args.keys()]
+            scf.Yield(*yield_args)
         # func wants a return
         func.Return()
 
@@ -237,39 +262,8 @@ class ExtractDevitoStencilConversion:
             stencil.IndexAttr.get(*shape),
         )
 
-    def _build_step_loop(
-        self,
-        dim: SteppingDimension,
-        eq: LoweredEq,
-    ) -> scf.For:
-        # Bounds and step boilerpalte
-        lb = iet_ssa.LoadSymbolic.get(dim.symbolic_min._C_name, builtin.IndexType())
-        ub = iet_ssa.LoadSymbolic.get(dim.symbolic_max._C_name, builtin.IndexType())
-        one = arith.Constant.from_int_and_width(1, builtin.IndexType())
-        try:
-            step = arith.Constant.from_int_and_width(
-                int(dim.symbolic_incr), builtin.IndexType()
-            )
-            step.result.name_hint = "step"
-        except:
-            raise ValueError("step must be int!")
-
-        iter_args = list(self.function_args.values())
-        # Create the for loop
-        loop = scf.For(lb, arith.Addi(ub, one), step, iter_args, Block(arg_types=[builtin.IndexType(), *(a.type for a in iter_args)]))
-        loop.body.block.args[0].name_hint = "time"
-
-        self.block_args = {(f,t) : loop.body.block.args[1+i] for i, (f,t) in enumerate(self.time_buffers)}
-        for ((f,t), arg) in self.block_args.items():
-            arg.name_hint = f"{f.name}_t{t}"
-
-        with ImplicitBuilder(loop.body.block):
-            self._build_step_body(dim, eq)
-            # Swap buffers through scf.yield
-            yield_args = [self.block_args[(f, (t+1)%f.time_size)] for (f, t) in self.block_args.keys()]
-            scf.Yield(*yield_args)
-
     def convert(self, eqs: Iterable[Eq], **kwargs) -> builtin.ModuleOp:
+        # Instantiate the module.
         module = builtin.ModuleOp(Region([block := Block([])]))
         with ImplicitBuilder(block):
             # Get all functions used in the equations
@@ -277,24 +271,25 @@ class ExtractDevitoStencilConversion:
                 *(f.function for eq in eqs for f in retrieve_function_carriers(eq))
             )
             self.time_buffers = [(f, i) for f in functions for i in range(f.time_size)]
-            # For each used time_buffer, define a stencil.field type for the function .
+            # For each used time_buffer, define a stencil.field type for the function.
+            # Those represent DeVito's buffers in xDSL/stencil terms.
             fields_types = [field_from_function(f) for (f, _) in self.time_buffers]
-            # Create a function with the fields as arguments
-            # print(kwargs)
+            # Get the operator name to name the function accordingly.
             name = kwargs.get("name", "Kernel")
+            # Create a function with the fields as arguments.
             xdsl_func = func.FuncOp(name, (fields_types, []))
 
-            # Define nice argument names to try and stay sane while debugging
-            # And store in self.function_args a mapping from time_buffers to their
-            # corresponding function arguments.
             self.function_args = {}
             for i, (f, t) in enumerate(self.time_buffers):
+                # Define argument names to help with debugging
                 xdsl_func.body.block.args[i].name_hint = f"{f.name}_vec_{t}"
+                # Store in self.function_args a mapping from time_buffers to their
+                # corresponding function arguments, for easier access later.
                 self.function_args[(f, t)] = xdsl_func.body.block.args[i]
 
             with ImplicitBuilder(xdsl_func.body.block):
+                # Lower equations to their xDSL equivalent
                 self._convert_eq(eqs, **kwargs)
-            # Lower equations to a ModuleOp
         return module
 
     def _ensure_same_type(self, *vals: SSAValue):
