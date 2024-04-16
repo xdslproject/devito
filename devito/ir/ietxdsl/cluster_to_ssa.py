@@ -129,32 +129,7 @@ class ExtractDevitoStencilConversion:
         output_time_offset = (eq.lhs.indices[step_dim] - step_dim) % eq.lhs.function.time_size
         self.out_time_buffer = (output_function, output_time_offset)
 
-        # Bounds and step boilerpalte
-        lb = iet_ssa.LoadSymbolic.get(step_dim.symbolic_min._C_name, builtin.IndexType())
-        ub = iet_ssa.LoadSymbolic.get(step_dim.symbolic_max._C_name, builtin.IndexType())
-        one = arith.Constant.from_int_and_width(1, builtin.IndexType())
-        try:
-            step = arith.Constant.from_int_and_width(
-                int(step_dim.symbolic_incr), builtin.IndexType()
-            )
-            step.result.name_hint = "step"
-        except:
-            raise ValueError("step must be int!")
-
-        iter_args = list(self.function_args.values())
-        # Create the for loop
-        loop = scf.For(lb, arith.Addi(ub, one), step, iter_args, Block(arg_types=[builtin.IndexType(), *(a.type for a in iter_args)]))
-        loop.body.block.args[0].name_hint = "time"
-
-        self.block_args = {(f,t) : loop.body.block.args[1+i] for i, (f,t) in enumerate(self.time_buffers)}
-        for ((f,t), arg) in self.block_args.items():
-            arg.name_hint = f"{f.name}_t{t}"
-
-        with ImplicitBuilder(loop.body.block):
-            self._build_step_body(step_dim, eq)
-            # Swap buffers through scf.yield
-            yield_args = [self.block_args[(f, (t+1)%f.time_size)] for (f, t) in self.block_args.keys()]
-            scf.Yield(*yield_args)
+        self._build_step_body(step_dim, eq)
 
         return
 
@@ -275,19 +250,61 @@ class ExtractDevitoStencilConversion:
             name = kwargs.get("name", "Kernel")
             # Create a function with the fields as arguments.
             xdsl_func = func.FuncOp(name, (fields_types, []))
-
-            self.function_args = {}
-            for i, (f, t) in enumerate(self.time_buffers):
-                # Define argument names to help with debugging
-                xdsl_func.body.block.args[i].name_hint = f"{f.name}_vec_{t}"
-                # Store in self.function_args a mapping from time_buffers to their
-                # corresponding function arguments, for easier access later.
-                self.function_args[(f, t)] = xdsl_func.body.block.args[i]
-
             with ImplicitBuilder(xdsl_func.body.block):
-                # Lower equations to their xDSL equivalent
-                for eq in eqs:
-                    self._convert_eq(eq, **kwargs)
+                self.function_args = {}
+                for i, (f, t) in enumerate(self.time_buffers):
+                    # Define argument names to help with debugging
+                    xdsl_func.body.block.args[i].name_hint = f"{f.name}_vec_{t}"
+                    # Store in self.function_args a mapping from time_buffers to their
+                    # corresponding function arguments, for easier access later.
+                    self.function_args[(f, t)] = xdsl_func.body.block.args[i]
+
+                # Get the stepping dimension. It's usually time, and usually the first one.
+                # Getting it here; more readable and less input assumptions :)
+                step_dim = eqs[0].lhs.function.grid.stepping_dim
+
+                # Bounds and step boilerpalte
+                lb = iet_ssa.LoadSymbolic.get(
+                    step_dim.symbolic_min._C_name, builtin.IndexType()
+                )
+                ub = iet_ssa.LoadSymbolic.get(
+                    step_dim.symbolic_max._C_name, builtin.IndexType()
+                )
+                one = arith.Constant.from_int_and_width(1, builtin.IndexType())
+                try:
+                    step = arith.Constant.from_int_and_width(
+                        int(step_dim.symbolic_incr), builtin.IndexType()
+                    )
+                    step.result.name_hint = "step"
+                except:
+                    raise ValueError("step must be int!")
+
+                iter_args = list(self.function_args.values())
+                # Create the for loop
+                loop = scf.For(
+                    lb,
+                    arith.Addi(ub, one),
+                    step,
+                    iter_args,
+                    Block(arg_types=[builtin.IndexType(), *(a.type for a in iter_args)]),
+                )
+                loop.body.block.args[0].name_hint = "time"
+
+                self.block_args = {
+                    (f, t): loop.body.block.args[1 + i]
+                    for i, (f, t) in enumerate(self.time_buffers)
+                }
+                for (f, t), arg in self.block_args.items():
+                    arg.name_hint = f"{f.name}_t{t}"
+
+                with ImplicitBuilder(loop.body.block):
+                    # Lower equations to their xDSL equivalent
+                    for eq in eqs:
+                        self._convert_eq(eq, **kwargs)
+                    # Swap buffers through scf.yield
+                    yield_args = [self.block_args[(f, (t+1)%f.time_size)] for (f, t) in self.block_args.keys()]
+                    scf.Yield(*yield_args)
+
                 # func wants a return
                 func.Return()
 
