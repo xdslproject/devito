@@ -308,8 +308,8 @@ def test_xdsl_mul_eqs_III():
     u = TimeFunction(name="u", grid=grid, space_order=2)
     u.data[:, :, :] = 0
 
-    eq0 = Eq(u.forward, 0.01*u.dx)
-    eq1 = Eq(u.forward, u.dx + 2)
+    eq0 = Eq(u.forward, u + 2)
+    eq1 = Eq(u.forward, u + 1)
 
     op = Operator([eq0, eq1], opt="advanced")
 
@@ -326,6 +326,33 @@ def test_xdsl_mul_eqs_III():
     norm_xdsl = norm(u)
 
     assert np.isclose(norm_devito, norm_xdsl, rtol=0.0001)
+
+
+def test_xdsl_mul_eqs_IV():
+    # Define a Devito Operator with multiple eqs
+    grid = Grid(shape=(4, 4))
+
+    u = TimeFunction(name="u", grid=grid, space_order=2)
+    u.data[:, :, :] = 0
+
+    eq0 = Eq(u.forward, u + 2)
+    eq1 = Eq(u.forward, u + 1)
+
+    op = Operator([eq0, eq1], opt="advanced")
+
+    op.apply(time_M=4)
+
+    assert (u.data[1, :] == 5.0).all()
+    assert (u.data[0, :] == 4.0).all()
+
+    u.data[:, :, :] = 0
+
+    op = Operator([eq0, eq1], opt="xdsl")
+
+    op.apply(time_M=4)
+
+    assert (u.data[1, :] == 5.0).all()
+    assert (u.data[0, :] == 4.0).all()
 
 
 class TestOperatorUnsupported(object):
