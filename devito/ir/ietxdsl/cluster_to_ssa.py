@@ -250,14 +250,20 @@ class ExtractDevitoStencilConversion:
             name = kwargs.get("name", "Kernel")
             # Create a function with the fields as arguments.
             xdsl_func = func.FuncOp(name, (fields_types, []))
+
+            # Store in self.function_args a mapping from time_buffers to their
+            # corresponding function arguments, for easier access later.
+            self.function_args = {}
+            for i, (f, t) in enumerate(self.time_buffers):
+                # Also define argument names to help with debugging
+                xdsl_func.body.block.args[i].name_hint = f"{f.name}_vec_{t}"
+                self.function_args[(f, t)] = xdsl_func.body.block.args[i]
+
+            # Move on to generate the function body
             with ImplicitBuilder(xdsl_func.body.block):
-                self.function_args = {}
-                for i, (f, t) in enumerate(self.time_buffers):
-                    # Define argument names to help with debugging
-                    xdsl_func.body.block.args[i].name_hint = f"{f.name}_vec_{t}"
-                    # Store in self.function_args a mapping from time_buffers to their
-                    # corresponding function arguments, for easier access later.
-                    self.function_args[(f, t)] = xdsl_func.body.block.args[i]
+                
+                # Start building the time loop
+                # TODO: This should be moed to the cluster codegen.
 
                 # Get the stepping dimension. It's usually time, and usually the first one.
                 # Getting it here; more readable and less input assumptions :)
@@ -271,6 +277,10 @@ class ExtractDevitoStencilConversion:
                     step_dim.symbolic_max._C_name, builtin.IndexType()
                 )
                 one = arith.Constant.from_int_and_width(1, builtin.IndexType())
+                # Devito iterates from time_m to time_M *inclusive*, MLIR only takes
+                # exclusive upper bounds, so we increment here.
+                ub = arith.Addi(ub, one)
+                # Take the exact time_step from DeVito
                 try:
                     step = arith.Constant.from_int_and_width(
                         int(step_dim.symbolic_incr), builtin.IndexType()
@@ -283,7 +293,7 @@ class ExtractDevitoStencilConversion:
                 # Create the for loop
                 loop = scf.For(
                     lb,
-                    arith.Addi(ub, one),
+                    ub,
                     step,
                     iter_args,
                     Block(arg_types=[builtin.IndexType(), *(a.type for a in iter_args)]),
