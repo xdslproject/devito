@@ -45,12 +45,12 @@ def test_u_plus1_conversion():
 def test_u_and_v_conversion():
     # Define a simple Devito Operator
     grid = Grid(shape=(3, 3))
-    u = TimeFunction(name='u', grid=grid, time_order=2)
-    v = TimeFunction(name='v', grid=grid, time_order=2)
+    u = TimeFunction(name='u', grid=grid, time_order=3)
+    v = TimeFunction(name='v', grid=grid, time_order=3)
     u.data[:] = 0.0001
     v.data[:] = 0.0001
-    eq0 = Eq(u.forward.forward, u.dt)
-    eq1 = Eq(v.forward.forward, u.dt)
+    eq0 = Eq(u.forward, u.dx + v.dy)
+    eq1 = Eq(v.forward, u.dy + v.dx)
     op = Operator([eq0, eq1])
     op.apply(time_M=5, dt=0.1)
     norm_u = norm(u)
