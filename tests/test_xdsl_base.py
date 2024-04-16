@@ -265,7 +265,7 @@ def test_xdsl_mul_eqs():
 
 class TestOperatorUnsupported(object):
 
-    @pytest.mark.xfail(reason="Multiple eqs are not supported")
+    @pytest.mark.xfail(reason="Symbols are not supported in xDSL yet")
     def test_symbol_I(self):
         # Define a simple Devito a = 1 operator
 
