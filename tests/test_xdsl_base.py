@@ -277,3 +277,23 @@ class TestOperatorUnsupported(object):
         op.apply()
 
         assert a == 1
+
+
+    # @pytest.mark.xfail(reason="Symbols are not supported in xDSL yet")
+    def test_mfe(self):
+        # Define a simple Devito a = 1 operator
+
+        grid = Grid(shape=(4, 4))
+        u = TimeFunction(name="u", grid=grid, space_order=2)
+        u.data[:, :, :] = 0
+
+        sdim = grid.stepping_dim
+
+        eq0 = Eq(u.forward[sdim, 1, 1], u[sdim, 1, 1])
+        eq1 = Eq(u.forward, u.laplace + 1)
+
+
+        op = Operator([eq0, eq1], opt='advanced')
+        op.apply()
+
+        assert a == 1

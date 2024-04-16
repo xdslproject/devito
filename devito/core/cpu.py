@@ -285,7 +285,7 @@ class XdslnoopOperator(Cpu64OperatorMixin, CoreOperator):
         return op
 
     @classmethod
-    def _lower_stencil(cls, clusters:ClusterGroup, **kwargs):
+    def _lower_stencil(cls, clusters: ClusterGroup, **kwargs):
         # [Eq] -> [xdsl]
         # Lower expressions to a builtin.ModuleOp
         conv = ExtractDevitoStencilConversion()
