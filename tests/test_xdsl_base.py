@@ -245,20 +245,7 @@ def test_standard_mlir_rewrites(shape, so, to, nt):
     # XDSL Operator
     xdslop = Operator([stencil], opt='xdsl')
     xdslop.apply(time=nt, dt=dt)
-    def test_xdsl_mul_eqs(self):
-        # Define a Devito Operator with multiple eqs
-        grid = Grid(shape=(4, 4))
-        u = TimeFunction(name='u', grid=grid, space_order=2)
 
-        eq0 = Eq(u.forward, u + 1)
-        eq1 = Eq(u.forward, u + 2)
-
-        op = Operator([eq0, eq1], opt='xdsl')
-
-        op.apply(time_M=1)
-
-        assert (u.data[1, :] == 2.).all()
-        assert (u.data[0, :] == 4.).all()
 
 def test_xdsl_mul_eqs():
     # Define a Devito Operator with multiple eqs
