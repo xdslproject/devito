@@ -173,19 +173,20 @@ class ExtractDevitoStencilConversion:
             raise NotImplementedError(f"Unknown math: {node}", node)
 
     def _build_step_body(self, dim: SteppingDimension, eq:LoweredEq) -> None:
-        loop_temps = {
+        read_functions = {(f.function, (f.indices[dim]-dim) % f.function.time_size) for f in retrieve_function_carriers(eq.rhs)}
+        temps = {
             (f, t): stencil.LoadOp.get(a).res
             for (f, t), a in self.block_args.items()
-            if (f, t) != self.out_time_buffer
+            if (f, t) in read_functions
         }
-        for (f,t), a in loop_temps.items():
+        for (f,t), a in temps.items():
             a.name_hint = f"{f.name}_t{t}_temp"        
 
         output_function = self.out_time_buffer[0]
         shape = output_function.grid.shape_local
         apply = stencil.ApplyOp.get(
-            loop_temps.values(),
-            Block(arg_types=[a.type for a in loop_temps.values()]),
+            temps.values(),
+            Block(arg_types=[a.type for a in temps.values()]),
             result_types=[stencil.TempType(len(shape), element_type=dtypes_to_xdsltypes[output_function.dtype])]
         )
 
@@ -195,8 +196,8 @@ class ExtractDevitoStencilConversion:
             # i.e. %v_t1_temp -> %v_t1_blk
             apply_arg.name_hint = apply_op.name_hint[:-5]+"_blk"
 
-        self.apply_temps = {k:v for k,v in zip(loop_temps.keys(), apply.region.block.args)}
-
+        self.apply_temps = {k:v for k,v in zip(temps.keys(), apply.region.block.args)}
+        print(self.apply_temps)
         with ImplicitBuilder(apply.region.block):
             stencil.ReturnOp.get([self._visit_math_nodes(dim, eq.rhs, eq.lhs)])
 
