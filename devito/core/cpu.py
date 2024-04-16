@@ -14,6 +14,7 @@ from typing import Iterable
 
 from devito.core.operator import CoreOperator, CustomOperator, ParTile
 from devito.exceptions import InvalidOperator
+from devito.ir.clusters.cluster import ClusterGroup
 from devito.passes.equations import collect_derivatives
 from devito.passes.clusters import (Lift, blocking, buffering, cire, cse,
                                     factorize, fission, fuse, optimize_pows,
@@ -278,17 +279,17 @@ class XdslnoopOperator(Cpu64OperatorMixin, CoreOperator):
         op._dimensions = set().union(*[e.dimensions for e in irs.expressions])
         op._dtype, op._dspace = irs.clusters.meta
         op._profiler = profiler
-        module = cls._lower_stencil(irs.expressions, **kwargs)
+        module = cls._lower_stencil(irs.clusters, **kwargs)
         op._module = module
 
         return op
 
     @classmethod
-    def _lower_stencil(cls, expressions, **kwargs):
+    def _lower_stencil(cls, clusters:ClusterGroup, **kwargs):
         # [Eq] -> [xdsl]
         # Lower expressions to a builtin.ModuleOp
         conv = ExtractDevitoStencilConversion()
-        module = conv.convert(expressions, **kwargs)
+        module = conv.convert(clusters, **kwargs)
         # Uncomment to print
         # Printer().print(module)
         convert_devito_stencil_to_xdsl_stencil(module, timed=True, **kwargs)

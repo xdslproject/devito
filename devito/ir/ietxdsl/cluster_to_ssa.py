@@ -3,6 +3,8 @@
 from typing import Any, Iterable
 from dataclasses import dataclass, field
 from sympy import Add, Expr, Float, Indexed, Integer, Mod, Mul, Pow, Symbol
+from devito.ir.clusters.cluster import ClusterGroup
+from devito.passes.clusters.misc import fuse
 from devito.tools.data_structures import OrderedSet
 from devito.types.dense import DiscreteFunction
 from devito.types.equation import Eq
@@ -207,7 +209,7 @@ class ExtractDevitoStencilConversion:
             stencil.IndexAttr.get(*shape),
         )
 
-    def convert(self, eqs: Iterable[Eq], **kwargs) -> builtin.ModuleOp:
+    def convert(self, clusters: ClusterGroup, **kwargs) -> builtin.ModuleOp:
         """
         This converts a Devito Operator, represented here by a list of LoweredEqs, to
         an xDSL module defining a function implementing it.
@@ -250,6 +252,8 @@ class ExtractDevitoStencilConversion:
 
 
         """
+        # fused = fuse(clusters)
+        import pdb; pdb.set_trace()
         # Instantiate the module.
         module = builtin.ModuleOp(Region([block := Block([])]))
         with ImplicitBuilder(block):
