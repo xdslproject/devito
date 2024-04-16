@@ -197,7 +197,7 @@ class ExtractDevitoStencilConversion:
             apply_arg.name_hint = apply_op.name_hint[:-5]+"_blk"
 
         self.apply_temps = {k:v for k,v in zip(temps.keys(), apply.region.block.args)}
-        print(self.apply_temps)
+        
         with ImplicitBuilder(apply.region.block):
             stencil.ReturnOp.get([self._visit_math_nodes(dim, eq.rhs, eq.lhs)])
 
