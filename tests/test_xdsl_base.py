@@ -386,7 +386,6 @@ class TestOperatorUnsupported(object):
 
         assert np.isclose(norm(u), 5.6584, rtol=0.001)
 
-
     @pytest.mark.xfail(reason="Cannot Load and Store the same field!")
     def test_xdsl_mul_eqs_III(self):
         # Define a Devito Operator with multiple eqs
@@ -394,7 +393,7 @@ class TestOperatorUnsupported(object):
 
         u = TimeFunction(name="u", grid=grid, space_order=2)
         v = TimeFunction(name="v", grid=grid, space_order=2)
-        
+
         u.data[:, :, :] = 0
         v.data[:, :, :] = 0
 
