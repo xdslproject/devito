@@ -343,6 +343,23 @@ class TestOperatorUnsupported(object):
 
         assert a == 1
 
+    @pytest.mark.xfail(reason="stencil.return operation does not verify")
+    def test_forward_assignment(self):
+        # simple Devito a = 1 operator
+
+        grid = Grid(shape=(4, 4))
+        u = TimeFunction(name="u", grid=grid, space_order=2)
+        u.data[:, :, :] = 0
+
+        eq0 = Eq(u.forward, 1)
+
+        op = Operator([eq0], opt='xdsl')
+
+        op.apply(time_M=1)
+
+        assert np.isclose(norm(u), 5.6584, rtol=0.001)
+
+
     @pytest.mark.xfail(reason="Cannot Load and Store the same field!")
     def test_xdsl_mul_eqs_III(self):
         # Define a Devito Operator with multiple eqs
