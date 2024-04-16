@@ -88,10 +88,6 @@ class ExtractDevitoStencilConversion:
         "stencil.store"(%4, %u_t1) {"lb" = #stencil.index<0>, "ub" = #stencil.index<3>} : (!stencil.temp<?xf32>, !stencil.field<[-1,4]xf32>) -> ()
         ```
         """
-        # Convert a Devito equation to a func.func op
-        # an equation may look like this:
-        #  u[x+1,y+1,z] = (u[x,y,z+1] + u[x+2,y+2,z+1]) / 2
-        # assert isinstance(eq.lhs, Indexed)
 
         # Get the left hand side, called "output function" here because it tells us
         # Where to write the results of each step.
@@ -102,12 +98,6 @@ class ExtractDevitoStencilConversion:
         # Get the stepping dimension. It's usually time, and usually the first one.
         # Getting it here; more readable and less input assumptions :)
         step_dim = grid.stepping_dim
-        # We identify time buffers by their function and positive time offset.
-        # e.g., u(t+2, x-1, y) would be indentified as (u, 2)
-        # NB. We map time offsets to positive with simple modulo arithmetic: if u has a
-        # a time size of 3, then u(t-2, ...) is identified as u(t, 1).
-
-        # We store a list of those here to help the following steps.
 
         # Also, store the output function's time buffer of this equation
         output_time_offset = (eq.lhs.indices[step_dim] - step_dim) % eq.lhs.function.time_size
@@ -121,7 +111,6 @@ class ExtractDevitoStencilConversion:
         # Handle Indexeds
         if isinstance(node, Indexed):
             space_offsets = [node.indices[d] - output_indexed.indices[d] for d in node.function.space_dimensions]
-            # import pdb; pdb.set_trace()
             temp = self.apply_temps[(node.function, (node.indices[dim] - dim) % node.function.time_size)]
             access = stencil.AccessOp.get(temp, space_offsets)
             return access.res

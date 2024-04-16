@@ -288,7 +288,6 @@ class XdslnoopOperator(Cpu64OperatorMixin, CoreOperator):
         # [Eq] -> [xdsl]
         # Lower expressions to a builtin.ModuleOp
         conv = ExtractDevitoStencilConversion()
-        # import pdb; pdb.set_trace()
         module = conv.convert(expressions, **kwargs)
         # Uncomment to print
         # Printer().print(module)
