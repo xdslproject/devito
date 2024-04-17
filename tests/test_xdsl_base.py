@@ -700,6 +700,38 @@ class TestAntiDepNotSupported(object):
         op.apply(time_M=1)
 
 
+def test_xdsl_mul_eqs_V():
+    # Define a Devito Operator with multiple eqs
+    grid = Grid(shape=(4, 4))
+
+    u = TimeFunction(name="u", grid=grid, time_order=3, space_order=2)
+    v = TimeFunction(name="v", grid=grid, time_order=3, space_order=2)
+    u.data[:, :, :] = np.random.rand(*u.shape)
+    v.data[:, :, :] = np.random.rand(*v.shape)
+    u_init = u.data.copy()
+    v_init = v.data.copy()
+
+    eq0 = Eq(u.forward, u + 2)
+    eq1 = Eq(v, u.forward * 2)
+
+    op = Operator([eq0, eq1], opt="advanced")
+
+    op.apply(time_M=4, dt=0.1)
+
+    devito_res_u = u.data.copy()
+    devito_res_v = v.data.copy()
+
+    u.data[:, :, :] = u_init[:, :, :]
+    v.data[:, :, :] = v_init[:, :, :]
+
+    op = Operator([eq0, eq1], opt="xdsl")
+
+    op.apply(time_M=4, dt=0.1)
+
+    assert np.isclose(u.data, devito_res_u.data).all()
+    assert np.isclose(v.data, devito_res_v.data).all()
+
+
 class TestOperatorUnsupported(object):
 
     @pytest.mark.xfail(reason="Symbols are not supported in xDSL yet")
