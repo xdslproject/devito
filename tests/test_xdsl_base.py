@@ -700,7 +700,7 @@ class TestAntiDepNotSupported(object):
         op.apply(time_M=1)
 
 
-def test_xdsl_mul_eqs_V():
+def test_xdsl_mul_eqs_VI():
     # Define a Devito Operator with multiple eqs
     grid = Grid(shape=(4, 4))
 
