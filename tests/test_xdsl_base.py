@@ -247,25 +247,117 @@ def test_standard_mlir_rewrites(shape, so, to, nt):
     xdslop.apply(time=nt, dt=dt)
 
 
+def test_xdsl_mul_eqs_I():
+    # Define a Devito Operator with multiple eqs
+    grid = Grid(shape=(4, 4))
+
+    u = TimeFunction(name="u", grid=grid, space_order=2)
+    u.data[:, :, :] = 0
+
+    eq0 = Eq(u.forward, u + 1)
+    eq1 = Eq(u.forward, u + 2)
+
+    op = Operator([eq0, eq1], opt="advanced")
+
+    op.apply(time_M=4)
+
+    assert (u.data[1, :] == 10.0).all()
+    assert (u.data[0, :] == 8.0).all()
+
+    u.data[:, :, :] = 0
+
+    op = Operator([eq0, eq1], opt="xdsl")
+
+    op.apply(time_M=4)
+
+    assert (u.data[1, :] == 10.0).all()
+    assert (u.data[0, :] == 8.0).all()
+
+
+def test_xdsl_mul_eqs_II():
+    # Define a Devito Operator with multiple eqs
+    grid = Grid(shape=(4, 4))
+
+    u = TimeFunction(name="u", grid=grid, space_order=2)
+    u.data[:, :, :] = 0
+
+    eq0 = Eq(u.forward, 0.01*u.dx)
+    eq1 = Eq(u.forward, u.dx + 2)
+
+    op = Operator([eq0, eq1], opt="advanced")
+
+    op.apply(time_M=4)
+
+    norm_devito = norm(u)
+
+    u.data[:, :, :] = 0
+
+    op = Operator([eq0, eq1], opt="xdsl")
+
+    op.apply(time_M=4)
+
+    norm_xdsl = norm(u)
+
+    assert np.isclose(norm_devito, norm_xdsl, rtol=0.0001)
+
+
+def test_xdsl_mul_eqs_III():
+    # Define a Devito Operator with multiple eqs
+    grid = Grid(shape=(4, 4))
+
+    u = TimeFunction(name="u", grid=grid, space_order=2)
+    u.data[:, :, :] = 0
+
+    eq0 = Eq(u.forward, u + 2)
+    eq1 = Eq(u.forward, u + 1)
+
+    op = Operator([eq0, eq1], opt="advanced")
+
+    op.apply(time_M=4)
+
+    norm_devito = norm(u)
+
+    u.data[:, :, :] = 0
+
+    op = Operator([eq0, eq1], opt="xdsl")
+
+    op.apply(time_M=4)
+
+    norm_xdsl = norm(u)
+
+    assert np.isclose(norm_devito, norm_xdsl, rtol=0.0001)
+
+
+def test_xdsl_mul_eqs_IV():
+    # Define a Devito Operator with multiple eqs
+    grid = Grid(shape=(4, 4))
+
+    u = TimeFunction(name="u", grid=grid, space_order=2)
+    u.data[:, :, :] = 0
+
+    eq0 = Eq(u.forward, u + 2)
+    eq1 = Eq(u.forward, u + 1)
+
+    op = Operator([eq0, eq1], opt="advanced")
+
+    op.apply(time_M=4)
+
+    assert (u.data[1, :] == 5.0).all()
+    assert (u.data[0, :] == 4.0).all()
+
+    u.data[:, :, :] = 0
+
+    op = Operator([eq0, eq1], opt="xdsl")
+
+    op.apply(time_M=4)
+
+    assert (u.data[1, :] == 5.0).all()
+    assert (u.data[0, :] == 4.0).all()
+
+
 class TestOperatorUnsupported(object):
 
-    @pytest.mark.xfail(reason="Multiple eqs are not supported")
-    def test_xdsl_mul_eqs(self):
-        # Define a Devito Operator with multiple eqs
-        grid = Grid(shape=(4, 4))
-        u = TimeFunction(name='u', grid=grid, space_order=2)
-
-        eq0 = Eq(u.forward, u + 1)
-        eq1 = Eq(u.forward, u + 2)
-
-        op = Operator([eq0, eq1], opt='xdsl')
-
-        op.apply(time_M=1)
-
-        assert (u.data[1, :] == 2.).all()
-        assert (u.data[0, :] == 4.).all()
-
-    @pytest.mark.xfail(reason="Multiple eqs are not supported")
+    @pytest.mark.xfail(reason="Symbols are not supported in xDSL yet")
     def test_symbol_I(self):
         # Define a simple Devito a = 1 operator
 
@@ -277,3 +369,49 @@ class TestOperatorUnsupported(object):
         op.apply()
 
         assert a == 1
+
+    @pytest.mark.xfail(reason="stencil.return operation does not verify")
+    def test_forward_assignment(self):
+        # simple Devito a = 1 operator
+
+        grid = Grid(shape=(4, 4))
+        u = TimeFunction(name="u", grid=grid, space_order=2)
+        u.data[:, :, :] = 0
+
+        eq0 = Eq(u.forward, 1)
+
+        op = Operator([eq0], opt='xdsl')
+
+        op.apply(time_M=1)
+
+        assert np.isclose(norm(u), 5.6584, rtol=0.001)
+
+    @pytest.mark.xfail(reason="Cannot Load and Store the same field!")
+    def test_xdsl_mul_eqs_III(self):
+        # Define a Devito Operator with multiple eqs
+        grid = Grid(shape=(4, 4))
+
+        u = TimeFunction(name="u", grid=grid, space_order=2)
+        v = TimeFunction(name="v", grid=grid, space_order=2)
+
+        u.data[:, :, :] = 0
+        v.data[:, :, :] = 0
+
+        eq0 = Eq(u.forward, u + 1)
+        eq1 = Eq(v.forward, v + 1)
+
+        op = Operator([eq0, eq1], opt="advanced")
+
+        op.apply(time_M=4)
+
+        norm_devito = norm(u)
+
+        u.data[:, :, :] = 0
+
+        op = Operator([eq0, eq1], opt="xdsl")
+
+        op.apply(time_M=4)
+
+        norm_xdsl = norm(u)
+
+        assert np.isclose(norm_devito, norm_xdsl, rtol=0.0001)
