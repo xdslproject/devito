@@ -384,8 +384,6 @@ def test_xdsl_mul_eqs_IV():
         norm_u_xdsl = norm(u)
         norm_v_xdsl = norm(v)
 
-        import pdb;pdb.set_trace()
-
         assert np.isclose(norm_u_devito, 25.612497, rtol=0.0001)
         assert np.isclose(norm_v_devito, 25.612497, rtol=0.0001)
 
