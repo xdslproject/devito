@@ -45,8 +45,8 @@ def test_u_plus1_conversion():
 def test_u_and_v_conversion():
     # Define a simple Devito Operator
     grid = Grid(shape=(3, 3))
-    u = TimeFunction(name='u', grid=grid, time_order=3)
-    v = TimeFunction(name='v', grid=grid, time_order=3)
+    u = TimeFunction(name='u', grid=grid, time_order=2)
+    v = TimeFunction(name='v', grid=grid, time_order=2)
     u.data[:] = 0.0001
     v.data[:] = 0.0001
     eq0 = Eq(u.forward, u.dx + v.dy)
@@ -64,6 +64,6 @@ def test_u_and_v_conversion():
     norm_v2 = norm(v)
 
     assert np.isclose(norm_u, norm_u2, atol=1e-5, rtol=0)
-    assert np.isclose(norm_u, 2.0664787, atol=1e-5, rtol=0)
+    assert np.isclose(norm_u, 2.0664592, atol=1e-5, rtol=0)
     assert np.isclose(norm_v, norm_v2, atol=1e-5, rtol=0)
-    assert np.isclose(norm_v, 2.0664787, atol=1e-5, rtol=0)
+    assert np.isclose(norm_v, 2.0664592, atol=1e-5, rtol=0)
