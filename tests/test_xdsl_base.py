@@ -354,6 +354,44 @@ def test_xdsl_mul_eqs_IV():
     assert (u.data[1, :] == 5.0).all()
     assert (u.data[0, :] == 4.0).all()
 
+    def test_xdsl_mul_eqs_III(self):
+        # Define a Devito Operator with multiple eqs
+        grid = Grid(shape=(4, 4))
+
+        u = TimeFunction(name="u", grid=grid, space_order=2)
+        v = TimeFunction(name="v", grid=grid, space_order=2)
+
+        u.data[:, :, :] = 0
+        v.data[:, :, :] = 0
+
+        eq0 = Eq(u.forward, u + 1)
+        eq1 = Eq(v.forward, v + 1)
+
+        op = Operator([eq0, eq1], opt="advanced")
+
+        op.apply(time_M=4)
+
+        norm_u_devito = norm(u)
+        norm_v_devito = norm(v)
+
+        u.data[:, :, :] = 0
+        v.data[:, :, :] = 0
+
+        op = Operator([eq0, eq1], opt="xdsl")
+
+        op.apply(time_M=4)
+
+        norm_u_xdsl = norm(u)
+        norm_v_xdsl = norm(v)
+
+        import pdb;pdb.set_trace()
+
+        assert np.isclose(norm_u_devito, 25.612497, rtol=0.0001)
+        assert np.isclose(norm_v_devito, 25.612497, rtol=0.0001)
+
+        assert np.isclose(norm_u_devito, norm_u_xdsl, rtol=0.0001)
+        assert np.isclose(norm_v_devito, norm_v_xdsl, rtol=0.0001)
+
 
 class TestOperatorUnsupported(object):
 
@@ -385,33 +423,3 @@ class TestOperatorUnsupported(object):
         op.apply(time_M=1)
 
         assert np.isclose(norm(u), 5.6584, rtol=0.001)
-
-    @pytest.mark.xfail(reason="Cannot Load and Store the same field!")
-    def test_xdsl_mul_eqs_III(self):
-        # Define a Devito Operator with multiple eqs
-        grid = Grid(shape=(4, 4))
-
-        u = TimeFunction(name="u", grid=grid, space_order=2)
-        v = TimeFunction(name="v", grid=grid, space_order=2)
-
-        u.data[:, :, :] = 0
-        v.data[:, :, :] = 0
-
-        eq0 = Eq(u.forward, u + 1)
-        eq1 = Eq(v.forward, v + 1)
-
-        op = Operator([eq0, eq1], opt="advanced")
-
-        op.apply(time_M=4)
-
-        norm_devito = norm(u)
-
-        u.data[:, :, :] = 0
-
-        op = Operator([eq0, eq1], opt="xdsl")
-
-        op.apply(time_M=4)
-
-        norm_xdsl = norm(u)
-
-        assert np.isclose(norm_devito, norm_xdsl, rtol=0.0001)
