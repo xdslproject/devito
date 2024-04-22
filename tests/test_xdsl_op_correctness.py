@@ -64,4 +64,6 @@ def test_u_and_v_conversion():
     norm_v2 = norm(v)
 
     assert np.isclose(norm_u, norm_u2, atol=1e-5, rtol=0)
+    assert np.isclose(norm_u, 2.0664787, atol=1e-5, rtol=0)
     assert np.isclose(norm_v, norm_v2, atol=1e-5, rtol=0)
+    assert np.isclose(norm_v, 2.0664787, atol=1e-5, rtol=0)
