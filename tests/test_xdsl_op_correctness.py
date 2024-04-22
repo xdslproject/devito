@@ -41,7 +41,7 @@ def test_u_plus1_conversion():
     assert np.isclose(norm1, norm2, atol=1e-5, rtol=0)
     assert np.isclose(norm1, 23.43075, atol=1e-5, rtol=0)
 
-@pytest.mark.xfail(reason="Needs a fix in offsets")
+
 def test_u_and_v_conversion():
     # Define a simple Devito Operator
     grid = Grid(shape=(3, 3))
@@ -49,8 +49,8 @@ def test_u_and_v_conversion():
     v = TimeFunction(name='v', grid=grid, time_order=2)
     u.data[:] = 0.0001
     v.data[:] = 0.0001
-    eq0 = Eq(u.forward, u.dt)
-    eq1 = Eq(v.forward, u.dt)
+    eq0 = Eq(u.forward, u.dx + v.dy)
+    eq1 = Eq(v.forward, u.dy + v.dx)
     op = Operator([eq0, eq1])
     op.apply(time_M=5, dt=0.1)
     norm_u = norm(u)
@@ -64,6 +64,6 @@ def test_u_and_v_conversion():
     norm_v2 = norm(v)
 
     assert np.isclose(norm_u, norm_u2, atol=1e-5, rtol=0)
-    assert np.isclose(norm_u, 26.565891, atol=1e-5, rtol=0)
+    assert np.isclose(norm_u, 2.0664592, atol=1e-5, rtol=0)
     assert np.isclose(norm_v, norm_v2, atol=1e-5, rtol=0)
-    assert np.isclose(norm_v, 292.49646, atol=1e-5, rtol=0)
+    assert np.isclose(norm_v, 2.0664592, atol=1e-5, rtol=0)
