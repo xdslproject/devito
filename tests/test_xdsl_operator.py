@@ -8,17 +8,8 @@ def test_create_xdsl_operator():
     u = TimeFunction(name='u', grid=grid)
     eq = Eq(u.forward, u.dx)
     xdsl_op = Operator([eq], opt='xdsl')
+
+    assert xdsl_op.name == 'Kernel'
+    assert len(xdsl_op._module.regions[0].blocks[0].ops) == 3
+
     xdsl_op.apply(time_M=5)
-
-    op = Operator([eq], opt='xdsl')
-    op.apply(time_M=5)
-
-
-def test_opt_xdsl():
-    # Following Devito's path for the moment
-    grid = Grid(shape=(3, 3))
-    u = TimeFunction(name='u', grid=grid)
-    eq = Eq(u.forward, u.dx)
-    op = Operator([eq], opt='xdsl')
-    # op = Operator([eq], opt='advanced')
-    op.apply(time_M=5)

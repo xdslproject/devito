@@ -3,6 +3,13 @@ from devito import Grid, TimeFunction, Eq, Operator, norm
 import pytest
 # flake8: noqa
 
+from xdsl.dialects.scf import For, Yield
+from xdsl.dialects.arith import Addi
+from xdsl.dialects.func import Call, Return
+from xdsl.dialects.stencil import FieldType, ApplyOp, LoadOp, StoreOp
+from xdsl.dialects.llvm import LLVMPointerType
+from xdsl.printer import Printer
+
 def test_udx():
 
     # Define a simple Devito Operator
@@ -67,3 +74,37 @@ def test_u_and_v_conversion():
     assert np.isclose(norm_u, 2.0664592, atol=1e-5, rtol=0)
     assert np.isclose(norm_v, norm_v2, atol=1e-5, rtol=0)
     assert np.isclose(norm_v, 2.0664592, atol=1e-5, rtol=0)
+
+    assert len(xdsl_op._module.regions[0].blocks[0].ops.first.body.blocks[0].ops) == 10
+
+    import pdb;pdb.set_trace()
+    assert isinstance(xdsl_op._module.regions[0].blocks[0].ops.first.body.blocks[0]._args[0].type, FieldType)  # noqa
+    assert isinstance(xdsl_op._module.regions[0].blocks[0].ops.first.body.blocks[0]._args[1].type, FieldType)  # noqa
+    assert isinstance(xdsl_op._module.regions[0].blocks[0].ops.first.body.blocks[0]._args[2].type, FieldType)  # noqa
+
+    ops = list(xdsl_op._module.regions[0].blocks[0].ops.first.body.blocks[0].ops)
+    assert type(ops[5] == Addi)
+    assert type(ops[6] == For)
+
+    scffor_ops = list(ops[6].regions[0].blocks[0].ops)
+    
+    assert len(scffor_ops) == 9
+
+    # First
+    assert isinstance(scffor_ops[0], LoadOp)
+    assert isinstance(scffor_ops[1], LoadOp)
+    assert isinstance(scffor_ops[2], ApplyOp)
+    assert isinstance(scffor_ops[3], StoreOp)
+
+    # Second
+    assert isinstance(scffor_ops[4], LoadOp)
+    assert isinstance(scffor_ops[5], LoadOp)
+    assert isinstance(scffor_ops[6], ApplyOp)
+    assert isinstance(scffor_ops[7], StoreOp)
+
+    # Yield
+    assert isinstance(scffor_ops[8], Yield)
+
+    assert type(ops[7] == Call)
+    assert type(ops[8] == StoreOp)
+    assert type(ops[9] == Return)
