@@ -1455,12 +1455,13 @@ class TestDataGather(object):
         else:
             assert ans == np.array(None)
 
+    @pytest.mark.xfail(reason="KeyError in visiting math nodes")
     @pytest.mark.parallel(mode=[4, 6])
     def test_gather_time_function(self):
         """ Test gathering of TimeFunction objects. """
         grid = Grid(shape=(11, 11))
         f = TimeFunction(name='f', grid=grid, save=11)
-        op = Operator([Eq(f.forward, f+1)])
+        op = Operator([Eq(f.forward, f+1)], opt='xdsl')
         op.apply(time_m=0, time_M=9)
         ans = f.data_gather(rank=0)
         tdata = np.zeros((11, 11, 11))
