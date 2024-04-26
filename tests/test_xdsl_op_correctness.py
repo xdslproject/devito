@@ -77,7 +77,6 @@ def test_u_and_v_conversion():
 
     assert len(xdsl_op._module.regions[0].blocks[0].ops.first.body.blocks[0].ops) == 10
 
-    import pdb;pdb.set_trace()
     assert isinstance(xdsl_op._module.regions[0].blocks[0].ops.first.body.blocks[0]._args[0].type, FieldType)  # noqa
     assert isinstance(xdsl_op._module.regions[0].blocks[0].ops.first.body.blocks[0]._args[1].type, FieldType)  # noqa
     assert isinstance(xdsl_op._module.regions[0].blocks[0].ops.first.body.blocks[0]._args[2].type, FieldType)  # noqa
