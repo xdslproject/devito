@@ -421,7 +421,7 @@ class TestOperatorUnsupported(object):
 
         assert a == 1
 
-    @pytest.mark.xfail(reason="stencil.return operation does not verify f32 works but not i64")
+    @pytest.mark.xfail(reason="stencil.return operation does not verify for i64")
     def test_forward_assignment(self):
         # simple forward assignment
 
