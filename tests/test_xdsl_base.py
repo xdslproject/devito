@@ -390,6 +390,21 @@ def test_xdsl_mul_eqs_IV():
         assert np.isclose(norm_u_devito, norm_u_xdsl, rtol=0.0001)
         assert np.isclose(norm_v_devito, norm_v_xdsl, rtol=0.0001)
 
+    def test_forward_assignment_f32(self):
+        # simple Devito a = 1 operator
+
+        grid = Grid(shape=(4, 4))
+        u = TimeFunction(name="u", grid=grid, space_order=2)
+        u.data[:, :, :] = 0
+
+        eq0 = Eq(u.forward, 0.1)
+
+        op = Operator([eq0], opt='xdsl')
+
+        op.apply(time_M=1)
+
+        assert np.isclose(norm(u), 0.56584, rtol=0.001)
+
 
 class TestOperatorUnsupported(object):
 
@@ -406,9 +421,9 @@ class TestOperatorUnsupported(object):
 
         assert a == 1
 
-    @pytest.mark.xfail(reason="stencil.return operation does not verify")
+    @pytest.mark.xfail(reason="stencil.return operation does not verify f32 works but not i64")
     def test_forward_assignment(self):
-        # simple Devito a = 1 operator
+        # simple forward assignment
 
         grid = Grid(shape=(4, 4))
         u = TimeFunction(name="u", grid=grid, space_order=2)
