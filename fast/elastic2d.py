@@ -20,7 +20,8 @@
 #
 # $$g(t) = -2 \alpha(t - t_0)e^{-\alpha(t-t_0)^2}$$
 
-from devito import Grid, TimeFunction, TensorTimeFunction, VectorTimeFunction, div, grad, diag, solve, Operator, Eq, Constant, norm, SpaceDimension
+from devito import (Grid, TensorTimeFunction, VectorTimeFunction, div, grad, diag, solve,
+                    Operator, Eq, Constant, norm, SpaceDimension)
 import argparse
 from examples.seismic.source import WaveletSource, RickerSource, TimeAxis
 from examples.seismic import plot_image
