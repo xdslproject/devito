@@ -1557,9 +1557,9 @@ class TestLoopScheduling(object):
         xi, yi, zi = grid.interior.dimensions  # noqa
         t = grid.stepping_dim  # noqa
 
-        ti0 = Array(name='ti0', shape=grid.shape, dimensions=grid.dimensions)  # noqa
-        ti1 = Array(name='ti1', shape=grid.shape, dimensions=grid.dimensions)  # noqa
-        ti3 = Array(name='ti3', shape=grid.shape, dimensions=grid.dimensions)  # noqa
+        ti0 = Function(name='ti0', shape=grid.shape, dimensions=grid.dimensions)  # noqa
+        ti1 = Function(name='ti1', shape=grid.shape, dimensions=grid.dimensions)  # noqa
+        ti3 = Function(name='ti3', shape=grid.shape, dimensions=grid.dimensions)  # noqa
         f = Function(name='f', grid=grid)  # noqa
         tu = TimeFunction(name='tu', grid=grid)  # noqa
         tv = TimeFunction(name='tv', grid=grid)  # noqa
