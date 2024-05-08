@@ -20,19 +20,21 @@
 #
 # $$g(t) = -2 \alpha(t - t_0)e^{-\alpha(t-t_0)^2}$$
 
+import argparse
+import numpy as np
+
 from devito import (Grid, TensorTimeFunction, VectorTimeFunction, div, grad, diag, solve,
                     Operator, Eq, Constant, norm, SpaceDimension)
-import argparse
+
 from examples.seismic.source import WaveletSource, RickerSource, TimeAxis
 from examples.seismic import plot_image
-import numpy as np
+
 
 from sympy import init_printing
 init_printing(use_latex='mathjax')
 
 
 parser = argparse.ArgumentParser(description='Process arguments.')
-
 parser.add_argument("-d", "--shape", default=(110, 110), type=int, nargs="+",
                     help="Number of grid points along each axis")
 parser.add_argument("-so", "--space_order", default=2,
