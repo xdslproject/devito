@@ -286,14 +286,14 @@ class XdslnoopOperator(Cpu64OperatorMixin, CoreOperator):
     @classmethod
     def _lower_stencil(cls, expressions, **kwargs):
         """
-        Lower the input expressions into an xDSL builtin.ModuleOp 
+        Lower the input expressions into an xDSL builtin.ModuleOp
         [Eq] -> [xdsl]
         Apply timers to the module
-        """      
+        """
 
-        conv = ExtractDevitoStencilConversion()     
+        conv = ExtractDevitoStencilConversion()
         module = conv.convert(expressions, **kwargs)
-        # print(module)       
+        # print(module)
         apply_timers(module, timed=True, **kwargs)
 
         return module
