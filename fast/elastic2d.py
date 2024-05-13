@@ -22,7 +22,6 @@
 
 import argparse
 import numpy as np
-
 from devito import (Grid, TensorTimeFunction, VectorTimeFunction, div, grad, diag, solve,
                     Operator, Eq, Constant, norm, SpaceDimension)
 
@@ -35,6 +34,7 @@ init_printing(use_latex='mathjax')
 
 
 parser = argparse.ArgumentParser(description='Process arguments.')
+
 parser.add_argument("-d", "--shape", default=(110, 110), type=int, nargs="+",
                     help="Number of grid points along each axis")
 parser.add_argument("-so", "--space_order", default=2,
