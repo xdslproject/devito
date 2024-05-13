@@ -9,7 +9,7 @@ cgen>=2020.1
 codepy>=2019.1
 click<9.0
 multidict
-anytree>=2.4.3,<=2.8
+anytree>=2.4.3,<=2.12.1
 pyrevolve>=2.1.3
 distributed<2022.10
 pytest>=3.6,<8.0
