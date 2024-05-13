@@ -13,6 +13,7 @@ on:
   pull_request:
     branches:
       - master
+  workflow_dispatch:
 
 jobs:
   pytest:
@@ -167,10 +168,3 @@ jobs:
     - name: Test with pytest
       run: |
         ${{ env.RUN_CMD }} pytest -k "${{ matrix.test-set }}" -m "not parallel" --cov --cov-config=.coveragerc --cov-report=xml ${{ env.TESTS }}
-
-    - name: Upload coverage to Codecov
-      if: "!contains(matrix.name, 'docker')"
-      uses: codecov/codecov-action@v3
-      with:
-        token: ${{ secrets.CODECOV_TOKEN }}
-        name: ${{ matrix.name }}
