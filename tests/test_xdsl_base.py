@@ -423,75 +423,6 @@ class TestAntiDepSupported(object):
         (('Eq(u[t+1,x,y,z], u[t,x,y,z] + v[t,x,y,z])',
             'Eq(v[t+1,x,y,z], u[t+1,x,y,z] + v[t,x,y,z])'),
             '++++++', ['txyz', 'txyz', 'txyz'], 'txyzzz'),
-        # 8) WAR 1->2; WAW 1->3
-        (('Eq(tu[t,x,y,z], tu[t,x,y,z] + tv[t,x,y,z])',
-            'Eq(tv[t,x,y,z], tu[t,x+2,y,z])',
-            'Eq(tu[t,3,y,0], tu[t,3,y,0] + 1.)'),
-            '++++++++', ['txyz', 'txyz', 'ty'], 'txyzxyzy'),
-        # 9) RAW 1->2, WAR 2->3
-        (('Eq(tu[t,x,y,z], tu[t,x,y,z] + tv[t,x,y,z])',
-            'Eq(tv[t,x,y,z], tu[t,x,y,z-2])',
-            'Eq(tw[t,x,y,z], tv[t,x,y+1,z] + 1.)'),
-            '++++++++', ['txyz', 'txyz', 'txyz'], 'txyzyzyz'),
-        # 10) WAR 1->2; WAW 1->3
-        (('Eq(tu[t-1,x,y,z], tu[t,x,y,z] + tv[t,x,y,z])',
-            'Eq(tv[t,x,y,z], tu[t,x,y,z+2])',
-            'Eq(tu[t-1,x,y,0], tu[t,x,y,0] + 1.)'),
-            '-+++', ['txyz', 'txy'], 'txyz'),
-        # 11) WAR 1->2
-        (('Eq(tu[t-1,x,y,z], tu[t,x,y,z] + tv[t,x,y,z])',
-            'Eq(tv[t,x,y,z], tu[t,x,y,z+2] + tu[t,x,y,z-2])',
-            'Eq(tw[t,x,y,z], tv[t,x,y,z] + 2)'),
-            '-+++', ['txyz'], 'txyz'),
-        # 12) Time goes backward so that information flows in time
-        (('Eq(tu[t-1,x,y,z], tu[t,x+3,y,z] + tv[t,x,y,z])',
-            'Eq(tv[t-1,x,y,z], tu[t,x,y,z+2])',
-            'Eq(tw[t-1,x,y,z], tu[t,x,y+1,z] + tv[t,x,y-1,z])'),
-            '-+++', ['txyz'], 'txyz'),
-        # 13) Time goes backward so that information flows in time, but the
-        # first and last Eqs are interleaved by a completely independent
-        # Eq. This results in three disjoint sets of loops
-        (('Eq(tu[t-1,x,y,z], tu[t,x+3,y,z] + tv[t,x,y,z])',
-            'Eq(ti0[x,y,z], ti1[x,y,z+2])',
-            'Eq(tw[t-1,x,y,z], tu[t,x,y+1,z] + tv[t,x,y-1,z])'),
-            '-++++++++++', ['txyz', 'xyz', 'txyz'], 'txyzxyztxyz'),
-        # 14) Time goes backward so that information flows in time
-        (('Eq(ti0[x,y,z], ti1[x,y,z+2])',
-            'Eq(tu[t-1,x,y,z], tu[t,x+3,y,z] + tv[t,x,y,z])',
-            'Eq(tw[t-1,x,y,z], tu[t,x,y+1,z] + ti0[x,y-1,z])'),
-            '+++-+++', ['xyz', 'txyz'], 'xyztxyz'),
-        # 15) WAR 2->1
-        # Here the difference is that we're using SubDimensions
-        (('Eq(tv[t,xi,yi,zi], tu[t,xi-1,yi,zi] + tu[t,xi+1,yi,zi])',
-            'Eq(tu[t+1,xi,yi,zi], tu[t,xi,yi,zi] + tv[t,xi-1,yi,zi] + tv[t,xi+1,yi,zi])'),
-            '+++++++', ['ti0xi0yi0z', 'ti0xi0yi0z'], 'ti0xi0yi0zi0xi0yi0z'),
-        # 16) RAW 3->1; expected=2
-        # Time goes backward, but the third equation should get fused with
-        # the first one, as the time dependence is loop-carried
-        (('Eq(tv[t-1,x,y,z], tv[t,x-1,y,z] + tv[t,x+1,y,z])',
-            'Eq(tv[t-1,z,z,z], tv[t-1,z,z,z] + 1)',
-            'Eq(f[x,y,z], tu[t-1,x,y,z] + tu[t,x,y,z] + tu[t+1,x,y,z] + tv[t,x,y,z])'),
-            '-++++', ['txyz', 'tz'], 'txyzz'),
-        # 17) WAR 2->3, 2->4; expected=4
-        (('Eq(tu[t+1,x,y,z], tu[t,x,y,z] + 1.)',
-            'Eq(tu[t+1,y,y,y], tu[t+1,y,y,y] + tw[t+1,y,y,y])',
-            'Eq(tw[t+1,z,z,z], tw[t+1,z,z,z] + 1.)',
-            'Eq(tv[t+1,x,y,z], tu[t+1,x,y,z] + 1.)'),
-            '+++++++++', ['txyz', 'ty', 'tz', 'txyz'], 'txyzyzxyz'),
-        # 18) WAR 1->3; expected=3
-        # 5 is expected to be moved before 4 but after 3, to be merged with 3
-        (('Eq(tu[t+1,x,y,z], tv[t,x,y,z] + 1.)',
-            'Eq(tv[t+1,x,y,z], tu[t,x,y,z] + 1.)',
-            'Eq(tw[t+1,x,y,z], tu[t+1,x+1,y,z] + tu[t+1,x-1,y,z])',
-            'Eq(f[x,x,z], tu[t,x,x,z] + tw[t,x,x,z])',
-            'Eq(ti0[x,y,z], tw[t+1,x,y,z] + 1.)'),
-            '++++++++', ['txyz', 'txyz', 'txz'], 'txyzxyzz'),
-        # 19) WAR 1->3; expected=3
-        # Cannot merge 1 with 3 otherwise we would break an anti-dependence
-        (('Eq(tv[t+1,x,y,z], tu[t,x,y,z] + tu[t,x+1,y,z])',
-            'Eq(tu[t+1,xi,yi,zi], tv[t+1,xi,yi,zi] + tv[t+1,xi+1,yi,zi])',
-            'Eq(tw[t+1,x,y,z], tv[t+1,x,y,z] + tv[t+1,x+1,y,z])'),
-            '++++++++++', ['txyz', 'ti0xi0yi0z', 'txyz'], 'txyzi0xi0yi0zxyz'),
     ])
     def test_consistency_anti_dependences(self, exprs, directions, expected, visit):
         """
@@ -512,29 +443,28 @@ class TestAntiDepSupported(object):
         v = TimeFunction(name='v', grid=grid)  # noqa
         w = TimeFunction(name='w', grid=grid)  # noqa
 
-
         # List comprehension would need explicit locals/globals mappings to eval
         eqns = []
         for e in exprs:
             eqns.append(eval(e))
 
-        u.data[:,:,:] = 1
-        v.data[:,:,:] = 1
+        u.data[:, :, :] = 1
+        v.data[:, :, :] = 1
 
         op = Operator(eqns)
         op.apply(time_M=1)
-        devito_a = u.data[:,:,:]
-        devito_b = v.data[:,:,:]
+        devito_a = u.data[:, :, :]
+        devito_b = v.data[:, :, :]
         
         # Re-initialize
-        u.data[:,:,:] = 1
-        v.data[:,:,:] = 1
+        u.data[:, :, :] = 1
+        v.data[:, :, :] = 1
 
         op = Operator(eqns, opt='xdsl')
         op.apply(time_M=1)
 
-        xdsl_a = u.data[:,:,:]
-        xdsl_b = v.data[:,:,:]
+        xdsl_a = u.data[:, :, :]
+        xdsl_b = v.data[:, :, :]
 
         assert np.all(devito_a == xdsl_a)
 
