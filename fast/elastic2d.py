@@ -121,6 +121,12 @@ u_t = Eq(tau.forward, solve(pde_tau, tau.forward))
 op = Operator([u_v] + [u_t] + src_xx + src_zz)
 op(dt=dt)
 
+
+v_init = v[0].data[:, :], v[1].data[:, :]
+tau_init = tau[0].data[:, :], tau[1].data[:, :], tau[2].data[:, :]
+
+# import pdb;pdb.set_trace()
+
 # Up to here, let's only use Devito
 # assert np.isclose(norm(v[0]), 0.6285093, atol=1e-4, rtol=0)
 
@@ -141,11 +147,25 @@ if args.devito:
     print("norm tau0:", norm(tau[0]))
 
 
-plot_image(v[0].data[0], vmin=-.5*1e-1, vmax=.5*1e-1, cmap="seismic")
-plot_image(v[1].data[0], vmin=-.5*1e-2, vmax=.5*1e-2, cmap="seismic")
-plot_image(tau[0, 0].data[0], vmin=-.5*1e-2, vmax=.5*1e-2, cmap="seismic")
-plot_image(tau[1, 1].data[0], vmin=-.5*1e-2, vmax=.5*1e-2, cmap="seismic")
-plot_image(tau[0, 1].data[0], vmin=-.5*1e-2, vmax=.5*1e-2, cmap="seismic")
+# plot_image(v[0].data[0], vmin=-.5*1e-1, vmax=.5*1e-1, cmap="seismic")
+# plot_image(v[1].data[0], vmin=-.5*1e-2, vmax=.5*1e-2, cmap="seismic")
+# plot_image(tau[0, 0].data[0], vmin=-.5*1e-2, vmax=.5*1e-2, cmap="seismic")
+# plot_image(tau[1, 1].data[0], vmin=-.5*1e-2, vmax=.5*1e-2, cmap="seismic")
+# plot_image(tau[0, 1].data[0], vmin=-.5*1e-2, vmax=.5*1e-2, cmap="seismic")
+
+op = Operator([u_v] + [u_t], opt='advanced')
+
+v_xdsl = v[0].data[:, :], v[1].data[:, :]
+tau_xdsl = tau[0].data[:, :], tau[1].data[:, :], tau[2].data[:, :]
+
+# v[0].data[:, :], v[1].data[:, :] = v_init[0][:, :], v_init[1][:, :]
+# tau[0].data[:, :], tau[1].data[:, :], tau[2].data[:, :] = (
+#     tau_init[0][:, :],
+#     tau_init[1][:, :],
+#     tau_init[2][:, :],
+# )
+
+op(dt=dt, time_M=1)
 
 print(norm(v[0]))
 print(norm(tau[0]))
@@ -159,5 +179,11 @@ plt.imsave('/home/gb4018/workspace/xdslproject/devito/fast/v1.pdf', v[1].data_wi
 plt.imsave('/home/gb4018/workspace/xdslproject/devito/fast/tau00.pdf', tau[0, 0].data_with_halo[0], vmin=-.5*1e-2, vmax=.5*1e-2, cmap="seismic")
 plt.imsave('/home/gb4018/workspace/xdslproject/devito/fast/tau11.pdf', tau[1, 1].data_with_halo[0], vmin=-.5*1e-2, vmax=.5*1e-2, cmap="seismic")
 plt.imsave('/home/gb4018/workspace/xdslproject/devito/fast/tau01.pdf', tau[0, 1].data_with_halo[0], vmin=-.5*1e-2, vmax=.5*1e-2, cmap="seismic")
+
+assert np.allclose(v_xdsl[0].data, v[0].data, rtol=1e-8)
+assert np.allclose(v_xdsl[1].data, v[1].data, rtol=1e-8)
+assert np.allclose(tau[0].data, tau_xdsl[0].data, rtol=1e-8)
+assert np.allclose(tau[1].data, tau_xdsl[1].data, rtol=1e-8)
+assert np.allclose(tau[2].data, tau_xdsl[2].data, rtol=1e-8)
 
 # assert np.isclose(norm(v[0]), 0.6285093, atol=1e-4, rtol=0)

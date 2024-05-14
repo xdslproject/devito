@@ -1,10 +1,11 @@
 # ------------- General imports -------------#
 
-from typing import Any, Iterable
+from typing import Any, Iterable, cast
 from dataclasses import dataclass, field
 from sympy import Add, Expr, Float, Indexed, Integer, Mod, Mul, Pow, Symbol
+from devito.symbolics.search import retrieve_functions
 from devito.tools.data_structures import OrderedSet
-from devito.types.dense import DiscreteFunction
+from devito.types.dense import DiscreteFunction, Function, TimeFunction
 from devito.types.equation import Eq
 
 # ------------- xdsl imports -------------#
@@ -63,6 +64,41 @@ class ExtractDevitoStencilConversion:
 
     time_offs: int
 
+    def __init__(self):
+        self.temps = dict()
+
+    def convert_time_function_eq(self, lhs: Indexed, eq: LoweredEq, **kwargs):
+        # Read the grid containing necessary discretization information
+        # (size, halo width, ...)
+        write_function = cast(TimeFunction, lhs.function)
+        grid: Grid = write_function.grid
+        # Retrieve the stepping dimension from the grid
+        step_dim = grid.stepping_dim
+        # Also, store the output function's time buffer of this equation
+        output_time_offset = (
+            lhs.indices[step_dim] - step_dim
+        ) % write_function.time_size
+        self.out_time_buffer = (write_function, output_time_offset)
+
+        # Get the function carriers of the equation
+        self._build_step_body(step_dim, eq)
+
+        return
+
+    def convert_function_eq(
+        self, lhs: Indexed, eq: LoweredEq, **kwargs
+    ):  # Read the grid containing necessary discretization information
+        # (size, halo width, ...)
+        write_function = cast(Function, lhs.function)
+        grid: Grid = write_function.grid
+        # Retrieve the stepping dimension from the grid
+        step_dim = grid.stepping_dim
+        # Also, store the output function's time buffer of this equation
+        self.out_time_buffer = (write_function, 0)
+
+        # Get the function carriers of the equation
+        self._build_step_body(step_dim, eq)
+
     def _convert_eq(self, eq: LoweredEq, **kwargs):
         """
         # Docs here Need rewriting
@@ -98,21 +134,23 @@ class ExtractDevitoStencilConversion:
 
         # Get the left hand side, called "output function" here because it tells us
         # Where to write the results of each step.
-        write_function = eq.lhs.function
-        # Read the grid containing necessary discretization information
-        # (size, halo width, ...)
-        grid: Grid = write_function.grid
-        # Retrieve the stepping dimension from the grid
-        step_dim = grid.stepping_dim
+        write_function = eq.lhs
 
-        # Also, store the output function's time buffer of this equation
-        output_time_offset = (eq.lhs.indices[step_dim] - step_dim) % eq.lhs.function.time_size
-        self.out_time_buffer = (write_function, output_time_offset)
-
-        # Get the function carriers of the equation
-        self._build_step_body(step_dim, eq)
-
-        return
+        match write_function:
+            case Indexed():
+                match write_function.function:
+                    case TimeFunction():
+                        self.convert_time_function_eq(write_function, eq, **kwargs)
+                    case Function():
+                        self.convert_function_eq(write_function, eq, **kwargs)
+                    case _:
+                        raise NotImplementedError(
+                            f"Function of type {type(write_function.function)} not supported"
+                        )
+            case Symbol():
+                self.convert_symbol_eq(write_function, eq, **kwargs)
+            case _:
+                raise NotImplementedError(f"LHS of type {type(write_function)} not supported")
 
     def _visit_math_nodes(self, dim: SteppingDimension, node: Expr, output_indexed:Indexed) -> SSAValue:
         # Handle Indexeds
@@ -190,11 +228,11 @@ class ExtractDevitoStencilConversion:
 
         for f, t in read_functions:
             if (f, t) not in self.temps:
-                self.temps[(f, t)] = stencil.LoadOp.get(self.block_args[(f, t)]).res
+                self.temps[(f, t)] = stencil.LoadOp.get(self.function_values[(f, t)]).res
                 self.temps[(f, t)].name_hint = f"{f.name}_t{t}_temp"
 
         apply_args = [self.temps[f] for f in read_functions]
-        
+
         write_function = self.out_time_buffer[0]
         shape = write_function.grid.shape_local
         apply = stencil.ApplyOp.get(
@@ -215,7 +253,7 @@ class ExtractDevitoStencilConversion:
             apply_arg.name_hint = apply_op.name_hint.replace("temp", "blk")
 
         self.apply_temps = {k:v for k,v in zip(read_functions, apply.region.block.args)}
-        
+
         with ImplicitBuilder(apply.region.block):
             stencil.ReturnOp.get([self._visit_math_nodes(dim, eq.rhs, eq.lhs)])
 
@@ -225,16 +263,80 @@ class ExtractDevitoStencilConversion:
         # import pdb;pdb.set_trace()
         store = stencil.StoreOp.get(
             apply.res[0],
-            self.block_args[self.out_time_buffer],
-            stencil.StencilBoundsAttr(zip(lb ,ub)),
+            self.function_values[self.out_time_buffer],
+            stencil.StencilBoundsAttr(zip(lb, ub)),
             stencil.TempType(len(shape), element_type=dtypes_to_xdsltypes[write_function.dtype])
         )
 
         # import pdb;pdb.set_trace()
-        
+
         store.temp_with_halo.name_hint = f"{write_function.name}_t{self.out_time_buffer[1]}_temp"
         self.temps[self.out_time_buffer] = store.temp_with_halo
 
+    def build_time_loop(
+        self, eqs: list[LoweredEq], step_dim: SteppingDimension, **kwargs
+    ):
+        # Bounds and step boilerpalte
+        lb = iet_ssa.LoadSymbolic.get(
+            step_dim.symbolic_min._C_name, builtin.IndexType()
+        )
+        ub = iet_ssa.LoadSymbolic.get(
+            step_dim.symbolic_max._C_name, builtin.IndexType()
+        )
+        one = arith.Constant.from_int_and_width(1, builtin.IndexType())
+        # Devito iterates from time_m to time_M *inclusive*, MLIR only takes
+        # exclusive upper bounds, so we increment here.
+        ub = arith.Addi(ub, one)
+        # Take the exact time_step from DeVito
+        try:
+            step = arith.Constant.from_int_and_width(
+                int(step_dim.symbolic_incr), builtin.IndexType()
+            )
+            step.result.name_hint = "step"
+        except:
+            raise ValueError("step must be int!")
+
+        # The iteration arguments
+        # Those are the buffers we will be swapping through the time loop.
+        # This is our SSA implementation of DeVito's buffer swapping as
+        # u[(t+k)%n].
+        iter_args = list(
+            v for (f, t), v in self.function_args.items() if isinstance(f, TimeFunction)
+        )
+        # Create the for loop
+        loop = scf.For(
+            lb,
+            ub,
+            step,
+            iter_args,
+            Block(arg_types=[builtin.IndexType(), *(a.type for a in iter_args)]),
+        )
+        loop.body.block.args[0].name_hint = "time"
+
+        # Store a mapping from time_buffers to their corresponding block
+        # arguments for easier access later.
+        self.block_args = {
+            (f, t): loop.body.block.args[1 + i]
+            for i, (f, t) in enumerate(self.time_buffers)
+        }
+        self.function_values |= self.block_args
+        # Name the block argument for debugging.
+        for (f, t), arg in self.block_args.items():
+            arg.name_hint = f"{f.name}_t{t}"
+
+        with ImplicitBuilder(loop.body.block):
+            self.generate_equations(eqs, **kwargs)
+            # Swap buffers through scf.yield
+            yield_args = [
+                self.block_args[(f, (t + 1) % f.time_size)]
+                for (f, t) in self.block_args.keys()
+            ]
+            scf.Yield(*yield_args)
+
+    def generate_equations(self, eqs: list[LoweredEq], **kwargs):
+        # Lower equations to their xDSL equivalent
+        for eq in eqs:
+            self._convert_eq(eq, **kwargs)
 
     def convert(self, eqs: Iterable[Eq], **kwargs) -> builtin.ModuleOp:
         """
@@ -280,16 +382,27 @@ class ExtractDevitoStencilConversion:
 
         """
         # Instantiate the module.
+        self.function_values : dict[tuple[Function, int], SSAValue] = {}
         module = builtin.ModuleOp(Region([block := Block([])]))
         with ImplicitBuilder(block):
             # Get all functions used in the equations
             functions = OrderedSet(
                 *(f.function for eq in eqs for f in retrieve_function_carriers(eq))
             )
-            self.time_buffers = [(f, i) for f in functions for i in range(f.time_size)]
+            self.time_buffers : list[TimeFunction] = []
+            self.functions : list[Function] = []
+            for f in functions:
+                match f:
+                    case TimeFunction():
+                        for i in range(f.time_size):
+                            self.time_buffers.append((f, i))
+                    case Function():
+                        self.functions.append(f)
+
             # For each used time_buffer, define a stencil.field type for the function.
             # Those represent DeVito's buffers in xDSL/stencil terms.
             fields_types = [field_from_function(f) for (f, _) in self.time_buffers]
+            fields_types += [field_from_function(f) for f in self.functions]
             # Get the operator name to name the function accordingly.
             name = kwargs.get("name", "Kernel")
             # Create a function with the fields as arguments.
@@ -302,6 +415,12 @@ class ExtractDevitoStencilConversion:
                 # Also define argument names to help with debugging
                 xdsl_func.body.block.args[i].name_hint = f"{f.name}_vec{t}"
                 self.function_args[(f, t)] = xdsl_func.body.block.args[i]
+            for i, f in enumerate(self.functions):
+                xdsl_func.body.block.args[len(self.time_buffers)+i].name_hint = f"{f.name}_vec"
+                self.function_args[(f, 0)] = xdsl_func.body.block.args[len(self.time_buffers)+i]
+
+            self.function_values |= self.function_args
+            print(self.function_values)
 
             # Move on to generate the function body
             with ImplicitBuilder(xdsl_func.body.block):
@@ -313,60 +432,15 @@ class ExtractDevitoStencilConversion:
 
                 # Get the stepping dimension. It's usually time, and usually the first one.
                 # Getting it here; more readable and less input assumptions :)
-                step_dim = eqs[0].lhs.function.grid.stepping_dim
-
-                # Bounds and step boilerpalte
-                lb = iet_ssa.LoadSymbolic.get(
-                    step_dim.symbolic_min._C_name, builtin.IndexType()
-                )
-                ub = iet_ssa.LoadSymbolic.get(
-                    step_dim.symbolic_max._C_name, builtin.IndexType()
-                )
-                one = arith.Constant.from_int_and_width(1, builtin.IndexType())
-                # Devito iterates from time_m to time_M *inclusive*, MLIR only takes
-                # exclusive upper bounds, so we increment here.
-                ub = arith.Addi(ub, one)
-                # Take the exact time_step from DeVito
-                try:
-                    step = arith.Constant.from_int_and_width(
-                        int(step_dim.symbolic_incr), builtin.IndexType()
-                    )
-                    step.result.name_hint = "step"
-                except:
-                    raise ValueError("step must be int!")
-
-                # The iteration arguments
-                # Those are the buffers we will be swapping through the time loop.
-                # This is our SSA implementation of DeVito's buffer swapping as
-                # u[(t+k)%n].
-                iter_args = list(self.function_args.values())
-                # Create the for loop
-                loop = scf.For(
-                    lb,
-                    ub,
-                    step,
-                    iter_args,
-                    Block(arg_types=[builtin.IndexType(), *(a.type for a in iter_args)]),
-                )
-                loop.body.block.args[0].name_hint = "time"
-
-                # Store a mapping from time_buffers to their corresponding block
-                # arguments for easier access later.
-                self.block_args = {
-                    (f, t): loop.body.block.args[1 + i]
-                    for i, (f, t) in enumerate(self.time_buffers)
+                time_functions = [f for (f,_) in self.time_buffers]
+                dimensions = {
+                    d for f in (self.functions + time_functions) for d in f.dimensions
                 }
-                # Name the block argument for debugging.
-                for (f, t), arg in self.block_args.items():
-                    arg.name_hint = f"{f.name}_t{t}"
-
-                with ImplicitBuilder(loop.body.block):
-                    # Lower equations to their xDSL equivalent
-                    for eq in eqs:
-                        self._convert_eq(eq, **kwargs)
-                    # Swap buffers through scf.yield
-                    yield_args = [self.block_args[(f, (t+1)%f.time_size)] for (f, t) in self.block_args.keys()]
-                    scf.Yield(*yield_args)
+                step_dim = next((d for d in dimensions if isinstance(d, SteppingDimension)), None)
+                if step_dim is not None:
+                    self.build_time_loop(eqs, step_dim, **kwargs)
+                else:
+                    self.generate_equations(eqs, **kwargs)
 
                 # func wants a return
                 func.Return()
@@ -490,7 +564,6 @@ class MakeFunctionTimed(TimerRewritePattern):
             func.FuncOp.external('timer_start', [], [builtin.f64]),
             func.FuncOp.external('timer_end', [builtin.f64], [builtin.f64])
         ])
-
 
 
 def get_containing_func(op: Operation) -> func.FuncOp | None:
