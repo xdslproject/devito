@@ -30,7 +30,7 @@ from devito.ir.iet import Callable, MetaCall
 from devito.tools import flatten, filter_sorted, OrderedSet
 
 from devito.ir.ietxdsl.cluster_to_ssa import (ExtractDevitoStencilConversion,
-                                              convert_devito_stencil_to_xdsl_stencil,
+                                              apply_timers,
                                               finalize_module_with_globals)  # noqa
 
 from devito.types import TimeFunction
@@ -285,15 +285,17 @@ class XdslnoopOperator(Cpu64OperatorMixin, CoreOperator):
 
     @classmethod
     def _lower_stencil(cls, expressions, **kwargs):
-        # [Eq] -> [xdsl]
-        # Lower expressions to a builtin.ModuleOp
+        """
+        Lower the input expressions into an xDSL builtin.ModuleOp
+        [Eq] -> [xdsl]
+        Apply timers to the module
+        """
+
         conv = ExtractDevitoStencilConversion()
         module = conv.convert(expressions, **kwargs)
-        # Uncomment to print
-        # Printer().print(module)
-        convert_devito_stencil_to_xdsl_stencil(module, timed=True, **kwargs)
-        # Uncomment to print
-        # Printer().print(module)
+        # print(module)
+        apply_timers(module, timed=True, **kwargs)
+
         return module
 
     @property
@@ -326,7 +328,7 @@ class XdslnoopOperator(Cpu64OperatorMixin, CoreOperator):
             finalize_module_with_globals(self._module, self._jit_kernel_constants,
                                          gpu_boilerplate=is_gpu)
 
-            # print module as IR
+            # Print module as IR
             module_str = StringIO()
             Printer(stream=module_str).print(self._module)
             module_str = module_str.getvalue()
@@ -954,6 +956,7 @@ def generate_XDSL_MPI_PIPELINE(decomp, nb_tiled_dims):
 
 
 def generate_pipeline(passes: Iterable[str]):
+    'Generate a pipeline string from a list of passes'
     passes_string = ",".join(passes)
     return f'"{passes_string}"'
 
