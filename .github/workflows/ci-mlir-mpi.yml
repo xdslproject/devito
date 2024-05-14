@@ -21,7 +21,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    container: papychacal/xdsl-llvm:98e674c9f16d677d95c67bc130e267fae331e43c
+    container: papychacal/xdsl-llvm:ac9c9f53fa94452b958c0cf02fd069a5db62a4b8
     steps:
     - name: Checkout Devito
       uses: actions/checkout@v3

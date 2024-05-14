@@ -201,11 +201,12 @@ class ExtractDevitoStencilConversion:
         with ImplicitBuilder(apply.region.block):
             stencil.ReturnOp.get([self._visit_math_nodes(dim, eq.rhs, eq.lhs)])
 
+        lb = stencil.IndexAttr.get(*([0] * len(shape)))
+        ub = stencil.IndexAttr.get(*shape)
         stencil.StoreOp.get(
             apply.res[0],
             self.block_args[self.out_time_buffer],
-            stencil.IndexAttr.get(*([0] * len(shape))),
-            stencil.IndexAttr.get(*shape),
+            stencil.StencilBoundsAttr(zip(lb ,ub))
         )
 
     def convert(self, eqs: Iterable[Eq], **kwargs) -> builtin.ModuleOp:
@@ -272,7 +273,7 @@ class ExtractDevitoStencilConversion:
             self.function_args = {}
             for i, (f, t) in enumerate(self.time_buffers):
                 # Also define argument names to help with debugging
-                xdsl_func.body.block.args[i].name_hint = f"{f.name}_vec_{t}"
+                xdsl_func.body.block.args[i].name_hint = f"{f.name}_vec{t}"
                 self.function_args[(f, t)] = xdsl_func.body.block.args[i]
 
             # Move on to generate the function body
