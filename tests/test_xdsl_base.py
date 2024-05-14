@@ -731,6 +731,7 @@ def test_xdsl_mul_eqs_VI():
     assert np.isclose(u.data, devito_res_u.data).all()
     assert np.isclose(v.data, devito_res_v.data).all()
 
+
 class TestOperatorUnsupported(object):
 
     @pytest.mark.xfail(reason="Symbols are not supported in xDSL yet")
