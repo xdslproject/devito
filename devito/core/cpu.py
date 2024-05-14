@@ -539,7 +539,7 @@ class XdslnoopOperator(Cpu64OperatorMixin, CoreOperator):
             if isinstance(arg, TimeFunction):
                 data = arg._data
                 for t in range(data.shape[0]):
-                    args[f'{arg._C_name}_{t}'] = data[t, ...].ctypes.data_as(ptr_of(f32))
+                    args[f'{arg._C_name}{t}'] = data[t, ...].ctypes.data_as(ptr_of(f32))
 
         self._jit_kernel_constants.update(args)
 
