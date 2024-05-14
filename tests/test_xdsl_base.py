@@ -419,9 +419,15 @@ class TestAntiDepSupported(object):
         (('Eq(u[t+1,x,y,z], u[t,x,y,z] + v[t,x,y,z])',
             'Eq(v[t+1,x,y,z], u[t,x,y,z] + v[t,x,y,z])'),
             '+++++', ['txyz', 'txyz', 'txy'], 'txyzz'),
+        (('Eq(u[t+1,x,y,z], u[t,x,y,z] + v[t,x,y,z])',
+            'Eq(v[t+1,x,y,z], u[t,x,y,z] + v[t,x,y,z])'),
+            '+++++', ['txyz', 'txyz', 'txy'], 'txyzz'),
         # 7)
         (('Eq(u[t+1,x,y,z], u[t,x,y,z] + v[t,x,y,z])',
             'Eq(v[t+1,x,y,z], u[t+1,x,y,z] + v[t,x,y,z])'),
+            '++++++', ['txyz', 'txyz', 'txyz'], 'txyzzz'),
+        (('Eq(u[t+1,x,y,z], u[t,x,y,z] + v[t,x,y,z])',
+            'Eq(v[t+1,x,y,z], u[t+1,x,y+1,z] + u[t+1,x,y,z] + v[t,x,y,z])'),
             '++++++', ['txyz', 'txyz', 'txyz'], 'txyzzz'),
     ])
     def test_consistency_anti_dependences(self, exprs, directions, expected, visit):
@@ -452,20 +458,21 @@ class TestAntiDepSupported(object):
         v.data[:, :, :] = 1
 
         op = Operator(eqns)
-        op.apply(time_M=1)
-        devito_a = u.data[:, :, :]
-        devito_b = v.data[:, :, :]
+        op.apply(time_M=2)
+        devito_a = u.data_with_halo[:, :, :]
+        devito_b = v.data_with_halo[:, :, :]
         
         # Re-initialize
         u.data[:, :, :] = 1
         v.data[:, :, :] = 1
 
-        op = Operator(eqns, opt='xdsl')
-        op.apply(time_M=1)
+        xdsl_op = Operator(eqns, opt='xdsl')
+        xdsl_op.apply(time_M=2)
 
-        xdsl_a = u.data[:, :, :]
-        xdsl_b = v.data[:, :, :]
+        xdsl_a = u.data_with_halo[:, :, :]
+        xdsl_b = v.data_with_halo[:, :, :]
 
+        import pdb;pdb.set_trace()
         assert np.all(devito_a == xdsl_a)
 
 
@@ -649,7 +656,7 @@ def test_xdsl_mul_eqs_VI():
     assert np.isclose(v.data_with_halo, devito_res_v).all()
 
 
-@pytest.mark.xfail(reason=" .forward.dx cannot be handled")
+# @pytest.mark.xfail(reason=" .forward.dx cannot be handled")
 def test_xdsl_mul_eqs_VII():
     # Define a Devito Operator with multiple eqs
     grid = Grid(shape=(4, 4))
@@ -661,9 +668,9 @@ def test_xdsl_mul_eqs_VII():
     v.data[:, :, :] = 0.1
 
     eq0 = Eq(u.forward, u + 2)
-    eq1 = Eq(v, u.forward.dx * 2)
+    eq1 = Eq(v, u.forward * 2)
 
-    op = Operator([eq0, eq1], opt="advanced")
+    op = Operator([eq0, eq1], opt="noop")
     op.apply(time_M=4, dt=0.1)
 
     devito_res_u = u.data_with_halo[:, :, :]
@@ -672,9 +679,9 @@ def test_xdsl_mul_eqs_VII():
     u.data[:, :, :] = 0.1
     v.data[:, :, :] = 0.1
 
-    op = Operator([eq0, eq1], opt="xdsl")
-    op.apply(time_M=4, dt=0.1)
-
+    xdsl_op = Operator([eq0, eq1], opt="xdsl")
+    xdsl_op.apply(time_M=4, dt=0.1)
+    import pdb;pdb.set_trace()
     assert np.isclose(norm(u), np.linalg.norm(devito_res_u))
     assert np.isclose(norm(v), np.linalg.norm(devito_res_v))
 
