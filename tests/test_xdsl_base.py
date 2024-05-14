@@ -704,8 +704,8 @@ def test_xdsl_mul_eqs_VI():
     # Define a Devito Operator with multiple eqs
     grid = Grid(shape=(4, 4))
 
-    u = TimeFunction(name="u", grid=grid, time_order=3, space_order=2)
-    v = TimeFunction(name="v", grid=grid, time_order=3, space_order=2)
+    u = TimeFunction(name="u", grid=grid, time_order=2)
+    v = TimeFunction(name="v", grid=grid, time_order=2)
     u.data[:, :, :] = np.random.rand(*u.shape)
     v.data[:, :, :] = np.random.rand(*v.shape)
     u_init = u.data.copy()
@@ -730,7 +730,6 @@ def test_xdsl_mul_eqs_VI():
 
     assert np.isclose(u.data, devito_res_u.data).all()
     assert np.isclose(v.data, devito_res_v.data).all()
-
 
 class TestOperatorUnsupported(object):
 
