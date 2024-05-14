@@ -1,8 +1,8 @@
 import numpy as np
 import pytest
 
-from devito import Grid, TimeFunction, Eq, Operator, solve, norm
-from devito.types import Symbol
+from devito import Grid, TimeFunction, Eq, Operator, solve, norm, Function
+from devito.types import Symbol, Array
 
 from xdsl.dialects.scf import For, Yield
 from xdsl.dialects.arith import Addi
@@ -247,25 +247,462 @@ def test_standard_mlir_rewrites(shape, so, to, nt):
     xdslop.apply(time=nt, dt=dt)
 
 
-class TestOperatorUnsupported(object):
+def test_xdsl_mul_eqs_I():
+    # Define a Devito Operator with multiple eqs
+    grid = Grid(shape=(4, 4))
 
-    @pytest.mark.xfail(reason="Multiple eqs are not supported")
-    def test_xdsl_mul_eqs(self):
-        # Define a Devito Operator with multiple eqs
-        grid = Grid(shape=(4, 4))
-        u = TimeFunction(name='u', grid=grid, space_order=2)
+    u = TimeFunction(name="u", grid=grid, space_order=2)
+    u.data[:, :, :] = 0
 
-        eq0 = Eq(u.forward, u + 1)
-        eq1 = Eq(u.forward, u + 2)
+    eq0 = Eq(u.forward, u + 1)
+    eq1 = Eq(u.forward, u + 2)
 
-        op = Operator([eq0, eq1], opt='xdsl')
+    op = Operator([eq0, eq1], opt="advanced")
 
+    op.apply(time_M=4)
+
+    assert (u.data[1, :] == 10.0).all()
+    assert (u.data[0, :] == 8.0).all()
+
+    u.data[:, :, :] = 0
+
+    op = Operator([eq0, eq1], opt="xdsl")
+
+    op.apply(time_M=4)
+
+    assert (u.data[1, :] == 10.0).all()
+    assert (u.data[0, :] == 8.0).all()
+
+
+def test_xdsl_mul_eqs_II():
+    # Define a Devito Operator with multiple eqs
+    grid = Grid(shape=(4, 4))
+
+    u = TimeFunction(name="u", grid=grid, space_order=2)
+    u.data[:, :, :] = 0
+
+    eq0 = Eq(u.forward, 0.01*u.dx)
+    eq1 = Eq(u.forward, u.dx + 2)
+
+    op = Operator([eq0, eq1], opt="advanced")
+
+    op.apply(time_M=4)
+
+    norm_devito = norm(u)
+
+    u.data[:, :, :] = 0
+
+    op = Operator([eq0, eq1], opt="xdsl")
+
+    op.apply(time_M=4)
+
+    norm_xdsl = norm(u)
+
+    assert np.isclose(norm_devito, norm_xdsl, rtol=0.0001)
+
+
+def test_xdsl_mul_eqs_III():
+    # Define a Devito Operator with multiple eqs
+    grid = Grid(shape=(4, 4))
+
+    u = TimeFunction(name="u", grid=grid, space_order=2)
+    u.data[:, :, :] = 0
+
+    eq0 = Eq(u.forward, u + 2)
+    eq1 = Eq(u.forward, u + 1)
+
+    op = Operator([eq0, eq1], opt="advanced")
+
+    op.apply(time_M=4)
+
+    norm_devito = norm(u)
+
+    u.data[:, :, :] = 0
+
+    op = Operator([eq0, eq1], opt="xdsl")
+
+    op.apply(time_M=4)
+
+    norm_xdsl = norm(u)
+
+    assert np.isclose(norm_devito, norm_xdsl, rtol=0.0001)
+
+
+def test_xdsl_mul_eqs_IV():
+    # Define a Devito Operator with multiple eqs
+    grid = Grid(shape=(4, 4))
+
+    u = TimeFunction(name="u", grid=grid, space_order=2)
+    u.data[:, :, :] = 0
+
+    eq0 = Eq(u.forward, u + 2)
+    eq1 = Eq(u.forward, u + 1)
+
+    op = Operator([eq0, eq1], opt="advanced")
+
+    op.apply(time_M=4)
+
+    assert (u.data[1, :] == 5.0).all()
+    assert (u.data[0, :] == 4.0).all()
+
+    u.data[:, :, :] = 0
+
+    op = Operator([eq0, eq1], opt="xdsl")
+
+    op.apply(time_M=4)
+
+    assert (u.data[1, :] == 5.0).all()
+    assert (u.data[0, :] == 4.0).all()
+
+
+def test_xdsl_mul_eqs_V():
+    # Define a Devito Operator with multiple eqs
+    grid = Grid(shape=(4, 4))
+
+    u = TimeFunction(name="u", grid=grid, space_order=2)
+    v = TimeFunction(name="v", grid=grid, space_order=2)
+
+    u.data[:, :, :] = 0
+    v.data[:, :, :] = 0
+
+    eq0 = Eq(u.forward, u + 1)
+    eq1 = Eq(v.forward, v + 1)
+
+    op = Operator([eq0, eq1], opt="advanced")
+
+    op.apply(time_M=4)
+
+    norm_u_devito = norm(u)
+    norm_v_devito = norm(v)
+
+    u.data[:, :, :] = 0
+    v.data[:, :, :] = 0
+
+    op = Operator([eq0, eq1], opt="xdsl")
+
+    op.apply(time_M=4)
+
+    norm_u_xdsl = norm(u)
+    norm_v_xdsl = norm(v)
+
+    assert np.isclose(norm_u_devito, 25.612497, rtol=0.0001)
+    assert np.isclose(norm_v_devito, 25.612497, rtol=0.0001)
+
+    assert np.isclose(norm_u_devito, norm_u_xdsl, rtol=0.0001)
+    assert np.isclose(norm_v_devito, norm_v_xdsl, rtol=0.0001)
+
+
+def test_forward_assignment_f32():
+    # simple Devito a = 1 operator
+
+    grid = Grid(shape=(4, 4))
+    u = TimeFunction(name="u", grid=grid, space_order=2)
+    u.data[:, :, :] = 0
+
+    eq0 = Eq(u.forward, 0.1)
+
+    op = Operator([eq0], opt='xdsl')
+
+    op.apply(time_M=1)
+
+    assert np.isclose(norm(u), 0.56584, rtol=0.001)
+
+
+@pytest.mark.xfail(reason="not supported in xDSL yet")
+class TestAntiDepSupported(object):
+
+    @pytest.mark.parametrize('exprs,directions,expected,visit', [
+        # 0) WAR 2->3, 3 fissioned to maximize parallelism
+        (('Eq(ti0[x,y,z], ti0[x,y,z] + ti1[x,y,z])',
+            'Eq(ti1[x,y,z], ti3[x,y,z])',
+            'Eq(ti3[x,y,z], ti1[x,y,z+1] + 1.)'),
+            '+++++', ['xyz', 'xyz', 'xyz'], 'xyzzz'),
+        # 1) WAR 1->2, 2->3
+        (('Eq(ti0[x,y,z], ti0[x,y,z] + ti1[x,y,z])',
+            'Eq(ti1[x,y,z], ti0[x,y,z+1])',
+            'Eq(ti3[x,y,z], ti1[x,y,z-2] + 1.)'),
+            '+++++', ['xyz', 'xyz', 'xyz'], 'xyzzz'),
+        # 2) WAR 1->2, 2->3, RAW 2->3
+        (('Eq(ti0[x,y,z], ti0[x,y,z] + ti1[x,y,z])',
+            'Eq(ti1[x,y,z], ti0[x,y,z+1])',
+            'Eq(ti3[x,y,z], ti1[x,y,z-2] + ti1[x,y,z+2])'),
+            '+++++', ['xyz', 'xyz', 'xyz'], 'xyzzz'),
+        # 3) WAR 1->3
+        (('Eq(ti0[x,y,z], ti0[x,y,z] + ti1[x,y,z])',
+            'Eq(ti1[x,y,z], ti3[x,y,z])',
+            'Eq(ti3[x,y,z], ti0[x,y,z+1] + 1.)'),
+            '++++', ['xyz', 'xyz'], 'xyzz'),
+        # 4) WAR 1->3
+        # Like before, but the WAR is along `y`, an inner Dimension
+        (('Eq(ti0[x,y,z], ti0[x,y,z] + ti1[x,y,z])',
+            'Eq(ti1[x,y,z], ti3[x,y,z])',
+            'Eq(ti3[x,y,z], ti0[x,y+1,z] + 1.)'),
+            '+++++', ['xyz', 'xyz'], 'xyzyz'),
+        # 5) WAR 1->2, 2->3; WAW 1->3
+        # Similar to the cases above, but the last equation does not iterate over `z`
+        (('Eq(ti0[x,y,z], ti0[x,y,z] + ti1[x,y,z])',
+            'Eq(ti1[x,y,z], ti0[x,y,z+2])',
+            'Eq(ti0[x,y,0], ti0[x,y,0] + 1.)'),
+            '++++', ['xyz', 'xyz', 'xy'], 'xyzz'),
+        # 6) WAR 1->2; WAW 1->3
+        # Basically like above, but with the time dimension. This should have no impact
+        (('Eq(tu[t,x,y,z], tu[t,x,y,z] + tv[t,x,y,z])',
+            'Eq(tv[t,x,y,z], tu[t,x,y,z+2])',
+            'Eq(tu[t,x,y,0], tu[t,x,y,0] + 1.)'),
+            '+++++', ['txyz', 'txyz', 'txy'], 'txyzz'),
+        # 7) WAR 1->2, 2->3
+        (('Eq(tu[t,x,y,z], tu[t,x,y,z] + tv[t,x,y,z])',
+            'Eq(tv[t,x,y,z], tu[t,x,y,z+2])',
+            'Eq(tw[t,x,y,z], tv[t,x,y,z-1] + 1.)'),
+            '++++++', ['txyz', 'txyz', 'txyz'], 'txyzzz'),
+        # 8) WAR 1->2; WAW 1->3
+        (('Eq(tu[t,x,y,z], tu[t,x,y,z] + tv[t,x,y,z])',
+            'Eq(tv[t,x,y,z], tu[t,x+2,y,z])',
+            'Eq(tu[t,3,y,0], tu[t,3,y,0] + 1.)'),
+            '++++++++', ['txyz', 'txyz', 'ty'], 'txyzxyzy'),
+        # 9) RAW 1->2, WAR 2->3
+        (('Eq(tu[t,x,y,z], tu[t,x,y,z] + tv[t,x,y,z])',
+            'Eq(tv[t,x,y,z], tu[t,x,y,z-2])',
+            'Eq(tw[t,x,y,z], tv[t,x,y+1,z] + 1.)'),
+            '++++++++', ['txyz', 'txyz', 'txyz'], 'txyzyzyz'),
+        # 10) WAR 1->2; WAW 1->3
+        (('Eq(tu[t-1,x,y,z], tu[t,x,y,z] + tv[t,x,y,z])',
+            'Eq(tv[t,x,y,z], tu[t,x,y,z+2])',
+            'Eq(tu[t-1,x,y,0], tu[t,x,y,0] + 1.)'),
+            '-+++', ['txyz', 'txy'], 'txyz'),
+        # 11) WAR 1->2
+        (('Eq(tu[t-1,x,y,z], tu[t,x,y,z] + tv[t,x,y,z])',
+            'Eq(tv[t,x,y,z], tu[t,x,y,z+2] + tu[t,x,y,z-2])',
+            'Eq(tw[t,x,y,z], tv[t,x,y,z] + 2)'),
+            '-+++', ['txyz'], 'txyz'),
+        # 12) Time goes backward so that information flows in time
+        (('Eq(tu[t-1,x,y,z], tu[t,x+3,y,z] + tv[t,x,y,z])',
+            'Eq(tv[t-1,x,y,z], tu[t,x,y,z+2])',
+            'Eq(tw[t-1,x,y,z], tu[t,x,y+1,z] + tv[t,x,y-1,z])'),
+            '-+++', ['txyz'], 'txyz'),
+        # 13) Time goes backward so that information flows in time, but the
+        # first and last Eqs are interleaved by a completely independent
+        # Eq. This results in three disjoint sets of loops
+        (('Eq(tu[t-1,x,y,z], tu[t,x+3,y,z] + tv[t,x,y,z])',
+            'Eq(ti0[x,y,z], ti1[x,y,z+2])',
+            'Eq(tw[t-1,x,y,z], tu[t,x,y+1,z] + tv[t,x,y-1,z])'),
+            '-++++++++++', ['txyz', 'xyz', 'txyz'], 'txyzxyztxyz'),
+        # 14) Time goes backward so that information flows in time
+        (('Eq(ti0[x,y,z], ti1[x,y,z+2])',
+            'Eq(tu[t-1,x,y,z], tu[t,x+3,y,z] + tv[t,x,y,z])',
+            'Eq(tw[t-1,x,y,z], tu[t,x,y+1,z] + ti0[x,y-1,z])'),
+            '+++-+++', ['xyz', 'txyz'], 'xyztxyz'),
+        # 15) WAR 2->1
+        # Here the difference is that we're using SubDimensions
+        (('Eq(tv[t,xi,yi,zi], tu[t,xi-1,yi,zi] + tu[t,xi+1,yi,zi])',
+            'Eq(tu[t+1,xi,yi,zi], tu[t,xi,yi,zi] + tv[t,xi-1,yi,zi] + tv[t,xi+1,yi,zi])'),
+            '+++++++', ['ti0xi0yi0z', 'ti0xi0yi0z'], 'ti0xi0yi0zi0xi0yi0z'),
+        # 16) RAW 3->1; expected=2
+        # Time goes backward, but the third equation should get fused with
+        # the first one, as the time dependence is loop-carried
+        (('Eq(tv[t-1,x,y,z], tv[t,x-1,y,z] + tv[t,x+1,y,z])',
+            'Eq(tv[t-1,z,z,z], tv[t-1,z,z,z] + 1)',
+            'Eq(f[x,y,z], tu[t-1,x,y,z] + tu[t,x,y,z] + tu[t+1,x,y,z] + tv[t,x,y,z])'),
+            '-++++', ['txyz', 'tz'], 'txyzz'),
+        # 17) WAR 2->3, 2->4; expected=4
+        (('Eq(tu[t+1,x,y,z], tu[t,x,y,z] + 1.)',
+            'Eq(tu[t+1,y,y,y], tu[t+1,y,y,y] + tw[t+1,y,y,y])',
+            'Eq(tw[t+1,z,z,z], tw[t+1,z,z,z] + 1.)',
+            'Eq(tv[t+1,x,y,z], tu[t+1,x,y,z] + 1.)'),
+            '+++++++++', ['txyz', 'ty', 'tz', 'txyz'], 'txyzyzxyz'),
+        # 18) WAR 1->3; expected=3
+        # 5 is expected to be moved before 4 but after 3, to be merged with 3
+        (('Eq(tu[t+1,x,y,z], tv[t,x,y,z] + 1.)',
+            'Eq(tv[t+1,x,y,z], tu[t,x,y,z] + 1.)',
+            'Eq(tw[t+1,x,y,z], tu[t+1,x+1,y,z] + tu[t+1,x-1,y,z])',
+            'Eq(f[x,x,z], tu[t,x,x,z] + tw[t,x,x,z])',
+            'Eq(ti0[x,y,z], tw[t+1,x,y,z] + 1.)'),
+            '++++++++', ['txyz', 'txyz', 'txz'], 'txyzxyzz'),
+        # 19) WAR 1->3; expected=3
+        # Cannot merge 1 with 3 otherwise we would break an anti-dependence
+        (('Eq(tv[t+1,x,y,z], tu[t,x,y,z] + tu[t,x+1,y,z])',
+            'Eq(tu[t+1,xi,yi,zi], tv[t+1,xi,yi,zi] + tv[t+1,xi+1,yi,zi])',
+            'Eq(tw[t+1,x,y,z], tv[t+1,x,y,z] + tv[t+1,x+1,y,z])'),
+            '++++++++++', ['txyz', 'ti0xi0yi0z', 'txyz'], 'txyzi0xi0yi0zxyz'),
+    ])
+    def test_consistency_anti_dependences(self, exprs, directions, expected, visit):
+        """
+        Test that anti dependences end up generating multi loop nests, rather
+        than a single loop nest enclosing all of the equations.
+        """
+        grid = Grid(shape=(4, 4, 4))
+        x, y, z = grid.dimensions  # noqa
+        xi, yi, zi = grid.interior.dimensions  # noqa
+        t = grid.stepping_dim  # noqa
+
+        ti0 = Function(name='ti0', shape=grid.shape, dimensions=grid.dimensions)  # noqa
+        ti1 = Function(name='ti1', shape=grid.shape, dimensions=grid.dimensions)  # noqa
+        ti3 = Function(name='ti3', shape=grid.shape, dimensions=grid.dimensions)  # noqa
+        f = Function(name='f', grid=grid)  # noqa
+        tu = TimeFunction(name='tu', grid=grid)  # noqa
+        tv = TimeFunction(name='tv', grid=grid)  # noqa
+        tw = TimeFunction(name='tw', grid=grid)  # noqa
+
+        # List comprehension would need explicit locals/globals mappings to eval
+        eqns = []
+        for e in exprs:
+            eqns.append(eval(e))
+
+        # Note: `topofuse` is a subset of `advanced` mode. We use it merely to
+        # bypass 'blocking', which would complicate the asserts below
+        op = Operator(eqns, opt='xdsl')
         op.apply(time_M=1)
 
-        assert (u.data[1, :] == 2.).all()
-        assert (u.data[0, :] == 4.).all()
 
-    @pytest.mark.xfail(reason="Multiple eqs are not supported")
+@pytest.mark.xfail(reason="not supported in xDSL yet")
+class TestAntiDepNotSupported(object):
+
+    @pytest.mark.parametrize('exprs,directions,expected,visit', [
+        # 0) WAR 2->3, 3 fissioned to maximize parallelism
+        (('Eq(ti0[x,y,z], ti0[x,y,z] + ti1[x,y,z])',
+            'Eq(ti1[x,y,z], ti3[x,y,z])',
+            'Eq(ti3[x,y,z], ti1[x,y,z+1] + 1.)'),
+            '+++++', ['xyz', 'xyz', 'xyz'], 'xyzzz'),
+        # 1) WAR 1->2, 2->3
+        (('Eq(ti0[x,y,z], ti0[x,y,z] + ti1[x,y,z])',
+            'Eq(ti1[x,y,z], ti0[x,y,z+1])',
+            'Eq(ti3[x,y,z], ti1[x,y,z-2] + 1.)'),
+            '+++++', ['xyz', 'xyz', 'xyz'], 'xyzzz'),
+        # 2) WAR 1->2, 2->3, RAW 2->3
+        (('Eq(ti0[x,y,z], ti0[x,y,z] + ti1[x,y,z])',
+            'Eq(ti1[x,y,z], ti0[x,y,z+1])',
+            'Eq(ti3[x,y,z], ti1[x,y,z-2] + ti1[x,y,z+2])'),
+            '+++++', ['xyz', 'xyz', 'xyz'], 'xyzzz'),
+        # 3) WAR 1->3
+        (('Eq(ti0[x,y,z], ti0[x,y,z] + ti1[x,y,z])',
+            'Eq(ti1[x,y,z], ti3[x,y,z])',
+            'Eq(ti3[x,y,z], ti0[x,y,z+1] + 1.)'),
+            '++++', ['xyz', 'xyz'], 'xyzz'),
+        # 4) WAR 1->3
+        # Like before, but the WAR is along `y`, an inner Dimension
+        (('Eq(ti0[x,y,z], ti0[x,y,z] + ti1[x,y,z])',
+            'Eq(ti1[x,y,z], ti3[x,y,z])',
+            'Eq(ti3[x,y,z], ti0[x,y+1,z] + 1.)'),
+            '+++++', ['xyz', 'xyz'], 'xyzyz'),
+        # 5) WAR 1->2, 2->3; WAW 1->3
+        # Similar to the cases above, but the last equation does not iterate over `z`
+        (('Eq(ti0[x,y,z], ti0[x,y,z] + ti1[x,y,z])',
+            'Eq(ti1[x,y,z], ti0[x,y,z+2])',
+            'Eq(ti0[x,y,0], ti0[x,y,0] + 1.)'),
+            '++++', ['xyz', 'xyz', 'xy'], 'xyzz'),
+        # 6) WAR 1->2; WAW 1->3
+        # Basically like above, but with the time dimension. This should have no impact
+        (('Eq(tu[t,x,y,z], tu[t,x,y,z] + tv[t,x,y,z])',
+            'Eq(tv[t,x,y,z], tu[t,x,y,z+2])',
+            'Eq(tu[t,x,y,0], tu[t,x,y,0] + 1.)'),
+            '+++++', ['txyz', 'txyz', 'txy'], 'txyzz'),
+        # 7) WAR 1->2, 2->3
+        (('Eq(tu[t,x,y,z], tu[t,x,y,z] + tv[t,x,y,z])',
+            'Eq(tv[t,x,y,z], tu[t,x,y,z+2])',
+            'Eq(tw[t,x,y,z], tv[t,x,y,z-1] + 1.)'),
+            '++++++', ['txyz', 'txyz', 'txyz'], 'txyzzz'),
+        # 8) WAR 1->2; WAW 1->3
+        (('Eq(tu[t,x,y,z], tu[t,x,y,z] + tv[t,x,y,z])',
+            'Eq(tv[t,x,y,z], tu[t,x+2,y,z])',
+            'Eq(tu[t,3,y,0], tu[t,3,y,0] + 1.)'),
+            '++++++++', ['txyz', 'txyz', 'ty'], 'txyzxyzy'),
+        # 9) RAW 1->2, WAR 2->3
+        (('Eq(tu[t,x,y,z], tu[t,x,y,z] + tv[t,x,y,z])',
+            'Eq(tv[t,x,y,z], tu[t,x,y,z-2])',
+            'Eq(tw[t,x,y,z], tv[t,x,y+1,z] + 1.)'),
+            '++++++++', ['txyz', 'txyz', 'txyz'], 'txyzyzyz'),
+        # 10) WAR 1->2; WAW 1->3
+        (('Eq(tu[t-1,x,y,z], tu[t,x,y,z] + tv[t,x,y,z])',
+            'Eq(tv[t,x,y,z], tu[t,x,y,z+2])',
+            'Eq(tu[t-1,x,y,0], tu[t,x,y,0] + 1.)'),
+            '-+++', ['txyz', 'txy'], 'txyz'),
+        # 11) WAR 1->2
+        (('Eq(tu[t-1,x,y,z], tu[t,x,y,z] + tv[t,x,y,z])',
+            'Eq(tv[t,x,y,z], tu[t,x,y,z+2] + tu[t,x,y,z-2])',
+            'Eq(tw[t,x,y,z], tv[t,x,y,z] + 2)'),
+            '-+++', ['txyz'], 'txyz'),
+        # 12) Time goes backward so that information flows in time
+        (('Eq(tu[t-1,x,y,z], tu[t,x+3,y,z] + tv[t,x,y,z])',
+            'Eq(tv[t-1,x,y,z], tu[t,x,y,z+2])',
+            'Eq(tw[t-1,x,y,z], tu[t,x,y+1,z] + tv[t,x,y-1,z])'),
+            '-+++', ['txyz'], 'txyz'),
+        # 13) Time goes backward so that information flows in time, but the
+        # first and last Eqs are interleaved by a completely independent
+        # Eq. This results in three disjoint sets of loops
+        (('Eq(tu[t-1,x,y,z], tu[t,x+3,y,z] + tv[t,x,y,z])',
+            'Eq(ti0[x,y,z], ti1[x,y,z+2])',
+            'Eq(tw[t-1,x,y,z], tu[t,x,y+1,z] + tv[t,x,y-1,z])'),
+            '-++++++++++', ['txyz', 'xyz', 'txyz'], 'txyzxyztxyz'),
+        # 14) Time goes backward so that information flows in time
+        (('Eq(ti0[x,y,z], ti1[x,y,z+2])',
+            'Eq(tu[t-1,x,y,z], tu[t,x+3,y,z] + tv[t,x,y,z])',
+            'Eq(tw[t-1,x,y,z], tu[t,x,y+1,z] + ti0[x,y-1,z])'),
+            '+++-+++', ['xyz', 'txyz'], 'xyztxyz'),
+        # 15) WAR 2->1
+        # Here the difference is that we're using SubDimensions
+        (('Eq(tv[t,xi,yi,zi], tu[t,xi-1,yi,zi] + tu[t,xi+1,yi,zi])',
+            'Eq(tu[t+1,xi,yi,zi], tu[t,xi,yi,zi] + tv[t,xi-1,yi,zi] + tv[t,xi+1,yi,zi])'),
+            '+++++++', ['ti0xi0yi0z', 'ti0xi0yi0z'], 'ti0xi0yi0zi0xi0yi0z'),
+        # 16) RAW 3->1; expected=2
+        # Time goes backward, but the third equation should get fused with
+        # the first one, as the time dependence is loop-carried
+        (('Eq(tv[t-1,x,y,z], tv[t,x-1,y,z] + tv[t,x+1,y,z])',
+            'Eq(tv[t-1,z,z,z], tv[t-1,z,z,z] + 1)',
+            'Eq(f[x,y,z], tu[t-1,x,y,z] + tu[t,x,y,z] + tu[t+1,x,y,z] + tv[t,x,y,z])'),
+            '-++++', ['txyz', 'tz'], 'txyzz'),
+        # 17) WAR 2->3, 2->4; expected=4
+        (('Eq(tu[t+1,x,y,z], tu[t,x,y,z] + 1.)',
+            'Eq(tu[t+1,y,y,y], tu[t+1,y,y,y] + tw[t+1,y,y,y])',
+            'Eq(tw[t+1,z,z,z], tw[t+1,z,z,z] + 1.)',
+            'Eq(tv[t+1,x,y,z], tu[t+1,x,y,z] + 1.)'),
+            '+++++++++', ['txyz', 'ty', 'tz', 'txyz'], 'txyzyzxyz'),
+        # 18) WAR 1->3; expected=3
+        # 5 is expected to be moved before 4 but after 3, to be merged with 3
+        (('Eq(tu[t+1,x,y,z], tv[t,x,y,z] + 1.)',
+            'Eq(tv[t+1,x,y,z], tu[t,x,y,z] + 1.)',
+            'Eq(tw[t+1,x,y,z], tu[t+1,x+1,y,z] + tu[t+1,x-1,y,z])',
+            'Eq(f[x,x,z], tu[t,x,x,z] + tw[t,x,x,z])',
+            'Eq(ti0[x,y,z], tw[t+1,x,y,z] + 1.)'),
+            '++++++++', ['txyz', 'txyz', 'txz'], 'txyzxyzz'),
+        # 19) WAR 1->3; expected=3
+        # Cannot merge 1 with 3 otherwise we would break an anti-dependence
+        (('Eq(tv[t+1,x,y,z], tu[t,x,y,z] + tu[t,x+1,y,z])',
+            'Eq(tu[t+1,xi,yi,zi], tv[t+1,xi,yi,zi] + tv[t+1,xi+1,yi,zi])',
+            'Eq(tw[t+1,x,y,z], tv[t+1,x,y,z] + tv[t+1,x+1,y,z])'),
+            '++++++++++', ['txyz', 'ti0xi0yi0z', 'txyz'], 'txyzi0xi0yi0zxyz'),
+    ])
+    def test_consistency_anti_dependences(self, exprs, directions, expected, visit):
+        """
+        Test that anti dependences end up generating multi loop nests, rather
+        than a single loop nest enclosing all of the equations.
+        """
+        grid = Grid(shape=(4, 4, 4))
+        x, y, z = grid.dimensions  # noqa
+        xi, yi, zi = grid.interior.dimensions  # noqa
+        t = grid.stepping_dim  # noqa
+
+        ti0 = Array(name='ti0', shape=grid.shape, dimensions=grid.dimensions)  # noqa
+        ti1 = Array(name='ti1', shape=grid.shape, dimensions=grid.dimensions)  # noqa
+        ti3 = Array(name='ti3', shape=grid.shape, dimensions=grid.dimensions)  # noqa
+        f = Function(name='f', grid=grid)  # noqa
+        tu = TimeFunction(name='tu', grid=grid)  # noqa
+        tv = TimeFunction(name='tv', grid=grid)  # noqa
+        tw = TimeFunction(name='tw', grid=grid)  # noqa
+
+        # List comprehension would need explicit locals/globals mappings to eval
+        eqns = []
+        for e in exprs:
+            eqns.append(eval(e))
+
+        # Note: `topofuse` is a subset of `advanced` mode. We use it merely to
+        # bypass 'blocking', which would complicate the asserts below
+        op = Operator(eqns, opt='xdsl')
+        op.apply(time_M=1)
+
+
+class TestOperatorUnsupported(object):
+
+    @pytest.mark.xfail(reason="Symbols are not supported in xDSL yet")
     def test_symbol_I(self):
         # Define a simple Devito a = 1 operator
 
@@ -277,3 +714,33 @@ class TestOperatorUnsupported(object):
         op.apply()
 
         assert a == 1
+
+    @pytest.mark.xfail(reason="stencil.return operation does not verify for i64")
+    def test_forward_assignment(self):
+        # simple forward assignment
+
+        grid = Grid(shape=(4, 4))
+        u = TimeFunction(name="u", grid=grid, space_order=2)
+        u.data[:, :, :] = 0
+
+        eq0 = Eq(u.forward, 1)
+
+        op = Operator([eq0], opt='xdsl')
+
+        op.apply(time_M=1)
+
+        assert np.isclose(norm(u), 5.6584, rtol=0.001)
+
+    @pytest.mark.xfail(reason="stencil.return operation does not verify for i64")
+    def test_function(self):
+        grid = Grid(shape=(5, 5))
+        x, y = grid.dimensions
+
+        f = Function(name="f", grid=grid)
+
+        eqns = [Eq(f, 2)]
+
+        op = Operator(eqns, opt='xdsl')
+        op.apply()
+
+        assert np.all(f.data == 4)

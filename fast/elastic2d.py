@@ -20,11 +20,14 @@
 #
 # $$g(t) = -2 \alpha(t - t_0)e^{-\alpha(t-t_0)^2}$$
 
-from devito import *
 import argparse
+import numpy as np
+from devito import (Grid, TensorTimeFunction, VectorTimeFunction, div, grad, diag, solve,
+                    Operator, Eq, Constant, norm, SpaceDimension)
+
 from examples.seismic.source import WaveletSource, RickerSource, TimeAxis
 from examples.seismic import plot_image
-import numpy as np
+
 
 from sympy import init_printing
 init_printing(use_latex='mathjax')
@@ -111,6 +114,7 @@ u_v = Eq(v.forward, solve(pde_v, v.forward))
 u_t = Eq(tau.forward, solve(pde_tau, tau.forward))
 
 # This contains if conditions!!!
+# We use it to preinject data
 op = Operator([u_v] + [u_t] + src_xx + src_zz)
 op(dt=dt)
 
@@ -118,7 +122,12 @@ op(dt=dt)
 # assert np.isclose(norm(v[0]), 0.6285093, atol=1e-4, rtol=0)
 
 # This should NOT have conditions, we should use XDSL!
-op = Operator([u_v] + [u_t], opt='xdsl')
+try:
+    op = Operator([u_v] + [u_t], opt='xdsl')
+except:
+    print("This should fail!")
+    print("Now run Devito only")
+    op = Operator([u_v] + [u_t])
 
 op(dt=dt, time_M=100)
 
