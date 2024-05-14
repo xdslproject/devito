@@ -60,6 +60,8 @@ class ExtractDevitoStencilConversion:
 
     def _convert_eq(self, eq: LoweredEq, **kwargs):
         """
+        # Docs here Need rewriting
+
         This converts a Devito LoweredEq to IR implementing it.
         e.g.
         ```python
@@ -91,18 +93,18 @@ class ExtractDevitoStencilConversion:
 
         # Get the left hand side, called "output function" here because it tells us
         # Where to write the results of each step.
-        output_function = eq.lhs.function
-        # Get its grid: contains all necessary discretization information
-        # (Grid size, halo width, ...)
-        grid: Grid = output_function.grid
-        # Get the stepping dimension. It's usually time, and usually the first one.
-        # Getting it here; more readable and less input assumptions :)
+        write_function = eq.lhs.function
+        # Read the grid containing necessary discretization information
+        # (size, halo width, ...)
+        grid: Grid = write_function.grid
+        # Retrieve the stepping dimension from the grid
         step_dim = grid.stepping_dim
 
         # Also, store the output function's time buffer of this equation
         output_time_offset = (eq.lhs.indices[step_dim] - step_dim) % eq.lhs.function.time_size
-        self.out_time_buffer = (output_function, output_time_offset)
+        self.out_time_buffer = (write_function, output_time_offset)
 
+        # Get the function carriers of the equation
         self._build_step_body(step_dim, eq)
 
         return
@@ -173,7 +175,14 @@ class ExtractDevitoStencilConversion:
             raise NotImplementedError(f"Unknown math: {node}", node)
 
     def _build_step_body(self, dim: SteppingDimension, eq:LoweredEq) -> None:
-        read_functions = {(f.function, (f.indices[dim]-dim) % f.function.time_size) for f in retrieve_function_carriers(eq.rhs)}
+        """
+        Build the body of the time loop.
+        
+        """
+        read_functions = set()
+        for f in retrieve_function_carriers(eq.rhs):
+            read_functions.add((f.function, (f.indices[dim]-dim) % f.function.time_size))
+      
         temps = {
             (f, t): stencil.LoadOp.get(a).res
             for (f, t), a in self.block_args.items()
@@ -182,19 +191,20 @@ class ExtractDevitoStencilConversion:
         for (f,t), a in temps.items():
             a.name_hint = f"{f.name}_t{t}_temp"        
 
-        output_function = self.out_time_buffer[0]
-        shape = output_function.grid.shape_local
+        write_function = self.out_time_buffer[0]
+        shape = write_function.grid.shape_local
         apply = stencil.ApplyOp.get(
             temps.values(),
             Block(arg_types=[a.type for a in temps.values()]),
-            result_types=[stencil.TempType(len(shape), element_type=dtypes_to_xdsltypes[output_function.dtype])]
+            result_types=[stencil.TempType(len(shape), element_type=dtypes_to_xdsltypes[write_function.dtype])]
         )
 
         # Give names to stencil.apply's block arguments
         for apply_arg, apply_op in zip(apply.region.block.args, apply.operands):
             # Just reuse the corresponding operand name
             # i.e. %v_t1_temp -> %v_t1_blk
-            apply_arg.name_hint = apply_op.name_hint[:-5]+"_blk"
+            assert "temp" in apply_op.name_hint
+            apply_arg.name_hint = apply_op.name_hint.replace("temp", "blk")
 
         self.apply_temps = {k:v for k,v in zip(temps.keys(), apply.region.block.args)}
         
@@ -381,8 +391,15 @@ class ExtractDevitoStencilConversion:
 #                                                          ####
 # -------------------------------------------------------- ####
 
+
+class GPURewritePattern(RewritePattern):
+    """
+    Base class for GPU rewrite patterns
+    """
+    pass
+
 @dataclass
-class WrapFunctionWithTransfers(RewritePattern):
+class WrapFunctionWithTransfers(GPURewritePattern):
     func_name: str
     done: bool = field(default=False)
 
@@ -414,8 +431,16 @@ class WrapFunctionWithTransfers(RewritePattern):
                 body.insert_ops_before([copy_out, dealloc], body.ops.last)
         rewriter.insert_op_after_matched_op(wrapper)
 
+
+class TimerRewritePattern(RewritePattern):
+    """
+    Base class for time benchmarking related rewrite patterns
+    """
+    pass
+
+
 @dataclass
-class MakeFunctionTimed(RewritePattern):
+class MakeFunctionTimed(TimerRewritePattern):
     """
     Populate the section0 devito timer with the total runtime of the function
     """
@@ -430,6 +455,7 @@ class MakeFunctionTimed(RewritePattern):
         # only apply once
         self.seen_ops.add(op)
 
+        # Insert timer start and end calls
         rewriter.insert_op_at_start([
             t0 := func.Call('timer_start', [], [builtin.f64])
         ], op.body.block)
@@ -449,6 +475,7 @@ class MakeFunctionTimed(RewritePattern):
         ])
 
 
+
 def get_containing_func(op: Operation) -> func.FuncOp | None:
     while op is not None and not isinstance(op, func.FuncOp):
         op = op.parent_op()
@@ -457,6 +484,9 @@ def get_containing_func(op: Operation) -> func.FuncOp | None:
 
 @dataclass
 class _InsertSymbolicConstants(RewritePattern):
+    """
+    Replace LoadSymbolic ops with their constant values. copilot: done
+    """
     known_symbols: dict[str, int | float]
 
     @op_type_rewrite_pattern
@@ -465,7 +495,7 @@ class _InsertSymbolicConstants(RewritePattern):
         if symb_name not in self.known_symbols:
             return
 
-        if op.result.type in (builtin.f32, builtin.f64):
+        if isinstance(op.result.type, (builtin.Float32Type, builtin.Float64Type)):
             rewriter.replace_matched_op(
                 arith.Constant(builtin.FloatAttr
                     (
@@ -473,9 +503,7 @@ class _InsertSymbolicConstants(RewritePattern):
                     )
                 )
             )
-            return
-
-        if isinstance(op.result.type, (builtin.IntegerType, builtin.IndexType)):
+        elif isinstance(op.result.type, (builtin.IntegerType, builtin.IndexType)):
             rewriter.replace_matched_op(
                 arith.Constant.from_int_and_width(
                     int(self.known_symbols[symb_name]), op.result.type
@@ -516,21 +544,22 @@ class _LowerLoadSymbolidToFuncArgs(RewritePattern):
         parent.update_function_type()
 
 
-def convert_devito_stencil_to_xdsl_stencil(module, timed: bool = True, **kwargs):
+def apply_timers(module, **kwargs):
     """
-    TODO: Add docstring
+    Apply timers to a module
     """
-
-    if timed:
-        name = kwargs.get("name", "Kernel")
-        grpa = GreedyRewritePatternApplier([MakeFunctionTimed(name)])
-        PatternRewriteWalker(grpa, walk_regions_first=True).rewrite_module(module)
+    name = kwargs.get("name", "Kernel")
+    grpa = GreedyRewritePatternApplier([MakeFunctionTimed(name)])
+    PatternRewriteWalker(grpa, walk_regions_first=True).rewrite_module(module)
 
 
 def finalize_module_with_globals(module: builtin.ModuleOp, known_symbols: dict[str, Any],
                                  gpu_boilerplate):
     """
-    TODO: Add docstring
+    
+    This function finalizes a module by replacing all symbolic constants with their
+    values in the module. This is necessary to have a complete module that can be
+    executed. [copilot: done]
     """
     patterns = [
         _InsertSymbolicConstants(known_symbols),
