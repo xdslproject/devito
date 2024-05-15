@@ -124,6 +124,8 @@ op(dt=dt)
 # This should NOT have conditions, we should use XDSL!
 try:
     op = Operator([u_v] + [u_t], opt='xdsl')
+    # op = Operator([u_v] + [u_t])
+    import pdb;pdb.set_trace()
 except:
     print("This should fail!")
     print("Now run Devito only")
@@ -139,5 +141,16 @@ plot_image(tau[1, 1].data[0], vmin=-.5*1e-2, vmax=.5*1e-2, cmap="seismic")
 plot_image(tau[0, 1].data[0], vmin=-.5*1e-2, vmax=.5*1e-2, cmap="seismic")
 
 print(norm(v[0]))
+print(norm(tau[0]))
+
+
+import matplotlib.pyplot as plt
+
+# Save the plotted images locally
+plt.imsave('/home/gb4018/workspace/xdslproject/devito/fast/v0.pdf', v[0].data[0], vmin=-.5*1e-2, vmax=.5*1e-2, cmap="seismic")
+plt.imsave('/home/gb4018/workspace/xdslproject/devito/fast/v1.pdf', v[1].data[0], vmin=-.5*1e-2, vmax=.5*1e-2, cmap="seismic")
+plt.imsave('/home/gb4018/workspace/xdslproject/devito/fast/tau00.pdf', tau[0, 0].data[0], vmin=-.5*1e-2, vmax=.5*1e-2, cmap="seismic")
+plt.imsave('/home/gb4018/workspace/xdslproject/devito/fast/tau11.pdf', tau[1, 1].data[0], vmin=-.5*1e-2, vmax=.5*1e-2, cmap="seismic")
+plt.imsave('/home/gb4018/workspace/xdslproject/devito/fast/tau01.pdf', tau[0, 1].data[0], vmin=-.5*1e-2, vmax=.5*1e-2, cmap="seismic")
 
 # assert np.isclose(norm(v[0]), 0.6285093, atol=1e-4, rtol=0)

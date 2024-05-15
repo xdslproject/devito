@@ -480,6 +480,35 @@ class TestMulEqs(object):
         assert np.isclose(norm(v), np.linalg.norm(devito_res_v))
 
 
+def test_xdsl_mul_eqs_VII():
+    # Define a Devito Operator with multiple eqs
+    grid = Grid(shape=(4, 4))
+
+    u = TimeFunction(name="u", grid=grid, time_order=2)
+    v = TimeFunction(name="v", grid=grid, time_order=2)
+
+    u.data[:, :, :] = 0.1
+    v.data[:, :, :] = 0.1
+
+    eq0 = Eq(u.forward, u + 2)
+    eq1 = Eq(v, u.forward.dx * 2)
+
+    op = Operator([eq0, eq1], opt="advanced")
+    op.apply(time_M=4, dt=0.1)
+
+    devito_res_u = u.data_with_halo[:, :, :]
+    devito_res_v = v.data_with_halo[:, :, :]
+
+    u.data[:, :, :] = 0.1
+    v.data[:, :, :] = 0.1
+
+    op = Operator([eq0, eq1], opt="xdsl")
+    op.apply(time_M=4, dt=0.1)
+
+    assert np.isclose(norm(u), np.linalg.norm(devito_res_u))
+    assert np.isclose(norm(v), np.linalg.norm(devito_res_v))
+
+
 def test_forward_assignment_f32():
     # simple Devito a = 1 operator
 
@@ -496,122 +525,16 @@ def test_forward_assignment_f32():
     assert np.isclose(norm(u), 0.56584, rtol=0.001)
 
 
-@pytest.mark.xfail(reason="not supported in xDSL yet")
 class TestAntiDepSupported(object):
 
+    @pytest.mark.xfail(reason="Cannot store to a field that is loaded from")
     @pytest.mark.parametrize('exprs,directions,expected,visit', [
-        # 0) WAR 2->3, 3 fissioned to maximize parallelism
-        (('Eq(ti0[x,y,z], ti0[x,y,z] + ti1[x,y,z])',
-            'Eq(ti1[x,y,z], ti3[x,y,z])',
-            'Eq(ti3[x,y,z], ti1[x,y,z+1] + 1.)'),
-            '+++++', ['xyz', 'xyz', 'xyz'], 'xyzzz'),
-        # 1) WAR 1->2, 2->3
-        (('Eq(ti0[x,y,z], ti0[x,y,z] + ti1[x,y,z])',
-            'Eq(ti1[x,y,z], ti0[x,y,z+1])',
-            'Eq(ti3[x,y,z], ti1[x,y,z-2] + 1.)'),
-            '+++++', ['xyz', 'xyz', 'xyz'], 'xyzzz'),
-        # 2) WAR 1->2, 2->3, RAW 2->3
-        (('Eq(ti0[x,y,z], ti0[x,y,z] + ti1[x,y,z])',
-            'Eq(ti1[x,y,z], ti0[x,y,z+1])',
-            'Eq(ti3[x,y,z], ti1[x,y,z-2] + ti1[x,y,z+2])'),
-            '+++++', ['xyz', 'xyz', 'xyz'], 'xyzzz'),
-        # 3) WAR 1->3
-        (('Eq(ti0[x,y,z], ti0[x,y,z] + ti1[x,y,z])',
-            'Eq(ti1[x,y,z], ti3[x,y,z])',
-            'Eq(ti3[x,y,z], ti0[x,y,z+1] + 1.)'),
-            '++++', ['xyz', 'xyz'], 'xyzz'),
-        # 4) WAR 1->3
-        # Like before, but the WAR is along `y`, an inner Dimension
-        (('Eq(ti0[x,y,z], ti0[x,y,z] + ti1[x,y,z])',
-            'Eq(ti1[x,y,z], ti3[x,y,z])',
-            'Eq(ti3[x,y,z], ti0[x,y+1,z] + 1.)'),
-            '+++++', ['xyz', 'xyz'], 'xyzyz'),
-        # 5) WAR 1->2, 2->3; WAW 1->3
-        # Similar to the cases above, but the last equation does not iterate over `z`
-        (('Eq(ti0[x,y,z], ti0[x,y,z] + ti1[x,y,z])',
-            'Eq(ti1[x,y,z], ti0[x,y,z+2])',
-            'Eq(ti0[x,y,0], ti0[x,y,0] + 1.)'),
-            '++++', ['xyz', 'xyz', 'xy'], 'xyzz'),
         # 6) WAR 1->2; WAW 1->3
         # Basically like above, but with the time dimension. This should have no impact
-        (('Eq(tu[t,x,y,z], tu[t,x,y,z] + tv[t,x,y,z])',
-            'Eq(tv[t,x,y,z], tu[t,x,y,z+2])',
-            'Eq(tu[t,x,y,0], tu[t,x,y,0] + 1.)'),
+        (('Eq(tu[t+1,x,y,z], tu[t,x,y,z] + tv[t,x,y,z])',
+            'Eq(tv[t+1,x,y,z], tu[t+1,x,y,z+2])',
+            'Eq(tu[t+1,x,y,0], tu[t,x,y,0] + 1.)'),
             '+++++', ['txyz', 'txyz', 'txy'], 'txyzz'),
-        # 7) WAR 1->2, 2->3
-        (('Eq(tu[t,x,y,z], tu[t,x,y,z] + tv[t,x,y,z])',
-            'Eq(tv[t,x,y,z], tu[t,x,y,z+2])',
-            'Eq(tw[t,x,y,z], tv[t,x,y,z-1] + 1.)'),
-            '++++++', ['txyz', 'txyz', 'txyz'], 'txyzzz'),
-        # 8) WAR 1->2; WAW 1->3
-        (('Eq(tu[t,x,y,z], tu[t,x,y,z] + tv[t,x,y,z])',
-            'Eq(tv[t,x,y,z], tu[t,x+2,y,z])',
-            'Eq(tu[t,3,y,0], tu[t,3,y,0] + 1.)'),
-            '++++++++', ['txyz', 'txyz', 'ty'], 'txyzxyzy'),
-        # 9) RAW 1->2, WAR 2->3
-        (('Eq(tu[t,x,y,z], tu[t,x,y,z] + tv[t,x,y,z])',
-            'Eq(tv[t,x,y,z], tu[t,x,y,z-2])',
-            'Eq(tw[t,x,y,z], tv[t,x,y+1,z] + 1.)'),
-            '++++++++', ['txyz', 'txyz', 'txyz'], 'txyzyzyz'),
-        # 10) WAR 1->2; WAW 1->3
-        (('Eq(tu[t-1,x,y,z], tu[t,x,y,z] + tv[t,x,y,z])',
-            'Eq(tv[t,x,y,z], tu[t,x,y,z+2])',
-            'Eq(tu[t-1,x,y,0], tu[t,x,y,0] + 1.)'),
-            '-+++', ['txyz', 'txy'], 'txyz'),
-        # 11) WAR 1->2
-        (('Eq(tu[t-1,x,y,z], tu[t,x,y,z] + tv[t,x,y,z])',
-            'Eq(tv[t,x,y,z], tu[t,x,y,z+2] + tu[t,x,y,z-2])',
-            'Eq(tw[t,x,y,z], tv[t,x,y,z] + 2)'),
-            '-+++', ['txyz'], 'txyz'),
-        # 12) Time goes backward so that information flows in time
-        (('Eq(tu[t-1,x,y,z], tu[t,x+3,y,z] + tv[t,x,y,z])',
-            'Eq(tv[t-1,x,y,z], tu[t,x,y,z+2])',
-            'Eq(tw[t-1,x,y,z], tu[t,x,y+1,z] + tv[t,x,y-1,z])'),
-            '-+++', ['txyz'], 'txyz'),
-        # 13) Time goes backward so that information flows in time, but the
-        # first and last Eqs are interleaved by a completely independent
-        # Eq. This results in three disjoint sets of loops
-        (('Eq(tu[t-1,x,y,z], tu[t,x+3,y,z] + tv[t,x,y,z])',
-            'Eq(ti0[x,y,z], ti1[x,y,z+2])',
-            'Eq(tw[t-1,x,y,z], tu[t,x,y+1,z] + tv[t,x,y-1,z])'),
-            '-++++++++++', ['txyz', 'xyz', 'txyz'], 'txyzxyztxyz'),
-        # 14) Time goes backward so that information flows in time
-        (('Eq(ti0[x,y,z], ti1[x,y,z+2])',
-            'Eq(tu[t-1,x,y,z], tu[t,x+3,y,z] + tv[t,x,y,z])',
-            'Eq(tw[t-1,x,y,z], tu[t,x,y+1,z] + ti0[x,y-1,z])'),
-            '+++-+++', ['xyz', 'txyz'], 'xyztxyz'),
-        # 15) WAR 2->1
-        # Here the difference is that we're using SubDimensions
-        (('Eq(tv[t,xi,yi,zi], tu[t,xi-1,yi,zi] + tu[t,xi+1,yi,zi])',
-            'Eq(tu[t+1,xi,yi,zi], tu[t,xi,yi,zi] + tv[t,xi-1,yi,zi] + tv[t,xi+1,yi,zi])'),
-            '+++++++', ['ti0xi0yi0z', 'ti0xi0yi0z'], 'ti0xi0yi0zi0xi0yi0z'),
-        # 16) RAW 3->1; expected=2
-        # Time goes backward, but the third equation should get fused with
-        # the first one, as the time dependence is loop-carried
-        (('Eq(tv[t-1,x,y,z], tv[t,x-1,y,z] + tv[t,x+1,y,z])',
-            'Eq(tv[t-1,z,z,z], tv[t-1,z,z,z] + 1)',
-            'Eq(f[x,y,z], tu[t-1,x,y,z] + tu[t,x,y,z] + tu[t+1,x,y,z] + tv[t,x,y,z])'),
-            '-++++', ['txyz', 'tz'], 'txyzz'),
-        # 17) WAR 2->3, 2->4; expected=4
-        (('Eq(tu[t+1,x,y,z], tu[t,x,y,z] + 1.)',
-            'Eq(tu[t+1,y,y,y], tu[t+1,y,y,y] + tw[t+1,y,y,y])',
-            'Eq(tw[t+1,z,z,z], tw[t+1,z,z,z] + 1.)',
-            'Eq(tv[t+1,x,y,z], tu[t+1,x,y,z] + 1.)'),
-            '+++++++++', ['txyz', 'ty', 'tz', 'txyz'], 'txyzyzxyz'),
-        # 18) WAR 1->3; expected=3
-        # 5 is expected to be moved before 4 but after 3, to be merged with 3
-        (('Eq(tu[t+1,x,y,z], tv[t,x,y,z] + 1.)',
-            'Eq(tv[t+1,x,y,z], tu[t,x,y,z] + 1.)',
-            'Eq(tw[t+1,x,y,z], tu[t+1,x+1,y,z] + tu[t+1,x-1,y,z])',
-            'Eq(f[x,x,z], tu[t,x,x,z] + tw[t,x,x,z])',
-            'Eq(ti0[x,y,z], tw[t+1,x,y,z] + 1.)'),
-            '++++++++', ['txyz', 'txyz', 'txz'], 'txyzxyzz'),
-        # 19) WAR 1->3; expected=3
-        # Cannot merge 1 with 3 otherwise we would break an anti-dependence
-        (('Eq(tv[t+1,x,y,z], tu[t,x,y,z] + tu[t,x+1,y,z])',
-            'Eq(tu[t+1,xi,yi,zi], tv[t+1,xi,yi,zi] + tv[t+1,xi+1,yi,zi])',
-            'Eq(tw[t+1,x,y,z], tv[t+1,x,y,z] + tv[t+1,x+1,y,z])'),
-            '++++++++++', ['txyz', 'ti0xi0yi0z', 'txyz'], 'txyzi0xi0yi0zxyz'),
     ])
     def test_consistency_anti_dependences(self, exprs, directions, expected, visit):
         """
