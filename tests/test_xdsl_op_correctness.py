@@ -110,6 +110,7 @@ def test_u_and_v_conversion():
 
 
 # This test should fail, as we are trying to use an inplace operation
+@pytest.mark.xfail(reason="Cannot store to a field that is loaded from")
 def test_inplace():
     # Define a simple Devito Operator
     grid = Grid(shape=(3, 3))
@@ -120,6 +121,4 @@ def test_inplace():
     eq0 = Eq(u, u.dx)
 
     xdsl_op = Operator([eq0], opt='xdsl')
-
-    with pytest.raises(Exception):
-        xdsl_op.apply(time_M=5, dt=0.1)
+    xdsl_op.apply(time_M=5, dt=0.1)
