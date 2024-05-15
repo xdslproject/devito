@@ -87,7 +87,7 @@ def test_u_and_v_conversion():
 
     scffor_ops = list(ops[6].regions[0].blocks[0].ops)
     
-    assert len(scffor_ops) == 9
+    assert len(scffor_ops) == 7
 
     # First
     assert isinstance(scffor_ops[0], LoadOp)
