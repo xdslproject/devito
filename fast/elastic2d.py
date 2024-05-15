@@ -28,6 +28,7 @@ from devito import (Grid, TensorTimeFunction, VectorTimeFunction, div, grad, dia
 from examples.seismic.source import WaveletSource, RickerSource, TimeAxis
 from examples.seismic import plot_image
 
+# flake8: noqa
 
 from sympy import init_printing
 init_printing(use_latex='mathjax')
