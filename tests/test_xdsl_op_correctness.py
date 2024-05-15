@@ -87,7 +87,7 @@ def test_u_and_v_conversion():
 
     scffor_ops = list(ops[6].regions[0].blocks[0].ops)
     
-    assert len(scffor_ops) == 9
+    assert len(scffor_ops) == 7
 
     # First
     assert isinstance(scffor_ops[0], LoadOp)
@@ -96,14 +96,27 @@ def test_u_and_v_conversion():
     assert isinstance(scffor_ops[3], StoreOp)
 
     # Second
-    assert isinstance(scffor_ops[4], LoadOp)
-    assert isinstance(scffor_ops[5], LoadOp)
-    assert isinstance(scffor_ops[6], ApplyOp)
-    assert isinstance(scffor_ops[7], StoreOp)
+    assert isinstance(scffor_ops[4], ApplyOp)
+    assert isinstance(scffor_ops[5], StoreOp)
 
     # Yield
-    assert isinstance(scffor_ops[8], Yield)
+    assert isinstance(scffor_ops[6], Yield)
 
     assert type(ops[7] == Call)
     assert type(ops[8] == StoreOp)
     assert type(ops[9] == Return)
+
+
+# This test should fail, as we are trying to use an inplace operation
+@pytest.mark.xfail(reason="Cannot store to a field that is loaded from")
+def test_inplace():
+    # Define a simple Devito Operator
+    grid = Grid(shape=(3, 3))
+    u = TimeFunction(name='u', grid=grid, time_order=2)
+
+    u.data[:] = 0.0001
+
+    eq0 = Eq(u, u.dx)
+
+    xdsl_op = Operator([eq0], opt='xdsl')
+    xdsl_op.apply(time_M=5, dt=0.1)

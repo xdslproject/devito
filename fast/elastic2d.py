@@ -28,6 +28,7 @@ from devito import (Grid, TensorTimeFunction, VectorTimeFunction, div, grad, dia
 from examples.seismic.source import WaveletSource, RickerSource, TimeAxis
 from examples.seismic import plot_image
 
+# flake8: noqa
 
 from sympy import init_printing
 init_printing(use_latex='mathjax')
@@ -43,7 +44,9 @@ parser.add_argument("-nt", "--nt", default=40,
                     type=int, help="Simulation time in millisecond")
 parser.add_argument("-plot", "--plot", default=False, type=bool, help="Plot3D")
 
-parser.add_argument("-xdsl", "--xdsl", default=False, action='store_true')
+parser.add_argument("-devito", "--devito", default=False, type=bool, help="Devito run")
+parser.add_argument("-xdsl", "--xdsl", default=False, type=bool, help="xDSL run")
+
 args = parser.parse_args()
 
 # Some variable declarations
@@ -53,7 +56,7 @@ so = args.space_order
 to = 1
 
 
-# Initial grid: 1km x 1km, with spacing 100m
+# Initial grid: km x km, with spacing
 extent = (1500., 1500.)
 shape = (nx, ny)
 x = SpaceDimension(name='x', spacing=Constant(name='h_x', value=extent[0]/(shape[0]-1)))
@@ -74,7 +77,7 @@ dt = (10. / np.sqrt(2.)) / 6.
 time_range = TimeAxis(start=t0, stop=tn, step=dt)
 
 src = RickerSource(name='src', grid=grid, f0=0.01, time_range=time_range)
-src.coordinates.data[:] = [750., 750.]
+src.coordinates.data[:] = [250., 250.]
 
 # Plor source
 # src.show()
@@ -122,14 +125,20 @@ op(dt=dt)
 # assert np.isclose(norm(v[0]), 0.6285093, atol=1e-4, rtol=0)
 
 # This should NOT have conditions, we should use XDSL!
-try:
+
+if args.xdsl:
     op = Operator([u_v] + [u_t], opt='xdsl')
-except:
+    # op = Operator([u_v] + [u_t])
+    op(dt=dt, time_M=nt)
+    print("norm v0:", norm(v[0]))
+    print("norm tau0:", norm(tau[0]))
+if args.devito:
     print("This should fail!")
     print("Now run Devito only")
-    op = Operator([u_v] + [u_t])
-
-op(dt=dt, time_M=100)
+    op = Operator([u_v] + [u_t], opt='advanced')
+    op(dt=dt, time_M=nt)
+    print("norm v0:", norm(v[0]))
+    print("norm tau0:", norm(tau[0]))
 
 
 plot_image(v[0].data[0], vmin=-.5*1e-1, vmax=.5*1e-1, cmap="seismic")
@@ -139,5 +148,16 @@ plot_image(tau[1, 1].data[0], vmin=-.5*1e-2, vmax=.5*1e-2, cmap="seismic")
 plot_image(tau[0, 1].data[0], vmin=-.5*1e-2, vmax=.5*1e-2, cmap="seismic")
 
 print(norm(v[0]))
+print(norm(tau[0]))
+
+
+import matplotlib.pyplot as plt
+
+# Save the plotted images locally
+plt.imsave('/home/gb4018/workspace/xdslproject/devito/fast/v0.pdf', v[0].data_with_halo[0], vmin=-.5*1e-2, vmax=.5*1e-2, cmap="seismic")
+plt.imsave('/home/gb4018/workspace/xdslproject/devito/fast/v1.pdf', v[1].data_with_halo[0], vmin=-.5*1e-2, vmax=.5*1e-2, cmap="seismic")
+plt.imsave('/home/gb4018/workspace/xdslproject/devito/fast/tau00.pdf', tau[0, 0].data_with_halo[0], vmin=-.5*1e-2, vmax=.5*1e-2, cmap="seismic")
+plt.imsave('/home/gb4018/workspace/xdslproject/devito/fast/tau11.pdf', tau[1, 1].data_with_halo[0], vmin=-.5*1e-2, vmax=.5*1e-2, cmap="seismic")
+plt.imsave('/home/gb4018/workspace/xdslproject/devito/fast/tau01.pdf', tau[0, 1].data_with_halo[0], vmin=-.5*1e-2, vmax=.5*1e-2, cmap="seismic")
 
 # assert np.isclose(norm(v[0]), 0.6285093, atol=1e-4, rtol=0)
