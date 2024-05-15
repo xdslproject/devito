@@ -55,7 +55,7 @@ so = args.space_order
 to = 1
 
 
-# Initial grid: 1km x 1km, with spacing 100m
+# Initial grid: km x km, with spacing
 extent = (1500., 1500.)
 shape = (nx, ny)
 x = SpaceDimension(name='x', spacing=Constant(name='h_x', value=extent[0]/(shape[0]-1)))
@@ -76,7 +76,7 @@ dt = (10. / np.sqrt(2.)) / 6.
 time_range = TimeAxis(start=t0, stop=tn, step=dt)
 
 src = RickerSource(name='src', grid=grid, f0=0.01, time_range=time_range)
-src.coordinates.data[:] = [750., 750.]
+src.coordinates.data[:] = [250., 250.]
 
 # Plor source
 # src.show()
@@ -125,19 +125,17 @@ op(dt=dt)
 
 # This should NOT have conditions, we should use XDSL!
 
-import pdb;pdb.set_trace()
-
 if args.xdsl:
     op = Operator([u_v] + [u_t], opt='xdsl')
     # op = Operator([u_v] + [u_t])
-    op(dt=dt, time_M=100)
+    op(dt=dt, time_M=nt)
     print("norm v0:", norm(v[0]))
     print("norm tau0:", norm(tau[0]))
 if args.devito:
     print("This should fail!")
     print("Now run Devito only")
     op = Operator([u_v] + [u_t], opt='advanced')
-    op(dt=dt, time_M=100)
+    op(dt=dt, time_M=nt)
     print("norm v0:", norm(v[0]))
     print("norm tau0:", norm(tau[0]))
 
