@@ -96,13 +96,11 @@ def test_u_and_v_conversion():
     assert isinstance(scffor_ops[3], StoreOp)
 
     # Second
-    assert isinstance(scffor_ops[4], LoadOp)
-    assert isinstance(scffor_ops[5], LoadOp)
-    assert isinstance(scffor_ops[6], ApplyOp)
-    assert isinstance(scffor_ops[7], StoreOp)
+    assert isinstance(scffor_ops[4], ApplyOp)
+    assert isinstance(scffor_ops[5], StoreOp)
 
     # Yield
-    assert isinstance(scffor_ops[8], Yield)
+    assert isinstance(scffor_ops[6], Yield)
 
     assert type(ops[7] == Call)
     assert type(ops[8] == StoreOp)
