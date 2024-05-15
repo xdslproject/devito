@@ -55,7 +55,12 @@ class ExtractDevitoStencilConversion:
 
     eqs: list[LoweredEq]
     block: Block
-    loaded_values: dict[tuple[int, ...], SSAValue]
+    temps: dict[tuple[DiscreteFunction, int], SSAValue]
+    time_offs: int
+
+    def __init__(self):
+        self.temps = dict()
+
     time_offs: int
 
     def _convert_eq(self, eq: LoweredEq, **kwargs):
@@ -182,42 +187,54 @@ class ExtractDevitoStencilConversion:
         read_functions = set()
         for f in retrieve_function_carriers(eq.rhs):
             read_functions.add((f.function, (f.indices[dim]-dim) % f.function.time_size))
-      
-        temps = {
-            (f, t): stencil.LoadOp.get(a).res
-            for (f, t), a in self.block_args.items()
-            if (f, t) in read_functions
-        }
-        for (f,t), a in temps.items():
-            a.name_hint = f"{f.name}_t{t}_temp"        
 
+        for f, t in read_functions:
+            if (f, t) not in self.temps:
+                self.temps[(f, t)] = stencil.LoadOp.get(self.block_args[(f, t)]).res
+                self.temps[(f, t)].name_hint = f"{f.name}_t{t}_temp"
+
+        apply_args = [self.temps[f] for f in read_functions]
+        
         write_function = self.out_time_buffer[0]
         shape = write_function.grid.shape_local
         apply = stencil.ApplyOp.get(
-            temps.values(),
-            Block(arg_types=[a.type for a in temps.values()]),
+            apply_args,
+            Block(arg_types=[a.type for a in apply_args]),
             result_types=[stencil.TempType(len(shape), element_type=dtypes_to_xdsltypes[write_function.dtype])]
         )
 
+        # Adding temp as suffix to the apply result name
+        apply.res[0].name_hint = f"{write_function.name}_t{self.out_time_buffer[1]}_temp"
+
+        # import pdb;pdb.set_trace()
         # Give names to stencil.apply's block arguments
         for apply_arg, apply_op in zip(apply.region.block.args, apply.operands):
             # Just reuse the corresponding operand name
             # i.e. %v_t1_temp -> %v_t1_blk
-            assert "temp" in apply_op.name_hint
+            # assert "temp" in apply_op.name_hint
             apply_arg.name_hint = apply_op.name_hint.replace("temp", "blk")
 
-        self.apply_temps = {k:v for k,v in zip(temps.keys(), apply.region.block.args)}
+        self.apply_temps = {k:v for k,v in zip(read_functions, apply.region.block.args)}
         
         with ImplicitBuilder(apply.region.block):
             stencil.ReturnOp.get([self._visit_math_nodes(dim, eq.rhs, eq.lhs)])
 
         lb = stencil.IndexAttr.get(*([0] * len(shape)))
         ub = stencil.IndexAttr.get(*shape)
-        stencil.StoreOp.get(
+
+        # import pdb;pdb.set_trace()
+        store = stencil.StoreOp.get(
             apply.res[0],
             self.block_args[self.out_time_buffer],
-            stencil.StencilBoundsAttr(zip(lb ,ub))
+            stencil.StencilBoundsAttr(zip(lb ,ub)),
+            stencil.TempType(len(shape), element_type=dtypes_to_xdsltypes[write_function.dtype])
         )
+
+        # import pdb;pdb.set_trace()
+        
+        store.temp_with_halo.name_hint = f"{write_function.name}_t{self.out_time_buffer[1]}_temp"
+        self.temps[self.out_time_buffer] = store.temp_with_halo
+
 
     def convert(self, eqs: Iterable[Eq], **kwargs) -> builtin.ModuleOp:
         """
