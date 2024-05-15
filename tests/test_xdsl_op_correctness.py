@@ -107,3 +107,19 @@ def test_u_and_v_conversion():
     assert type(ops[7] == Call)
     assert type(ops[8] == StoreOp)
     assert type(ops[9] == Return)
+
+
+# This test should fail, as we are trying to use an inplace operation
+def test_inplace():
+    # Define a simple Devito Operator
+    grid = Grid(shape=(3, 3))
+    u = TimeFunction(name='u', grid=grid, time_order=2)
+
+    u.data[:] = 0.0001
+
+    eq0 = Eq(u, u.dx)
+
+    xdsl_op = Operator([eq0], opt='xdsl')
+
+    with pytest.raises(Exception):
+        xdsl_op.apply(time_M=5, dt=0.1)
