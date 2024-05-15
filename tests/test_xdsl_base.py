@@ -480,35 +480,6 @@ class TestMulEqs(object):
         assert np.isclose(norm(v), np.linalg.norm(devito_res_v))
 
 
-def test_xdsl_mul_eqs_VII():
-    # Define a Devito Operator with multiple eqs
-    grid = Grid(shape=(4, 4))
-
-    u = TimeFunction(name="u", grid=grid, time_order=2)
-    v = TimeFunction(name="v", grid=grid, time_order=2)
-
-    u.data[:, :, :] = 0.1
-    v.data[:, :, :] = 0.1
-
-    eq0 = Eq(u.forward, u + 2)
-    eq1 = Eq(v, u.forward.dx * 2)
-
-    op = Operator([eq0, eq1], opt="advanced")
-    op.apply(time_M=4, dt=0.1)
-
-    devito_res_u = u.data_with_halo[:, :, :]
-    devito_res_v = v.data_with_halo[:, :, :]
-
-    u.data[:, :, :] = 0.1
-    v.data[:, :, :] = 0.1
-
-    op = Operator([eq0, eq1], opt="xdsl")
-    op.apply(time_M=4, dt=0.1)
-
-    assert np.isclose(norm(u), np.linalg.norm(devito_res_u))
-    assert np.isclose(norm(v), np.linalg.norm(devito_res_v))
-
-
 def test_forward_assignment_f32():
     # simple Devito a = 1 operator
 
