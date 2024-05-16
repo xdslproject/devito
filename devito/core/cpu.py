@@ -34,6 +34,7 @@ from devito.ir.ietxdsl.cluster_to_ssa import (ExtractDevitoStencilConversion,
                                               finalize_module_with_globals)  # noqa
 
 from devito.types import TimeFunction
+from devito.types.dense import DiscreteFunction, Function
 from devito.types.mlir_types import ptr_of, f32
 
 from xdsl.printer import Printer
@@ -540,6 +541,8 @@ class XdslnoopOperator(Cpu64OperatorMixin, CoreOperator):
                 data = arg._data
                 for t in range(data.shape[0]):
                     args[f'{arg._C_name}{t}'] = data[t, ...].ctypes.data_as(ptr_of(f32))
+            if isinstance(arg, Function):
+                args[f'{arg._C_name}'] = arg._data[...].ctypes.data_as(ptr_of(f32))
 
         self._jit_kernel_constants.update(args)
 
@@ -552,21 +555,24 @@ class XdslnoopOperator(Cpu64OperatorMixin, CoreOperator):
             p._C_name: p._C_ctype for p in self.parameters
         }
 
-        things = []
-        things_types = []
+        objects = []
+        objects_types = []
 
         for name in get_arg_names_from_module(self._module):
-            thing = args[name]
-            things.append(thing)
+            object = args[name]
+            objects.append(object)
             if name in ps:
-                things_types.append(ps[name])
+                object_type = ps[name]
+                if object_type == DiscreteFunction._C_ctype:
+                    object_type = dict(object_type._type_._fields_)['data']
+                objects_types.append(object_type)
             else:
-                things_types.append(type(thing))
+                objects_types.append(type(object))
 
         if get_types:
-            return things_types
+            return objects_types
         else:
-            return things
+            return objects
 
 
 class XdslAdvOperator(XdslnoopOperator):
@@ -990,7 +996,7 @@ def generate_tiling_arg(nb_tiled_dims: int):
     Generate the tile-sizes arg for the convert-stencil-to-ll-mlir pass.
     Generating no argument if the diled_dims arg is 0
     """
-    if nb_tiled_dims == 0:
+    if nb_tiled_dims < 1:
         return 'parallel-loop-tile-sizes=0'
     return "parallel-loop-tile-sizes=" + ",".join(["64"]*nb_tiled_dims) + ",0"
 
