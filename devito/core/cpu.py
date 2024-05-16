@@ -12,8 +12,6 @@ from collections import OrderedDict
 from functools import partial
 from typing import Iterable
 
-from matplotlib.pyplot import isinteractive
-
 from devito.core.operator import CoreOperator, CustomOperator, ParTile
 from devito.exceptions import InvalidOperator
 from devito.passes.equations import collect_derivatives
