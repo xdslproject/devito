@@ -86,7 +86,6 @@ class ExtractDevitoStencilConversion:
         # Get the function carriers of the equation
         self._build_step_body(step_dim, eq)
 
-
     def _convert_eq(self, eq: LoweredEq, **kwargs):
         """
         # Docs here Need rewriting
@@ -142,7 +141,13 @@ class ExtractDevitoStencilConversion:
         # Handle Indexeds
         if isinstance(node, Indexed):
             space_offsets = [node.indices[d] - output_indexed.indices[d] for d in node.function.space_dimensions]
-            temp = self.apply_temps[(node.function, (node.indices[dim] - dim) % node.function.time_size)]
+            if isinstance(node.function, TimeFunction):
+                time_offset = (node.indices[dim] - dim) % node.function.time_size
+            elif isinstance(node.function, Function):
+                time_offset = 0
+            else:
+                raise NotImplementedError(f"reading function of type {type(node.func)} not supported")
+            temp = self.apply_temps[(node.function, time_offset)]
             access = stencil.AccessOp.get(temp, space_offsets)
             return access.res
         # Handle Integers
@@ -210,7 +215,13 @@ class ExtractDevitoStencilConversion:
         """
         read_functions = set()
         for f in retrieve_function_carriers(eq.rhs):
-            read_functions.add((f.function, (f.indices[dim]-dim) % f.function.time_size))
+            if isinstance(f.function, TimeFunction):
+                time_offset = (f.indices[dim]-dim) % f.function.time_size
+            elif isinstance(f.function, Function):
+                time_offset = 0
+            else:
+                raise NotImplementedError(f"reading function of type {type(f.func)} not supported")
+            read_functions.add((f.function, time_offset))
 
         for f, t in read_functions:
             if (f, t) not in self.temps:
