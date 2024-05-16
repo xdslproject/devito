@@ -704,9 +704,9 @@ def test_function_II():
     # Define a Devito Operator with multiple eqs
     grid = Grid(shape=(4, 4))
 
-    u = Function(name="u", grid=grid, time_order=2)
-    v = TimeFunction(name="v", grid=grid, time_order=2)
-    w = Function(name="w", grid=grid, time_order=2)
+    u = Function(name="u", grid=grid)
+    v = TimeFunction(name="v", grid=grid)
+    w = Function(name="w", grid=grid)
 
     u.data[:, :] = 1.0
     v.data[:, :] = 2.0
@@ -717,17 +717,50 @@ def test_function_II():
     op = Operator([eq0, eq1], opt="advanced")
     op.apply(time_M=4, dt=0.1)
 
-    devito_res_u = u.data_with_halo[:, :]
-    devito_res_v = v.data_with_halo[:, :]
+    devito_norm_u = np.linalg.norm(u.data_ro_with_halo)
+    devito_norm_v = np.linalg.norm(v.data_ro_with_halo)
 
-    u.data[:, :] = 0.1
-    v.data[:, :] = 0.1
+    u.data[:, :] = 1.0
+    v.data[:, :] = 2.0
 
     op = Operator([eq0, eq1], opt="xdsl")
     op.apply(time_M=4, dt=0.1)
 
-    assert np.isclose(norm(u), np.linalg.norm(devito_res_u))
-    assert np.isclose(norm(v), np.linalg.norm(devito_res_v))
+    import pdb;pdb.set_trace()  # noqa
+
+    assert np.isclose(norm(u), devito_norm_u)
+    assert np.isclose(norm(v), devito_norm_v)
+
+
+def test_function_III():
+    # Define a Devito Operator with multiple eqs
+    grid = Grid(shape=(4, 4))
+
+    u = Function(name="u", grid=grid)
+    v = TimeFunction(name="v", grid=grid)
+    w = Function(name="w", grid=grid)
+
+    u.data[:, :] = 1.0
+    v.data[:, :] = 2.0
+
+    eq0 = Eq(v.forward, u * u + w)
+
+    op = Operator([eq0], opt="advanced")
+    op.apply(time_M=4, dt=0.1)
+
+    devito_norm_u = np.linalg.norm(u.data_ro_with_halo)
+    devito_norm_v = np.linalg.norm(v.data_ro_with_halo)
+
+    u.data[:, :] = 1.0
+    v.data[:, :] = 2.0
+
+    op = Operator([eq0], opt="xdsl")
+    op.apply(time_M=4, dt=0.1)
+
+    import pdb;pdb.set_trace()  # noqa
+
+    assert np.isclose(norm(u), devito_norm_u)
+    assert np.isclose(norm(v), devito_norm_v)
 
 
 class TestOperatorUnsupported(object):

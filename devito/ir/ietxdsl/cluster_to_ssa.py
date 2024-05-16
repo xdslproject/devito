@@ -99,6 +99,7 @@ class ExtractDevitoStencilConversion:
         # Get the function carriers of the equation
         self._build_step_body(step_dim, eq)
 
+
     def _convert_eq(self, eq: LoweredEq, **kwargs):
         """
         # Docs here Need rewriting
@@ -222,6 +223,7 @@ class ExtractDevitoStencilConversion:
         Build the body of the time loop.
         
         """
+        import pdb;pdb.set_trace()
         read_functions = set()
         for f in retrieve_function_carriers(eq.rhs):
             read_functions.add((f.function, (f.indices[dim]-dim) % f.function.time_size))
