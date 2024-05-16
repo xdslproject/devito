@@ -67,7 +67,7 @@ class ExtractDevitoStencilConversion:
     def __init__(self):
         self.temps = dict()
 
-    def convert_function(self, eq: LoweredEq, **kwargs):
+    def convert_function_eq(self, eq: LoweredEq, **kwargs):
         # Read the grid containing necessary discretization information
         # (size, halo width, ...)
         write_function = eq.lhs.function
@@ -128,7 +128,7 @@ class ExtractDevitoStencilConversion:
             case Indexed():
                 match write_function.function:
                     case TimeFunction() | Function():
-                        self.convert_function(eq, **kwargs)
+                        self.convert_function_eq(eq, **kwargs)
                     case _:
                         raise NotImplementedError(
                             f"Function of type {type(write_function.function)} not supported"
