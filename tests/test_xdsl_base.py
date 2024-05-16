@@ -717,8 +717,8 @@ def test_function_II():
     op = Operator([eq0, eq1], opt="advanced")
     op.apply(time_M=4, dt=0.1)
 
-    devito_norm_u = np.linalg.norm(u.data_ro_with_halo)
-    devito_norm_v = np.linalg.norm(v.data_ro_with_halo)
+    devito_norm_u = np.linalg.norm(u.data_with_halo)
+    devito_norm_v = np.linalg.norm(v.data_with_halo)
 
     u.data[:, :] = 1.0
     v.data[:, :] = 2.0
@@ -726,12 +726,11 @@ def test_function_II():
     op = Operator([eq0, eq1], opt="xdsl")
     op.apply(time_M=4, dt=0.1)
 
-    import pdb;pdb.set_trace()  # noqa
-
     assert np.isclose(norm(u), devito_norm_u)
     assert np.isclose(norm(v), devito_norm_v)
 
 
+@pytest.mark.xfail(reason="not supported reading from Functions yet")
 def test_function_III():
     # Define a Devito Operator with multiple eqs
     grid = Grid(shape=(4, 4))

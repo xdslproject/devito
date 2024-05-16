@@ -555,24 +555,24 @@ class XdslnoopOperator(Cpu64OperatorMixin, CoreOperator):
             p._C_name: p._C_ctype for p in self.parameters
         }
 
-        things = []
-        things_types = []
+        objects = []
+        objects_types = []
 
         for name in get_arg_names_from_module(self._module):
-            thing = args[name]
-            things.append(thing)
+            object = args[name]
+            objects.append(object)
             if name in ps:
-                thing_type = ps[name]
-                if thing_type == DiscreteFunction._C_ctype:
-                    thing_type = thing_type._type_._fields_[0][1]
-                things_types.append(thing_type)
+                object_type = ps[name]
+                if object_type == DiscreteFunction._C_ctype:
+                    object_type = dict(object_type._type_._fields_)['data']
+                objects_types.append(object_type)
             else:
-                things_types.append(type(thing))
+                objects_types.append(type(object))
 
         if get_types:
-            return things_types
+            return objects_types
         else:
-            return things
+            return objects
 
 
 class XdslAdvOperator(XdslnoopOperator):
