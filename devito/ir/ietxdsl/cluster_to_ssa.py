@@ -412,11 +412,13 @@ class ExtractDevitoStencilConversion:
                 xdsl_func.body.block.args[i].name_hint = f"{f.name}_vec{t}"
                 self.function_args[(f, t)] = xdsl_func.body.block.args[i]
             for i, f in enumerate(self.functions):
-                xdsl_func.body.block.args[len(self.time_buffers)+i].name_hint = f"{f.name}_vec"  # noqa
+                xdsl_func.body.block.args[len(self.time_buffers) + i].name_hint = f"{f.name}_vec"  # noqa
+                # tofix what is this 0 in [(f, 0)]
                 self.function_args[(f, 0)] = xdsl_func.body.block.args[len(self.time_buffers) + i]  # noqa
 
+            # Union operation?
             self.function_values |= self.function_args
-            print(self.function_values)
+            # print(self.function_values)
 
             # Move on to generate the function body
             with ImplicitBuilder(xdsl_func.body.block):
@@ -555,7 +557,7 @@ class _InsertSymbolicConstants(RewritePattern):
             )
 
 
-class _LowerLoadSymbolidToFuncArgs(RewritePattern):
+class _LowerLoadSymbolicToFuncArgs(RewritePattern):
 
     func_to_args: dict[func.FuncOp, dict[str, SSAValue]]
 
@@ -596,7 +598,7 @@ def finalize_module_with_globals(module: builtin.ModuleOp, known_symbols: dict[s
     """
     patterns = [
         _InsertSymbolicConstants(known_symbols),
-        _LowerLoadSymbolidToFuncArgs(),
+        _LowerLoadSymbolicToFuncArgs(),
     ]
     rewriter = GreedyRewritePatternApplier(patterns)
     PatternRewriteWalker(rewriter).rewrite_module(module)
