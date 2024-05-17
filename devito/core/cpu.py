@@ -277,6 +277,7 @@ class XdslnoopOperator(Cpu64OperatorMixin, CoreOperator):
         op._dimensions = set().union(*[e.dimensions for e in irs.expressions])
         op._dtype, op._dspace = irs.clusters.meta
         op._profiler = profiler
+        kwargs['xdsl_num_sections'] = len(FindNodes(Section).visit(irs.iet))
         module = cls._lower_stencil(irs.expressions, **kwargs)
         op._module = module
 
