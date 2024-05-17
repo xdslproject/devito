@@ -394,6 +394,9 @@ class ExtractDevitoStencilConversion:
         steps = [arith.Constant.from_int_and_width(1, builtin.IndexType()).result]*len(ubs)
 
         with ImplicitBuilder(scf.ParallelOp(lbs, ubs, steps, [Block()]).body):
+            for eq in eqs:
+                self._convert_eq(eq)
+            import pdb;pdb.set_trace()
             raise NotImplementedError("Injections not supported yet")
 
     def convert(self, eqs: Iterable[Eq], **kwargs) -> builtin.ModuleOp:
