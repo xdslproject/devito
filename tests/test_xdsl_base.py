@@ -762,7 +762,7 @@ def test_function_III():
     assert np.isclose(norm(v), devito_norm_v)
 
 
-@pytest.mark.xfail(reason="Operation does not verify: Cannot Load and Store the same field!")
+@pytest.mark.xfail(reason="Operation does not verify: Cannot Load and Store the same field!")  # noqa
 def test_function_IV():
     # Define a Devito Operator with multiple eqs
     grid = Grid(shape=(4, 4))
