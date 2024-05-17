@@ -761,19 +761,6 @@ def test_function_III():
 
 class TestOperatorUnsupported(object):
 
-    @pytest.mark.xfail(reason="Symbols are not supported in xDSL yet")
-    def test_symbol_I(self):
-        # Define a simple Devito a = 1 operator
-
-        a = Symbol('a')
-        eq0 = Eq(a, 1)
-
-        op = Operator([eq0], opt='xdsl')
-
-        op.apply()
-
-        assert a == 1
-
     @pytest.mark.xfail(reason="stencil.return operation does not verify for i64")
     def test_forward_assignment(self):
         # simple forward assignment

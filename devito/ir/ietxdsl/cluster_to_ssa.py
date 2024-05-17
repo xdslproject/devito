@@ -86,6 +86,13 @@ class ExtractDevitoStencilConversion:
         # Get the function carriers of the equation
         self._build_step_body(step_dim, eq)
 
+    def convert_symbol_eq(self, symbol: Symbol, rhs: LoweredEq, **kwargs):
+        """
+        Convert a symbol equation to xDSL.
+        """
+        self.symbol_values[symbol.name] = self._visit_math_nodes(None, rhs, None)
+        self.symbol_values[symbol.name].name_hint = symbol.name
+
     def _convert_eq(self, eq: LoweredEq, **kwargs):
         """
         # Docs here Need rewriting
@@ -133,7 +140,7 @@ class ExtractDevitoStencilConversion:
                             f"Function of type {type(write_function.function)} not supported"
                         )
             case Symbol():
-                self.convert_symbol_eq(write_function, eq, **kwargs)
+                self.convert_symbol_eq(write_function, eq.rhs, **kwargs)
             case _:
                 raise NotImplementedError(f"LHS of type {type(write_function)} not supported")
 
@@ -634,6 +641,8 @@ def apply_timers(module, **kwargs):
     """
     Apply timers to a module
     """
+    if kwargs['xdsl_num_sections'] < 1:
+        return
     name = kwargs.get("name", "Kernel")
     grpa = GreedyRewritePatternApplier([MakeFunctionTimed(name)])
     PatternRewriteWalker(grpa, walk_regions_first=True).rewrite_module(module)
