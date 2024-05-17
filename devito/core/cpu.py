@@ -43,6 +43,8 @@ from devito.types.mlir_types import ptr_of, f32
 from xdsl.printer import Printer
 from xdsl.xdsl_opt_main import xDSLOptMain
 
+from examples.seismic.source import PointSource
+
 
 __all__ = ['Cpu64NoopCOperator', 'Cpu64NoopOmpOperator', 'Cpu64AdvCOperator',
            'Cpu64AdvOmpOperator', 'Cpu64FsgCOperator', 'Cpu64FsgOmpOperator',
@@ -457,6 +459,7 @@ class XdslnoopOperator(Cpu64OperatorMixin, CoreOperator):
             self._jit_kernel_constants = args
 
         cfunction = self.cfunction
+        
         try:
             # Invoke kernel function with args
             arg_values = self._construct_cfunction_args(args)
@@ -498,9 +501,8 @@ class XdslnoopOperator(Cpu64OperatorMixin, CoreOperator):
         if self._cfunction is None:
             self._cfunction = getattr(self._lib, self.name)
             # Associate a C type to each argument for runtime type check
-            argtypes = self._construct_cfunction_args(self._jit_kernel_constants,
-                                                      get_types=True)
-            self._cfunction.argtypes = argtypes
+            argtypes = self._construct_cfunction_types(self._jit_kernel_constants)
+            # self._cfunction.argtypes = argtypes
 
         return self._cfunction
 
@@ -545,26 +547,21 @@ class XdslnoopOperator(Cpu64OperatorMixin, CoreOperator):
                 data = arg._data
                 for t in range(data.shape[0]):
                     args[f'{arg._C_name}{t}'] = data[t, ...].ctypes.data_as(ptr_of(f32))
-            if isinstance(arg, Function):
-                args[f'{arg._C_name}'] = arg._data[...].ctypes.data_as(ptr_of(f32))
+            elif isinstance(arg, Function):
+                args[arg._C_name] = arg._data[...].ctypes.data_as(ptr_of(f32))
+
+            elif isinstance(arg, PointSource):
+                args[arg._C_name] = arg._data[...].ctypes.data_as(ptr_of(f32))
+            else:
+                raise NotImplementedError(f"type {type(arg)} not implemented")
 
         self._jit_kernel_constants.update(args)
 
-    def _construct_cfunction_args(self, args, get_types=False):
-        """
-        Either construct the args for the cfunction, or construct the
-        arg types for it.
-        """
-        ps = {
-            p._C_name: p._C_ctype for p in self.parameters
-        }
+    def _construct_cfunction_types(self, args):
+        ps = {p._C_name: p._C_ctype for p in self.parameters}
 
-        objects = []
         objects_types = []
-
         for name in get_arg_names_from_module(self._module):
-            object = args[name]
-            objects.append(object)
             if name in ps:
                 object_type = ps[name]
                 if object_type == DiscreteFunction._C_ctype:
@@ -572,11 +569,20 @@ class XdslnoopOperator(Cpu64OperatorMixin, CoreOperator):
                 objects_types.append(object_type)
             else:
                 objects_types.append(type(object))
+        return objects_types
 
-        if get_types:
-            return objects_types
-        else:
-            return objects
+    def _construct_cfunction_args(self, args):
+        """
+        Either construct the args for the cfunction, or construct the
+        arg types for it.
+        """
+
+        objects = []
+        for name in get_arg_names_from_module(self._module):
+            object = args[name]
+            objects.append(object)
+
+        return objects
 
 
 class XdslAdvOperator(XdslnoopOperator):

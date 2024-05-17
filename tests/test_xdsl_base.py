@@ -265,14 +265,14 @@ def test_source_I():
     time_range = TimeAxis(start=t0, stop=tn, step=dt)
 
     f0 = 0.010
-    src = RickerSource(name="src", grid=grid, f0=f0, npoint=3, time_range=time_range)
+    src = RickerSource(name="src", grid=grid, f0=f0, npoint=64, time_range=time_range)
 
     domain_size = np.array(extent)
 
     src.coordinates.data[0, :] = domain_size * 0.5
     src.coordinates.data[0, -1] = 20.0
 
-    u = TimeFunction(name="u", grid=grid, time_order=2, space_order=2)
+    u = TimeFunction(name="u", grid=grid, time_order=1, space_order=2)
     m = Function(name='m', grid=grid)
     m.data[:] = 1./(v*v)
 
@@ -281,6 +281,10 @@ def test_source_I():
     op = Operator([src_term], opt="xdsl")
 
     op(time=time_range.num-1, dt=dt)
+
+    print(norm(u))
+
+
 
 
 def test_xdsl_mul_eqs_I():

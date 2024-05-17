@@ -143,7 +143,6 @@ class ExtractDevitoStencilConversion:
         "stencil.store"(%4, %u_t1) {"lb" = #stencil.index<0>, "ub" = #stencil.index<3>} : (!stencil.temp<?xf32>, !stencil.field<[-1,4]xf32>) -> ()
         ```
         """
-
         # Get the left hand side, called "output function" here because it tells us
         # Where to write the results of each step.
         write_function = eq.lhs
@@ -182,8 +181,16 @@ class ExtractDevitoStencilConversion:
             # Otherwise, generate a load op
             else:
                 temp = self.function_values[(node.function, time_offset)]
-                memtemp = builtin.UnrealizedConversionCastOp.get(temp, StencilToMemRefType(temp.type))
-                return memref.Load.get(memtemp, [self._visit_math_nodes(dim, i, output_indexed) for i in node.indices]).res
+                memtemp = builtin.UnrealizedConversionCastOp.get(temp, StencilToMemRefType(temp.type)).results[0]
+                memtemp.name_hint = temp.name_hint + "_mem"
+                indices = node.indices
+                if isinstance(node.function, TimeFunction):
+                    indices = indices[1:]
+                ssa_indices = [self._visit_math_nodes(dim, i, output_indexed) for i in node.indices]
+                for i, ssa_i in enumerate(ssa_indices):
+                    if isinstance(ssa_i.type, builtin.IntegerType):
+                        ssa_indices[i] = arith.IndexCastOp(ssa_i, builtin.IndexType())
+                return memref.Load.get(memtemp, ssa_indices).res
 
             import pdb; pdb.set_trace()
         # Handle Integers
@@ -196,8 +203,11 @@ class ExtractDevitoStencilConversion:
             return cst.result
         # Handle Symbols
         elif isinstance(node, Symbol):
-            symb = iet_ssa.LoadSymbolic.get(node.name, builtin.f32)
-            return symb.result     
+            if node.name in self.symbol_values:
+                return self.symbol_values[node.name]
+            else: 
+                symb = iet_ssa.LoadSymbolic.get(node.name, builtin.f32)
+                return symb.result     
         # Handle Add Mul
         elif isinstance(node, (Add, Mul)):
             args = [self._visit_math_nodes(dim, arg, output_indexed) for arg in node.args]
@@ -206,12 +216,12 @@ class ExtractDevitoStencilConversion:
             # this makes the reduction easier
             carry, *args = self._ensure_same_type(*args)
             # select the correct op from arith.addi, arith.addf, arith.muli, arith.mulf
-            if isinstance(carry.type, builtin.IntegerType):
+            if is_int(carry):
                 op_cls = arith.Addi if isinstance(node, Add) else arith.Muli
             elif isinstance(carry.type, builtin.Float32Type):
                 op_cls = arith.Addf if isinstance(node, Add) else arith.Mulf
             else:
-                raise("Add support for another type")
+                raise NotImplementedError(f"Add support for another type {carry.type}")
             for arg in args:
                 op = op_cls(carry, arg)
                 carry = op.result
@@ -316,10 +326,17 @@ class ExtractDevitoStencilConversion:
 
     def build_generic_step(self, dim: SteppingDimension, eq: LoweredEq):
         value = self._visit_math_nodes(dim, eq.rhs, None)
-        import pdb; pdb.set_trace()
         temp = self.function_values[self.out_time_buffer]
-        memtemp = builtin.UnrealizedConversionCastOp.get([temp], [StencilToMemRefType(temp.type)])
-        memref.Store.get(value, memtemp, (self._visit_math_nodes(dim, i, None) for i in eq.lhs.indices))
+        memtemp = builtin.UnrealizedConversionCastOp.get([temp], [StencilToMemRefType(temp.type)]).results[0]
+        memtemp.name_hint = temp.name_hint + "_mem"
+        indices = eq.lhs.indices
+        if isinstance(eq.lhs.function, TimeFunction):
+            indices = indices[1:]
+        ssa_indices = [self._visit_math_nodes(dim, i, None) for i in indices]
+        for i, ssa_i in enumerate(ssa_indices):
+            if isinstance(ssa_i.type, builtin.IntegerType):
+                ssa_indices[i] = arith.IndexCastOp(ssa_i, builtin.IndexType())
+        memref.Store.get(value, memtemp, ssa_indices)
 
     def build_time_loop(
         self, eqs: list[Any], step_dim: SteppingDimension, **kwargs
@@ -410,15 +427,16 @@ class ExtractDevitoStencilConversion:
         lbs = []
         ubs = []
         for interval in ispace[1:]:
-            lower = interval.lower
+            lower = interval.symbolic_min
             if isinstance(lower, Scalar):
                 lb = iet_ssa.LoadSymbolic.get(lower._C_name, builtin.IndexType())
             elif isinstance(lower, (Number, int)):
                 lb = arith.Constant.from_int_and_width(int(lower), builtin.IndexType())
             else:
                 raise NotImplementedError(f"Lower bound of type {type(lower)} not supported")
+            lb.result.name_hint = f"{interval.dim.name}_m"
 
-            upper = interval.upper
+            upper = interval.symbolic_max
             if isinstance(upper, Scalar):
                 ub = iet_ssa.LoadSymbolic.get(upper._C_name, builtin.IndexType())
             elif isinstance(upper, (Number, int)):
@@ -427,15 +445,21 @@ class ExtractDevitoStencilConversion:
                 raise NotImplementedError(
                     f"Upper bound of type {type(upper)} not supported"
                 )
+            ub.result.name_hint = f"{interval.dim.name}_M"
             lbs.append(lb)
             ubs.append(ub)
 
-        steps = [arith.Constant.from_int_and_width(1, builtin.IndexType()).result]*len(ubs)
 
-        with ImplicitBuilder(scf.ParallelOp(lbs, ubs, steps, [Block()]).body):
+        steps = [arith.Constant.from_int_and_width(1, builtin.IndexType()).result]*len(ubs)
+        ubs = [arith.Addi(ub, steps[0]) for ub in ubs]
+
+        with ImplicitBuilder(scf.ParallelOp(lbs, ubs, steps, [pblock := Block(arg_types=[builtin.IndexType()]*len(ubs))]).body):
+            for arg, interval in zip(pblock.args, ispace[1:], strict=True):
+                arg.name_hint = interval.dim.name
+                self.symbol_values[interval.dim.name] = arg
             for eq in eqs:
                 self._convert_eq(eq)
-            import pdb;pdb.set_trace()
+            scf.Yield()
             # raise NotImplementedError("Injections not supported yet")
 
     def convert(self, eqs: Iterable[Eq], **kwargs) -> builtin.ModuleOp:
@@ -490,7 +514,7 @@ class ExtractDevitoStencilConversion:
                     for f in retrieve_functions(eq):
                         functions.add(f.function)
                 elif isinstance(eq, Injection):
-                    import pdb;pdb.set_trace()
+                    # import pdb; pdb.set_trace()
                     functions.add(eq.field.function)
                     for f in retrieve_functions(eq.expr):
                         if isinstance(f, PointSource):
@@ -509,6 +533,7 @@ class ExtractDevitoStencilConversion:
                     case Function():
                         self.functions.append(f)
                     case PointSource():
+                        self.functions.append(f.coordinates)
                         self.functions.append(f)
                     case _:
                         raise NotImplementedError(f"Function of type {type(f)} not supported")
@@ -527,10 +552,10 @@ class ExtractDevitoStencilConversion:
             self.function_args = {}
             for i, (f, t) in enumerate(self.time_buffers):
                 # Also define argument names to help with debugging
-                xdsl_func.body.block.args[i].name_hint = f"{f.name}_vec{t}"
+                xdsl_func.body.block.args[i].name_hint = f._C_name + str(t)
                 self.function_args[(f, t)] = xdsl_func.body.block.args[i]
             for i, f in enumerate(self.functions):
-                xdsl_func.body.block.args[len(self.time_buffers)+i].name_hint = f"{f.name}_vec"
+                xdsl_func.body.block.args[len(self.time_buffers)+i].name_hint = f._C_name
                 self.function_args[(f, 0)] = xdsl_func.body.block.args[len(self.time_buffers)+i]
 
             self.function_values |= self.function_args
@@ -558,12 +583,20 @@ class ExtractDevitoStencilConversion:
     def _ensure_same_type(self, *vals: SSAValue):
         if all(isinstance(val.type, builtin.IntegerAttr) for val in vals):
             return vals
+        if all(isinstance(val.type, builtin.IndexType) for val in vals):
+            return vals
         if all(is_float(val) for val in vals):
             return vals
         # not everything homogeneous
+        cast_to_floats = True
+        if all(is_int(val) for val in vals):
+            cast_to_floats = False
         processed = []
         for val in vals:
-            if is_float(val):
+            if cast_to_floats and is_float(val):
+                processed.append(val)
+                continue
+            if (not cast_to_floats) and isinstance(val.type, builtin.IndexType):
                 processed.append(val)
                 continue
             # if the val is the result of a arith.constant with no uses,
@@ -573,14 +606,23 @@ class ExtractDevitoStencilConversion:
                 and isinstance(val.op, arith.Constant)
                 and val.uses == 0
             ):
-                val.type = builtin.f32
-                val.op.attributes["value"] = builtin.FloatAttr(
-                    float(val.op.value.value.data), builtin.f32
-                )
+                if cast_to_floats:
+                    val.type = builtin.f32
+                    val.op.attributes["value"] = builtin.FloatAttr(
+                        float(val.op.value.value.data), builtin.f32
+                    )
+                else:
+                    val.type = builtin.IndexType()
+                    val.op.value.type = builtin.IndexType()
                 processed.append(val)
                 continue
-            # insert an integer to float cast op
-            conv = arith.SIToFPOp(val, builtin.f32)
+            # insert a cast op
+            if cast_to_floats:
+                if val.type == builtin.IndexType():
+                    val = arith.IndexCastOp(val, builtin.i64).result
+                conv = arith.SIToFPOp(val, builtin.f32)
+            else:
+                conv = arith.IndexCastOp(val, builtin.IndexType())
             processed.append(conv.result)
         return processed
 
