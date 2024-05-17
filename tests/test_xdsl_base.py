@@ -6,6 +6,7 @@ from devito import (Grid, TensorTimeFunction, VectorTimeFunction, div, grad, dia
 from devito.types import Array, Function, TimeFunction
 from devito.tools import as_tuple
 
+from examples.seismic.source import RickerSource, TimeAxis
 from xdsl.dialects.scf import For, Yield
 from xdsl.dialects.arith import Addi
 from xdsl.dialects.func import Call, Return
@@ -249,6 +250,41 @@ def test_standard_mlir_rewrites(shape, so, to, nt):
     # XDSL Operator
     xdslop = Operator([stencil], opt='xdsl')
     xdslop.apply(time=nt, dt=dt)
+
+
+def test_source_I():
+    shape = (101, 101)
+    extent = (1000, 1000)
+    origin = (0.0, 0.0)
+
+    v = np.empty(shape, dtype=np.float32)
+    v[:, :51] = 1.5
+    v[:, 51:] = 2.5
+
+    grid = Grid(shape=shape, extent=extent, origin=origin)
+
+    t0 = 0.0
+    tn = 1000.0
+    dt = 1.6
+    time_range = TimeAxis(start=t0, stop=tn, step=dt)
+
+    f0 = 0.010
+    src = RickerSource(name="src", grid=grid, f0=f0, npoint=3, time_range=time_range)
+
+    domain_size = np.array(extent)
+
+    src.coordinates.data[0, :] = domain_size * 0.5
+    src.coordinates.data[0, -1] = 20.0
+
+    u = TimeFunction(name="u", grid=grid, time_order=2, space_order=2)
+    m = Function(name='m', grid=grid)
+    m.data[:] = 1./(v*v)
+
+    src_term = src.inject(field=u.forward, expr=src * dt**2 / m)
+
+    op = Operator([src_term], opt="xdsl")
+
+    op(time=time_range.num-1, dt=dt)
 
 
 def test_xdsl_mul_eqs_I():
