@@ -561,7 +561,7 @@ class XdslnoopOperator(Cpu64OperatorMixin, CoreOperator):
 
         objects = []
         objects_types = []
-
+        import pdb; pdb.set_trace()
         for name in get_arg_names_from_module(self._module):
             object = args[name]
             objects.append(object)
