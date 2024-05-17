@@ -859,8 +859,6 @@ class Operator(Callable):
         # Output summary of performance achieved
         return self._emit_apply_profiling(args)
 
-    # Performance profiling
-
     def _emit_build_profiling(self):
         if not is_log_enabled_for('PERF'):
             return
