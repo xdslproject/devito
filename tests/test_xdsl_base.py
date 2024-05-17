@@ -762,6 +762,31 @@ def test_function_III():
     assert np.isclose(norm(v), devito_norm_v)
 
 
+@pytest.mark.xfail(reason="Operation does not verify: Cannot Load and Store the same field!")
+def test_function_IV():
+    # Define a Devito Operator with multiple eqs
+    grid = Grid(shape=(4, 4))
+
+    u = Function(name="u", grid=grid)
+    w = Function(name="w", grid=grid)
+
+    u.data[:, :] = 1.0
+
+    eq0 = Eq(w, u * u + w)
+
+    op = Operator([eq0], opt="advanced")
+    op.apply()
+
+    devito_norm_u = np.linalg.norm(u.data_ro_with_halo)
+
+    u.data[:, :] = 1.0
+
+    op = Operator([eq0], opt="xdsl")
+    op.apply()
+
+    assert np.isclose(norm(u), devito_norm_u)
+
+
 class TestOperatorUnsupported(object):
 
     @pytest.mark.xfail(reason="Symbols are not supported in xDSL yet")
