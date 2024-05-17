@@ -35,6 +35,7 @@ from devito.ir.ietxdsl.cluster_to_ssa import (ExtractDevitoStencilConversion,
                                               apply_timers,
                                               finalize_module_with_globals)  # noqa
 
+from devito.tools.utils import as_tuple
 from devito.types import TimeFunction
 from devito.types.dense import DiscreteFunction, Function
 from devito.types.mlir_types import ptr_of, f32
@@ -245,12 +246,12 @@ class XdslnoopOperator(Cpu64OperatorMixin, CoreOperator):
         Callable.__init__(op, **op.args)
 
         # Header files, etc.
-        op._headers = OrderedSet(*cls._default_headers)
-        op._headers.update(byproduct.headers)
-        op._globals = OrderedSet(*cls._default_globals)
-        op._includes = OrderedSet(*cls._default_includes)
-        op._includes.update(profiler._default_includes)
-        op._includes.update(byproduct.includes)
+        # op._headers = OrderedSet(*cls._default_headers)
+        # op._headers.update(byproduct.headers)
+        # op._globals = OrderedSet(*cls._default_globals)
+        # op._includes = OrderedSet(*cls._default_includes)
+        # op._includes.update(profiler._default_includes)
+        # op._includes.update(byproduct.includes)
 
         # Required for the jit-compilation
         op._compiler = kwargs['compiler']
@@ -282,7 +283,7 @@ class XdslnoopOperator(Cpu64OperatorMixin, CoreOperator):
         op._dtype, op._dspace = irs.clusters.meta
         op._profiler = profiler
         kwargs['xdsl_num_sections'] = len(FindNodes(Section).visit(irs.iet))
-        module = cls._lower_stencil(irs.expressions, **kwargs)
+        module = cls._lower_stencil(expressions, **kwargs)
         op._module = module
 
         return op
@@ -295,8 +296,8 @@ class XdslnoopOperator(Cpu64OperatorMixin, CoreOperator):
         Apply timers to the module
         """
 
-        conv = ExtractDevitoStencilConversion()
-        module = conv.convert(expressions, **kwargs)
+        conv = ExtractDevitoStencilConversion(cls)
+        module = conv.convert(as_tuple(expressions), **kwargs)
         # print(module)
         apply_timers(module, timed=True, **kwargs)
 
