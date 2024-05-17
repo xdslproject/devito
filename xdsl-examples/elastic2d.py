@@ -125,8 +125,6 @@ op(dt=dt)
 v_init = v[0].data[:, :], v[1].data[:, :]
 tau_init = tau[0].data[:, :], tau[1].data[:, :], tau[2].data[:, :]
 
-# import pdb;pdb.set_trace()
-
 # Up to here, let's only use Devito
 # assert np.isclose(norm(v[0]), 0.6285093, atol=1e-4, rtol=0)
 

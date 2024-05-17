@@ -1,44 +1,41 @@
+from collections import OrderedDict
 from contextlib import redirect_stdout
+import ctypes
 import io
 import os
-import sys
 import subprocess
-import ctypes
+import sys
 import tempfile
 
 from io import StringIO
-from collections import OrderedDict
 
 from functools import partial
 from typing import Iterable
 
 from devito.core.operator import CoreOperator, CustomOperator, ParTile
 from devito.exceptions import InvalidOperator
-from devito.passes.equations import collect_derivatives
-from devito.passes.clusters import (Lift, blocking, buffering, cire, cse,
-                                    factorize, fission, fuse, optimize_pows,
-                                    optimize_hyperplanes)
-from devito.passes.iet import (CTarget, OmpTarget, avoid_denormals, linearize, mpiize,
-                               hoist_prodders, relax_incr_dimensions)
+from devito.ir.iet import Callable, MetaCall
+from devito.logger import info, perf
 from devito.mpi import MPI
+from devito.operator.profiling import create_profile
+from devito.passes.equations import collect_derivatives
+from devito.tools import filter_sorted, flatten, OrderedSet
+from devito.types import TimeFunction
+from devito.types.dense import DiscreteFunction, Function
+from devito.types.mlir_types import f32, ptr_of
 from devito.tools import timed_pass
 
-from devito.logger import info, perf
-from devito.operator.profiling import create_profile
-from devito.ir.iet import Callable, MetaCall
-
-from devito.tools import flatten, filter_sorted, OrderedSet
+from xdsl.printer import Printer
+from xdsl.xdsl_opt_main import xDSLOptMain
 
 from devito.ir.ietxdsl.cluster_to_ssa import (ExtractDevitoStencilConversion,
                                               apply_timers,
                                               finalize_module_with_globals)  # noqa
-
-from devito.types import TimeFunction
-from devito.types.dense import DiscreteFunction, Function
-from devito.types.mlir_types import ptr_of, f32
-
-from xdsl.printer import Printer
-from xdsl.xdsl_opt_main import xDSLOptMain
+from devito.passes.clusters import (Lift, blocking, buffering, cire, cse,
+                                    factorize, fission, fuse, optimize_hyperplanes,
+                                    optimize_pows)
+from devito.passes.iet import (CTarget, OmpTarget, avoid_denormals, hoist_prodders,
+                               linearize, mpiize, relax_incr_dimensions)
 
 
 __all__ = ['Cpu64NoopCOperator', 'Cpu64NoopOmpOperator', 'Cpu64AdvCOperator',

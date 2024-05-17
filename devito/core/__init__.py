@@ -25,14 +25,6 @@ operator_registry.add(Cpu64NoopOmpOperator, Cpu64, 'noop', 'openmp')
 operator_registry.add(Cpu64AdvCOperator, Cpu64, 'advanced', 'C')
 operator_registry.add(Cpu64AdvOmpOperator, Cpu64, 'advanced', 'openmp')
 
-operator_registry.add(XdslnoopOperator, Cpu64, 'xdsl-noop', 'C')
-# to change
-operator_registry.add(XdslAdvOperator, Cpu64, 'xdsl-noop', 'openmp')
-
-operator_registry.add(XdslAdvOperator, Cpu64, 'xdsl', 'C')
-operator_registry.add(XdslAdvOperator, Cpu64, 'xdsl', 'openmp')
-operator_registry.add(XdslAdvDeviceOperator, Device, 'xdsl', 'openacc')
-
 operator_registry.add(Cpu64FsgCOperator, Cpu64, 'advanced-fsg', 'C')
 operator_registry.add(Cpu64FsgOmpOperator, Cpu64, 'advanced-fsg', 'openmp')
 
@@ -63,3 +55,11 @@ operator_registry.add(DeviceAdvAccOperator, Device, 'advanced', 'openacc')
 operator_registry.add(DeviceFsgOmpOperator, Device, 'advanced-fsg', 'C')
 operator_registry.add(DeviceFsgOmpOperator, Device, 'advanced-fsg', 'openmp')
 operator_registry.add(DeviceFsgAccOperator, Device, 'advanced-fsg', 'openacc')
+
+# Register XDSL Operators
+operator_registry.add(XdslnoopOperator, Cpu64, 'xdsl-noop', 'C')
+operator_registry.add(XdslAdvOperator, Cpu64, 'xdsl-noop', 'openmp')
+
+operator_registry.add(XdslAdvOperator, Cpu64, 'xdsl', 'C')
+operator_registry.add(XdslAdvOperator, Cpu64, 'xdsl', 'openmp')
+operator_registry.add(XdslAdvDeviceOperator, Device, 'xdsl', 'openacc')

@@ -1,12 +1,8 @@
 # ------------- General imports -------------#
 
-from typing import Any, Iterable, cast
+from typing import Any, Iterable
 from dataclasses import dataclass, field
 from sympy import Add, Expr, Float, Indexed, Integer, Mod, Mul, Pow, Symbol
-from devito.symbolics.search import retrieve_functions
-from devito.tools.data_structures import OrderedSet
-from devito.types.dense import DiscreteFunction, Function, TimeFunction
-from devito.types.equation import Eq
 
 # ------------- xdsl imports -------------#
 from xdsl.dialects import (arith, builtin, func, memref, scf,
@@ -27,26 +23,25 @@ from devito import Grid, SteppingDimension
 from devito.ir.equations import LoweredEq
 from devito.symbolics import retrieve_indexed, retrieve_function_carriers
 from devito.logger import perf
+from devito.tools.dtypes_lowering import dtype_to_xdsltype
+from devito.symbolics.search import retrieve_functions
+from devito.tools.data_structures import OrderedSet
+from devito.types.dense import DiscreteFunction, Function, TimeFunction
+from devito.types.equation import Eq
 
 # ------------- devito-xdsl SSA imports -------------#
 from devito.ir.ietxdsl import iet_ssa
 from devito.ir.ietxdsl.utils import is_int, is_float
 import numpy as np
 
-dtypes_to_xdsltypes = {
-    np.float32: builtin.f32,
-    np.float64: builtin.f64,
-    np.int32: builtin.i32,
-    np.int64: builtin.i64,
-}
+# flake8: noqa E501
 
-# flake8: noqa
 
 def field_from_function(f: DiscreteFunction) -> stencil.FieldType:
     halo = [f.halo[d] for d in f.grid.dimensions]
     shape = f.grid.shape
     bounds = [(-h[0], s+h[1]) for h, s in zip(halo, shape)]
-    return stencil.FieldType(bounds, element_type=dtypes_to_xdsltypes[f.dtype])
+    return stencil.FieldType(bounds, element_type=dtype_to_xdsltype(f.dtype))
 
 
 class ExtractDevitoStencilConversion:
@@ -71,14 +66,14 @@ class ExtractDevitoStencilConversion:
         # Read the grid containing necessary discretization information
         # (size, halo width, ...)
         write_function = eq.lhs.function
+        grid: Grid = write_function.grid
+        step_dim = grid.stepping_dim
+
         if isinstance(write_function, TimeFunction):
-            grid: Grid = write_function.grid
-            step_dim = grid.stepping_dim
-            output_time_offset = (eq.lhs.indices[step_dim] - step_dim) % write_function.time_size
+            time_size = write_function.time_size
+            output_time_offset = (eq.lhs.indices[step_dim] - step_dim) % time_size
             self.out_time_buffer = (write_function, output_time_offset)
         elif isinstance(write_function, Function):
-            grid: Grid = write_function.grid
-            step_dim = grid.stepping_dim
             self.out_time_buffer = (write_function, 0)
         else:
             raise NotImplementedError(f"Function of type {type(write_function)} not supported")
@@ -130,23 +125,26 @@ class ExtractDevitoStencilConversion:
                         self.convert_function_eq(eq, **kwargs)
                     case _:
                         raise NotImplementedError(
-                            f"Function of type {type(write_function.function)} not supported"
+                            f"Function of type {type(write_function.function)} not supported"  # noqa
                         )
             case Symbol():
                 self.convert_symbol_eq(write_function, eq, **kwargs)
             case _:
-                raise NotImplementedError(f"LHS of type {type(write_function)} not supported")
+                raise NotImplementedError(f"LHS of type {type(write_function)} not supported")  # noqa
 
-    def _visit_math_nodes(self, dim: SteppingDimension, node: Expr, output_indexed:Indexed) -> SSAValue:
+    def _visit_math_nodes(self, dim: SteppingDimension, node: Expr,
+                          output_indexed: Indexed) -> SSAValue:
         # Handle Indexeds
         if isinstance(node, Indexed):
-            space_offsets = [node.indices[d] - output_indexed.indices[d] for d in node.function.space_dimensions]
+            space_offsets = []
+            for d in node.function.space_dimensions:
+                space_offsets.append(node.indices[d] - output_indexed.indices[d])
             if isinstance(node.function, TimeFunction):
                 time_offset = (node.indices[dim] - dim) % node.function.time_size
             elif isinstance(node.function, Function):
                 time_offset = 0
             else:
-                raise NotImplementedError(f"reading function of type {type(node.func)} not supported")
+                raise NotImplementedError(f"reading function of type {type(node.func)} not supported")  # noqa
             temp = self.apply_temps[(node.function, time_offset)]
             access = stencil.AccessOp.get(temp, space_offsets)
             return access.res
@@ -161,15 +159,15 @@ class ExtractDevitoStencilConversion:
         # Handle Symbols
         elif isinstance(node, Symbol):
             symb = iet_ssa.LoadSymbolic.get(node.name, builtin.f32)
-            return symb.result     
+            return symb.result
         # Handle Add Mul
         elif isinstance(node, (Add, Mul)):
             args = [self._visit_math_nodes(dim, arg, output_indexed) for arg in node.args]
-            # add casts when necessary
+            # Add casts when necessary
             # get first element out, store the rest in args
             # this makes the reduction easier
             carry, *args = self._ensure_same_type(*args)
-            # select the correct op from arith.addi, arith.addf, arith.muli, arith.mulf
+            # select the correct op from arith.Addi, arith.Addf, arith.Muli, arith.Mulf
             if isinstance(carry.type, builtin.IntegerType):
                 op_cls = arith.Addi if isinstance(node, Add) else arith.Muli
             elif isinstance(carry.type, builtin.Float32Type):
@@ -180,6 +178,7 @@ class ExtractDevitoStencilConversion:
                 op = op_cls(carry, arg)
                 carry = op.result
             return carry
+
         # Handle Pow
         elif isinstance(node, Pow):
             args = [self._visit_math_nodes(dim, arg, output_indexed) for arg in node.args]
@@ -208,19 +207,26 @@ class ExtractDevitoStencilConversion:
         else:
             raise NotImplementedError(f"Unknown math: {node}", node)
 
-    def _build_step_body(self, dim: SteppingDimension, eq:LoweredEq) -> None:
+    def _build_step_body(self, dim: SteppingDimension, eq: LoweredEq) -> None:
         """
-        Build the body of the time loop.
-        
+        Builds the body of the step function for a given dimension and equation.
+
+        Args:
+            dim (SteppingDimension): The stepping dimension for the equation.
+            eq (LoweredEq): The equation to build the step body for.
+
+        Returns:
+            None
         """
         read_functions = set()
         for f in retrieve_function_carriers(eq.rhs):
             if isinstance(f.function, TimeFunction):
-                time_offset = (f.indices[dim]-dim) % f.function.time_size
+                time_offset = (f.indices[dim] - dim) % f.function.time_size
             elif isinstance(f.function, Function):
                 time_offset = 0
             else:
-                raise NotImplementedError(f"reading function of type {type(f.func)} not supported")
+                raise NotImplementedError(f"reading function of type {type(f.func)}"
+                                          "not supported")
             read_functions.add((f.function, time_offset))
 
         for f, t in read_functions:
@@ -235,21 +241,21 @@ class ExtractDevitoStencilConversion:
         apply = stencil.ApplyOp.get(
             apply_args,
             Block(arg_types=[a.type for a in apply_args]),
-            result_types=[stencil.TempType(len(shape), element_type=dtypes_to_xdsltypes[write_function.dtype])]
+            result_types=[stencil.TempType(len(shape),
+                          element_type=dtype_to_xdsltype(write_function.dtype))]
         )
 
         # Adding temp as suffix to the apply result name
         apply.res[0].name_hint = f"{write_function.name}_t{self.out_time_buffer[1]}_temp"
 
-        # import pdb;pdb.set_trace()
         # Give names to stencil.apply's block arguments
         for apply_arg, apply_op in zip(apply.region.block.args, apply.operands):
             # Just reuse the corresponding operand name
             # i.e. %v_t1_temp -> %v_t1_blk
-            # assert "temp" in apply_op.name_hint
+            assert "temp" in apply_op.name_hint
             apply_arg.name_hint = apply_op.name_hint.replace("temp", "blk")
 
-        self.apply_temps = {k:v for k,v in zip(read_functions, apply.region.block.args)}
+        self.apply_temps = {k: v for k, v in zip(read_functions, apply.region.block.args)}
 
         with ImplicitBuilder(apply.region.block):
             stencil.ReturnOp.get([self._visit_math_nodes(dim, eq.rhs, eq.lhs)])
@@ -257,17 +263,15 @@ class ExtractDevitoStencilConversion:
         lb = stencil.IndexAttr.get(*([0] * len(shape)))
         ub = stencil.IndexAttr.get(*shape)
 
-        # import pdb;pdb.set_trace()
         store = stencil.StoreOp.get(
             apply.res[0],
             self.function_values[self.out_time_buffer],
             stencil.StencilBoundsAttr(zip(lb, ub)),
-            stencil.TempType(len(shape), element_type=dtypes_to_xdsltypes[write_function.dtype])
+            stencil.TempType(len(shape),
+                             element_type=dtype_to_xdsltype(write_function.dtype))
         )
 
-        # import pdb;pdb.set_trace()
-
-        store.temp_with_halo.name_hint = f"{write_function.name}_t{self.out_time_buffer[1]}_temp"
+        store.temp_with_halo.name_hint = f"{write_function.name}_t{self.out_time_buffer[1]}_temp"  # noqa
         self.temps[self.out_time_buffer] = store.temp_with_halo
 
     def build_time_loop(
@@ -284,11 +288,13 @@ class ExtractDevitoStencilConversion:
         # Devito iterates from time_m to time_M *inclusive*, MLIR only takes
         # exclusive upper bounds, so we increment here.
         ub = arith.Addi(ub, one)
-        # Take the exact time_step from DeVito
+
+        # Take the exact time_step from Devito
         try:
             step = arith.Constant.from_int_and_width(
                 int(step_dim.symbolic_incr), builtin.IndexType()
             )
+
             step.result.name_hint = "step"
         except:
             raise ValueError("step must be int!")
@@ -309,8 +315,8 @@ class ExtractDevitoStencilConversion:
             Block(arg_types=[builtin.IndexType(), *(a.type for a in iter_args)]),
         )
 
-        # Name the time step iterator
-        loop.body.block.args[0].name_hint = "time"
+        # Name the 'time' step iterator
+        loop.body.block.args[0].name_hint = step_dim.root.name  # 'time'
 
         # Store a mapping from time_buffers to their corresponding block
         # arguments for easier access later.
@@ -378,15 +384,15 @@ class ExtractDevitoStencilConversion:
         calling the operator.
         """
         # Instantiate the module.
-        self.function_values : dict[tuple[Function, int], SSAValue] = {}
+        self.function_values: dict[tuple[Function, int], SSAValue] = {}
         module = builtin.ModuleOp(Region([block := Block([])]))
         with ImplicitBuilder(block):
             # Get all functions used in the equations
             functions = OrderedSet(
                 *(f.function for eq in eqs for f in retrieve_function_carriers(eq))
             )
-            self.time_buffers : list[TimeFunction] = []
-            self.functions : list[Function] = []
+            self.time_buffers: list[TimeFunction] = []
+            self.functions: list[Function] = []
             for f in functions:
                 match f:
                     case TimeFunction():
@@ -412,8 +418,8 @@ class ExtractDevitoStencilConversion:
                 xdsl_func.body.block.args[i].name_hint = f"{f.name}_vec{t}"
                 self.function_args[(f, t)] = xdsl_func.body.block.args[i]
             for i, f in enumerate(self.functions):
-                xdsl_func.body.block.args[len(self.time_buffers)+i].name_hint = f"{f.name}_vec"
-                self.function_args[(f, 0)] = xdsl_func.body.block.args[len(self.time_buffers)+i]
+                xdsl_func.body.block.args[len(self.time_buffers)+i].name_hint = f"{f.name}_vec"  # noqa
+                self.function_args[(f, 0)] = xdsl_func.body.block.args[len(self.time_buffers) + i]  # noqa
 
             self.function_values |= self.function_args
             print(self.function_values)
@@ -428,11 +434,12 @@ class ExtractDevitoStencilConversion:
 
                 # Get the stepping dimension. It's usually time, and usually the first one.
                 # Getting it here; more readable and less input assumptions :)
-                time_functions = [f for (f,_) in self.time_buffers]
+                time_functions = [f for (f, _) in self.time_buffers]
                 dimensions = {
                     d for f in (self.functions + time_functions) for d in f.dimensions
                 }
-                step_dim = next((d for d in dimensions if isinstance(d, SteppingDimension)), None)
+                step_dim = next((d for d in dimensions
+                                if isinstance(d, SteppingDimension)), None)
                 if step_dim is not None:
                     self.build_time_loop(eqs, step_dim, **kwargs)
                 else:
@@ -622,7 +629,6 @@ class _LowerLoadSymbolidToFuncArgs(RewritePattern):
             body = parent.body.block
             args.append(body.insert_arg(op.result.type, len(body.args)))
             arg_index = len(args) - 1
-            
 
         op.result.replace_by(args[arg_index])
 
@@ -656,5 +662,5 @@ def finalize_module_with_globals(module: builtin.ModuleOp, known_symbols: dict[s
 
     # GPU boilerplate
     if gpu_boilerplate:
-        walker = PatternRewriteWalker(GreedyRewritePatternApplier([WrapFunctionWithTransfers('apply_kernel')]))
+        walker = PatternRewriteWalker(GreedyRewritePatternApplier([WrapFunctionWithTransfers('apply_kernel')]))  # noqa
         walker.rewrite_module(module)
