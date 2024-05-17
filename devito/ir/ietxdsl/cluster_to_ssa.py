@@ -6,7 +6,7 @@ from sympy import Add, Expr, Float, Indexed, Integer, Mod, Mul, Pow, Symbol
 
 # ------------- xdsl imports -------------#
 from xdsl.dialects import (arith, builtin, func, memref, scf,
-                           stencil, gpu, llvm)
+                           stencil, gpu)
 from xdsl.dialects.experimental import math
 from xdsl.ir import Block, Operation, OpResult, Region, SSAValue
 from xdsl.pattern_rewriter import (
@@ -21,10 +21,8 @@ from xdsl.builder import ImplicitBuilder
 # ------------- devito imports -------------#
 from devito import Grid, SteppingDimension
 from devito.ir.equations import LoweredEq
-from devito.symbolics import retrieve_indexed, retrieve_function_carriers
-from devito.logger import perf
+from devito.symbolics import retrieve_function_carriers
 from devito.tools.dtypes_lowering import dtype_to_xdsltype
-from devito.symbolics.search import retrieve_functions
 from devito.tools.data_structures import OrderedSet
 from devito.types.dense import DiscreteFunction, Function, TimeFunction
 from devito.types.equation import Eq
@@ -32,9 +30,8 @@ from devito.types.equation import Eq
 # ------------- devito-xdsl SSA imports -------------#
 from devito.ir.ietxdsl import iet_ssa
 from devito.ir.ietxdsl.utils import is_int, is_float
-import numpy as np
 
-# flake8: noqa E501
+# flake8: noqa
 
 
 def field_from_function(f: DiscreteFunction) -> stencil.FieldType:
@@ -58,9 +55,6 @@ class ExtractDevitoStencilConversion:
         self.temps = dict()
 
     time_offs: int
-
-    def __init__(self):
-        self.temps = dict()
 
     def convert_function_eq(self, eq: LoweredEq, **kwargs):
         # Read the grid containing necessary discretization information
@@ -526,49 +520,6 @@ class WrapFunctionWithTransfers(GPURewritePattern):
         rewriter.insert_op_after_matched_op(wrapper)
 
 
-class TimerRewritePattern(RewritePattern):
-    """
-    Base class for time benchmarking related rewrite patterns
-    """
-    pass
-
-
-@dataclass
-class MakeFunctionTimed(TimerRewritePattern):
-    """
-    Populate the section0 devito timer with the total runtime of the function
-    """
-    func_name: str
-    seen_ops: set[func.Func] = field(default_factory=set)
-
-    @op_type_rewrite_pattern
-    def match_and_rewrite(self, op: func.FuncOp, rewriter: PatternRewriter):
-        if op.sym_name.data != self.func_name or op in self.seen_ops:
-            return
-
-        # only apply once
-        self.seen_ops.add(op)
-
-        # Insert timer start and end calls
-        rewriter.insert_op_at_start([
-            t0 := func.Call('timer_start', [], [builtin.f64])
-        ], op.body.block)
-
-        ret = op.get_return_op()
-        assert ret is not None
-
-        rewriter.insert_op_before([
-            timers := iet_ssa.LoadSymbolic.get('timers', llvm.LLVMPointerType.opaque()),
-            t1 := func.Call('timer_end', [t0], [builtin.f64]),
-            llvm.StoreOp(t1, timers),
-        ], ret)
-
-        rewriter.insert_op_after_matched_op([
-            func.FuncOp.external('timer_start', [], [builtin.f64]),
-            func.FuncOp.external('timer_end', [builtin.f64], [builtin.f64])
-        ])
-
-
 def get_containing_func(op: Operation) -> func.FuncOp | None:
     while op is not None and not isinstance(op, func.FuncOp):
         op = op.parent_op()
@@ -636,19 +587,9 @@ class _LowerLoadSymbolidToFuncArgs(RewritePattern):
         parent.update_function_type()
 
 
-def apply_timers(module, **kwargs):
-    """
-    Apply timers to a module
-    """
-    name = kwargs.get("name", "Kernel")
-    grpa = GreedyRewritePatternApplier([MakeFunctionTimed(name)])
-    PatternRewriteWalker(grpa, walk_regions_first=True).rewrite_module(module)
-
-
 def finalize_module_with_globals(module: builtin.ModuleOp, known_symbols: dict[str, Any],
                                  gpu_boilerplate):
     """
-    
     This function finalizes a module by replacing all symbolic constants with their
     values in the module. This is necessary to have a complete module that can be
     executed. [copilot: done]

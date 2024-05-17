@@ -29,8 +29,9 @@ from xdsl.printer import Printer
 from xdsl.xdsl_opt_main import xDSLOptMain
 
 from devito.ir.ietxdsl.cluster_to_ssa import (ExtractDevitoStencilConversion,
-                                              apply_timers,
                                               finalize_module_with_globals)  # noqa
+
+from devito.ir.ietxdsl.profiling import apply_timers
 from devito.passes.clusters import (Lift, blocking, buffering, cire, cse,
                                     factorize, fission, fuse, optimize_hyperplanes,
                                     optimize_pows)
