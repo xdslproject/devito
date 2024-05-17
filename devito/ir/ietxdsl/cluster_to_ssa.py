@@ -46,6 +46,7 @@ class ExtractDevitoStencilConversion:
     Lower Devito equations to the stencil dialect
     """
 
+    operator: type[Operator]
     eqs: list[LoweredEq]
     block: Block
     temps: dict[tuple[DiscreteFunction, int], SSAValue]
@@ -278,7 +279,7 @@ class ExtractDevitoStencilConversion:
         self.temps[self.out_time_buffer] = store.temp_with_halo
 
     def build_time_loop(
-        self, eqs: list[LoweredEq], step_dim: SteppingDimension, **kwargs
+        self, eqs: list[Any], step_dim: SteppingDimension, **kwargs
     ):
         # Bounds and step boilerpalte
         lb = iet_ssa.LoadSymbolic.get(
@@ -341,10 +342,56 @@ class ExtractDevitoStencilConversion:
             ]
             scf.Yield(*yield_args)
 
-    def generate_equations(self, eqs: list[LoweredEq], **kwargs):
+    def generate_equations(self, eqs: list[Any], **kwargs):
         # Lower equations to their xDSL equivalent
         for eq in eqs:
-            self._convert_eq(eq, **kwargs)
+            if isinstance(eq, Eq):
+                lowered = self.operator._lower_exprs(as_tuple(eq), **kwargs)[0]
+                self._convert_eq(lowered, **kwargs)
+            elif isinstance(eq, Injection):
+                lowered = self.operator._lower_exprs(as_tuple(eq), **kwargs)
+                self._lower_injection(lowered)
+            else:
+                raise NotImplementedError(f"Expression {eq} of type {type(eq)} not supported")
+
+    def _lower_injection(self, eqs: list[LoweredEq]):
+        """
+        Lower an injection to xDSL.
+        """
+        # We assert that all equations of one Injection share the same iteration space!
+        ispaces = [e.ispace for e in eqs]
+        assert all(ispaces[0] == isp for isp in ispaces[1:])
+        ispace = ispaces[0]
+        assert isinstance(ispace.dimensions[0], TimeDimension)
+
+        lbs = []
+        ubs = []
+        for interval in ispace[1:]:
+            lower = interval.lower
+            if isinstance(lower, Scalar):
+                lb = iet_ssa.LoadSymbolic.get(lower._C_name, builtin.IndexType())
+            elif isinstance(lower, (Number, int)):
+                lb = arith.Constant.from_int_and_width(int(lower), builtin.IndexType())
+            else:
+                raise NotImplementedError(f"Lower bound of type {type(lower)} not supported")
+
+            upper = interval.upper
+            if isinstance(upper, Scalar):
+                ub = iet_ssa.LoadSymbolic.get(upper._C_name, builtin.IndexType())
+            elif isinstance(upper, (Number, int)):
+                ub = arith.Constant.from_int_and_width(int(upper), builtin.IndexType())
+            else:
+                raise NotImplementedError(
+                    f"Upper bound of type {type(upper)} not supported"
+                )
+            lbs.append(lb)
+            ubs.append(ub)
+
+        steps = [arith.Constant.from_int_and_width(1, builtin.IndexType()).result]*len(ubs)
+
+        with ImplicitBuilder(scf.ParallelOp(lbs, ubs, steps, [Block()]).body):
+            import pdb;pdb.set_trace()
+            raise NotImplementedError("Injections not supported yet")
 
     def convert(self, eqs: Iterable[Eq], **kwargs) -> builtin.ModuleOp:
         """

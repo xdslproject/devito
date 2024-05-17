@@ -2,6 +2,8 @@ from functools import partial
 
 from devito.core.operator import CoreOperator, CustomOperator, ParTile
 from devito.exceptions import InvalidOperator
+from devito.ir.iet.nodes import Section
+from devito.ir.iet.visitors import FindNodes
 from devito.passes.equations import collect_derivatives
 from devito.tools import timed_pass
 
