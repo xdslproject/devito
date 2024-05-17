@@ -1757,7 +1757,7 @@ class TestAliases(object):
                 Eq(p.forward, p - v.forward.dx + div(f*grad(p)))]
 
         # Operator
-        op0 = Operator(eqns, opt=('noop', {'openmp': True}))
+        op0 = Operator(eqns, opt='xdsl')
         op1 = Operator(eqns, opt=('advanced', {'openmp': True, 'cire-mingain': 1,
                                                'cire-rotate': rotate}))
 

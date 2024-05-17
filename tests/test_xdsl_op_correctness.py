@@ -1,5 +1,5 @@
 import numpy as np
-from devito import Grid, TimeFunction, Eq, Operator, norm
+from devito import Grid, TimeFunction, Eq, Operator, norm, switchconfig, Function, NODE, div, grad
 import pytest
 # flake8: noqa
 
@@ -120,3 +120,44 @@ def test_inplace():
 
     xdsl_op = Operator([eq0], opt='xdsl')
     xdsl_op.apply(time_M=5, dt=0.1)
+
+
+@pytest.mark.parametrize('rotate', [False, True])
+@switchconfig(profiling='advanced')
+def test_extraction_from_lifted_ispace(rotate):
+    """
+    Test that the aliases are scheduled correctly when extracted from
+    Clusters whose iteration space is lifted (ie, stamp != 0).
+    """
+    so = 8
+    grid = Grid(shape=(6, 6, 6))
+
+    f = Function(name='f', grid=grid, space_order=so, is_param=True)
+    v = TimeFunction(name="v", grid=grid, space_order=so)
+    v1 = TimeFunction(name="v1", grid=grid, space_order=so)
+    p = TimeFunction(name="p", grid=grid, space_order=so, staggered=NODE)
+    p1 = TimeFunction(name="p1", grid=grid, space_order=so, staggered=NODE)
+
+    v.data_with_halo[:] = 1.
+    v1.data_with_halo[:] = 1.
+    p.data_with_halo[:] = 0.5
+    p1.data_with_halo[:] = 0.5
+    f.data_with_halo[:] = 0.2
+
+    eqns = [Eq(v.forward, v - f*p),
+            Eq(p.forward, p - v.forward.dx + div(f*grad(p)))]
+
+    # Operator
+    op0 = Operator(eqns, opt='xdsl')
+    op1 = Operator(eqns, opt=('advanced', {'openmp': True, 'cire-mingain': 1,
+                                            'cire-rotate': rotate}))
+
+    # Check numerical output
+    op0(time_M=1)
+    summary = op1(time_M=1, v=v1, p=p1)
+    assert np.isclose(norm(v), norm(v1), rtol=1e-5)
+    assert np.isclose(norm(p), norm(p1), atol=1e-5)
+
+    # Also check against expected operation count to make sure
+    # all redundancies have been detected correctly
+    assert summary[('section0', None)].ops == 93
