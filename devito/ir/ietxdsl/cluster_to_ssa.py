@@ -59,6 +59,10 @@ class ExtractDevitoStencilConversion:
 
     time_offs: int
 
+    def __init__(self, operator: type[Operator]):
+        self.temps = dict()
+        self.operator = operator
+
     def convert_function_eq(self, eq: LoweredEq, **kwargs):
         # Read the grid containing necessary discretization information
         # (size, halo width, ...)
@@ -434,15 +438,22 @@ class ExtractDevitoStencilConversion:
         calling the operator.
         """
         # Instantiate the module.
-        self.function_values: dict[tuple[Function, int], SSAValue] = {}
+        self.function_values : dict[tuple[Function, int], SSAValue] = {}
+        self.symbol_values : dict[str, SSAValue] = {}
         module = builtin.ModuleOp(Region([block := Block([])]))
         with ImplicitBuilder(block):
             # Get all functions used in the equations
-            functions = OrderedSet(
-                *(f.function for eq in eqs for f in retrieve_function_carriers(eq))
-            )
-            self.time_buffers: list[TimeFunction] = []
-            self.functions: list[Function] = []
+            functions = OrderedSet()
+            for eq in eqs:
+                if isinstance(eq, Eq):
+                    for f in retrieve_functions(eq):
+                        functions.add(f.function)
+                elif isinstance(eq, Injection):
+                    functions.add(eq.field)
+                else:
+                    raise NotImplementedError(f"Expression {eq} of type {type(eq)} not supported")
+            self.time_buffers : list[TimeFunction] = []
+            self.functions : list[Function] = []
             for f in functions:
                 match f:
                     case TimeFunction():
@@ -474,7 +485,6 @@ class ExtractDevitoStencilConversion:
 
             # Union operation?
             self.function_values |= self.function_args
-            # print(self.function_values)
 
             # Move on to generate the function body
             with ImplicitBuilder(xdsl_func.body.block):
@@ -490,8 +500,8 @@ class ExtractDevitoStencilConversion:
                 dimensions = {
                     d for f in (self.functions + time_functions) for d in f.dimensions
                 }
-                step_dim = next((d for d in dimensions
-                                if isinstance(d, SteppingDimension)), None)
+
+                step_dim = next((d for d in dimensions if isinstance(d, SteppingDimension)), None)
                 if step_dim is not None:
                     self.build_time_loop(eqs, step_dim, **kwargs)
                 else:
