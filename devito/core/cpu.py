@@ -479,31 +479,6 @@ class XdslnoopOperator(Cpu64OperatorMixin, CoreOperator):
         # Output summary of performance achieved
         return self._emit_apply_profiling(args)
 
-    @property
-    def cfunction(self):
-        """The JIT-compiled C function as a ctypes.FuncPtr object."""
-        if self._lib is None:
-
-            delete = not os.getenv("XDSL_SKIP_CLEAN", False)
-            self._tf = tempfile.NamedTemporaryFile(prefix="devito-jit-", suffix='.so',
-                                                   delete=delete)
-            self._interop_tf = tempfile.NamedTemporaryFile(prefix="devito-jit-interop-",
-                                                           suffix=".o", delete=delete)
-            self._make_interop_o()
-            self._jit_compile()
-            self.setup_memref_args()
-            self._lib = self._compiler.load(self._tf.name)
-            self._lib.name = self._tf.name
-
-        if self._cfunction is None:
-            self._cfunction = getattr(self._lib, self.name)
-            # Associate a C type to each argument for runtime type check
-            argtypes = self._construct_cfunction_args(self._jit_kernel_constants,
-                                                      get_types=True)
-            self._cfunction.argtypes = argtypes
-
-        return self._cfunction
-
     def _make_interop_o(self):
         """
         compile the interop.o file
@@ -561,7 +536,6 @@ class XdslnoopOperator(Cpu64OperatorMixin, CoreOperator):
 
         objects = []
         objects_types = []
-        import pdb; pdb.set_trace()
         for name in get_arg_names_from_module(self._module):
             object = args[name]
             objects.append(object)
