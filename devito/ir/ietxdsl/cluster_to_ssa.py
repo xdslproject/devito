@@ -513,6 +513,7 @@ class ExtractDevitoStencilConversion:
                     for f in retrieve_functions(eq):
                         functions.add(f.function)
                 elif isinstance(eq, Injection):
+                    import pdb; pdb.set_trace()
                     functions.add(eq.field.function)
                     for f in retrieve_functions(eq.expr):
                         if isinstance(f, PointSource):
@@ -549,12 +550,11 @@ class ExtractDevitoStencilConversion:
             self.function_args = {}
             for i, (f, t) in enumerate(self.time_buffers):
                 # Also define argument names to help with debugging
-                xdsl_func.body.block.args[i].name_hint = f"{f.name}_vec{t}"
+                xdsl_func.body.block.args[i].name_hint = f._C_name + str(t)
                 self.function_args[(f, t)] = xdsl_func.body.block.args[i]
             for i, f in enumerate(self.functions):
-                xdsl_func.body.block.args[len(self.time_buffers) + i].name_hint = f"{f.name}_vec"  # noqa
-                # tofix what is this 0 in [(f, 0)]
-                self.function_args[(f, 0)] = xdsl_func.body.block.args[len(self.time_buffers) + i]  # noqa
+                xdsl_func.body.block.args[len(self.time_buffers)+i].name_hint = f._C_name
+                self.function_args[(f, 0)] = xdsl_func.body.block.args[len(self.time_buffers)+i]
 
             # Union operation?
             self.function_values |= self.function_args

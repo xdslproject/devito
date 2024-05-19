@@ -282,7 +282,7 @@ def test_source_I():
 
     src_term = src.inject(field=u.forward, expr=src * dt**2 / m)
 
-    op = Operator([src_term], opt="xdsl")
+    op = Operator([src_term], opt="advanced")
 
     op(time=time_range.num-1, dt=dt)
 
