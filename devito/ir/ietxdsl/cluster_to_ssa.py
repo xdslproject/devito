@@ -49,6 +49,7 @@ class ExtractDevitoStencilConversion:
     eqs: list[LoweredEq]
     block: Block
     temps: dict[tuple[DiscreteFunction, int], SSAValue]
+    symbol_values: dict[str, SSAValue]
     time_offs: int
 
     def __init__(self):
