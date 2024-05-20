@@ -26,6 +26,7 @@ class TestOperatorSimple(object):
 
         op = Operator(Eq(f.forward, f[t, x-1, y] + f[t, x+1, y] + 1), opt='xdsl')
         op.apply(time=2)
+
         assert np.isclose(norm(f), 515.9845, rtol=1e-4)
 
     @pytest.mark.parallel(mode=[2])

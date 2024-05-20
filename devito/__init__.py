@@ -41,10 +41,6 @@ from devito.operator import profiler_registry, operator_registry
 # Apply monkey-patching while we wait for our patches to be upstreamed and released
 from devito.mpatches import *  # noqa
 
-
-# Imports from xdsl
-# from devito.xdslpasses import *  # noqa
-
 from ._version import get_versions  # noqa
 __version__ = get_versions()['version']
 del get_versions

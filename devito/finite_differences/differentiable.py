@@ -251,8 +251,6 @@ class Differentiable(sympy.Expr, Evaluable):
             return False
         return all(getattr(self, i, None) == getattr(other, i, None)
                    for i in self.__rkwargs__)
-        return super(Differentiable, self).__eq__(other) is True and\
-            all(getattr(self, i, None) == getattr(other, i, None) for i in self._state)
 
     @property
     def name(self):

@@ -22,6 +22,7 @@
 
 import argparse
 import numpy as np
+import matplotlib.pyplot as plt
 from devito import (Grid, TensorTimeFunction, VectorTimeFunction, div, grad, diag, solve,
                     Operator, Eq, Constant, norm, SpaceDimension)
 
@@ -46,6 +47,7 @@ parser.add_argument("-plot", "--plot", default=False, type=bool, help="Plot3D")
 
 parser.add_argument("-devito", "--devito", default=False, type=bool, help="Devito run")
 parser.add_argument("-xdsl", "--xdsl", default=False, type=bool, help="xDSL run")
+parser.add_argument("-plot", "--plot", default=False, type=bool, help="Plot2D")
 
 args = parser.parse_args()
 
@@ -125,22 +127,18 @@ op(dt=dt)
 v_init = v[0].data[:, :], v[1].data[:, :]
 tau_init = tau[0].data[:, :], tau[1].data[:, :], tau[2].data[:, :]
 
-# import pdb;pdb.set_trace()
-
-# Up to here, let's only use Devito
+# Up to here, we have the same code as in the Devito example
 # assert np.isclose(norm(v[0]), 0.6285093, atol=1e-4, rtol=0)
 
 # This should NOT have conditions, we should use XDSL!
 
 if args.xdsl:
     op = Operator([u_v] + [u_t], opt='xdsl')
-    # op = Operator([u_v] + [u_t])
     op(dt=dt, time_M=nt)
     print("norm v0:", norm(v[0]))
     print("norm tau0:", norm(tau[0]))
+
 if args.devito:
-    print("This should fail!")
-    print("Now run Devito only")
     op = Operator([u_v] + [u_t], opt='advanced')
     op(dt=dt, time_M=nt)
     print("norm v0:", norm(v[0]))
@@ -170,15 +168,13 @@ op(dt=dt, time_M=1)
 print(norm(v[0]))
 print(norm(tau[0]))
 
-
-import matplotlib.pyplot as plt
-
-# Save the plotted images locally
-plt.imsave('/home/gb4018/workspace/xdslproject/devito/fast/v0.pdf', v[0].data_with_halo[0], vmin=-.5*1e-2, vmax=.5*1e-2, cmap="seismic")
-plt.imsave('/home/gb4018/workspace/xdslproject/devito/fast/v1.pdf', v[1].data_with_halo[0], vmin=-.5*1e-2, vmax=.5*1e-2, cmap="seismic")
-plt.imsave('/home/gb4018/workspace/xdslproject/devito/fast/tau00.pdf', tau[0, 0].data_with_halo[0], vmin=-.5*1e-2, vmax=.5*1e-2, cmap="seismic")
-plt.imsave('/home/gb4018/workspace/xdslproject/devito/fast/tau11.pdf', tau[1, 1].data_with_halo[0], vmin=-.5*1e-2, vmax=.5*1e-2, cmap="seismic")
-plt.imsave('/home/gb4018/workspace/xdslproject/devito/fast/tau01.pdf', tau[0, 1].data_with_halo[0], vmin=-.5*1e-2, vmax=.5*1e-2, cmap="seismic")
+if args.plot:
+    # Save the plotted images locally
+    plt.imsave('/home/gb4018/workspace/xdslproject/devito/fast/v0.pdf', v[0].data_with_halo[0], vmin=-.5*1e-2, vmax=.5*1e-2, cmap="seismic")
+    plt.imsave('/home/gb4018/workspace/xdslproject/devito/fast/v1.pdf', v[1].data_with_halo[0], vmin=-.5*1e-2, vmax=.5*1e-2, cmap="seismic")
+    plt.imsave('/home/gb4018/workspace/xdslproject/devito/fast/tau00.pdf', tau[0, 0].data_with_halo[0], vmin=-.5*1e-2, vmax=.5*1e-2, cmap="seismic")
+    plt.imsave('/home/gb4018/workspace/xdslproject/devito/fast/tau11.pdf', tau[1, 1].data_with_halo[0], vmin=-.5*1e-2, vmax=.5*1e-2, cmap="seismic")
+    plt.imsave('/home/gb4018/workspace/xdslproject/devito/fast/tau01.pdf', tau[0, 1].data_with_halo[0], vmin=-.5*1e-2, vmax=.5*1e-2, cmap="seismic")
 
 assert np.allclose(v_xdsl[0].data, v[0].data, rtol=1e-8)
 assert np.allclose(v_xdsl[1].data, v[1].data, rtol=1e-8)
