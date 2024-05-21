@@ -3,7 +3,7 @@ import pytest
 
 from devito import (Grid, TensorTimeFunction, VectorTimeFunction, div, grad, diag, solve,
                     Operator, Eq, Constant, norm, SpaceDimension)
-from devito.types import Symbol, Array, Function, TimeFunction
+from devito.types import Array, Function, TimeFunction
 
 from xdsl.dialects.scf import For, Yield
 from xdsl.dialects.arith import Addi

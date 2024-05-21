@@ -15,6 +15,8 @@ from typing import Iterable
 from devito.core.operator import CoreOperator, CustomOperator, ParTile
 from devito.exceptions import InvalidOperator
 from devito.ir.iet import Callable, MetaCall
+from devito.ir.iet.nodes import Section
+from devito.ir.iet.visitors import FindNodes
 from devito.logger import info, perf
 from devito.mpi import MPI
 from devito.operator.profiling import create_profile

@@ -54,6 +54,7 @@ class ExtractDevitoStencilConversion:
 
     def __init__(self):
         self.temps = dict()
+        self.symbol_values = dict()
 
     time_offs: int
 
