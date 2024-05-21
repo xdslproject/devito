@@ -3,7 +3,7 @@ import pytest
 
 from devito import (Grid, TensorTimeFunction, VectorTimeFunction, div, grad, diag, solve,
                     Operator, Eq, Constant, norm, SpaceDimension)
-from devito.types import Symbol, Array, Function, TimeFunction
+from devito.types import Array, Function, TimeFunction
 
 from xdsl.dialects.scf import For, Yield
 from xdsl.dialects.arith import Addi
@@ -788,19 +788,6 @@ def test_function_IV():
 
 
 class TestOperatorUnsupported(object):
-
-    @pytest.mark.xfail(reason="Symbols are not supported in xDSL yet")
-    def test_symbol_I(self):
-        # Define a simple Devito a = 1 operator
-
-        a = Symbol('a')
-        eq0 = Eq(a, 1)
-
-        op = Operator([eq0], opt='xdsl')
-
-        op.apply()
-
-        assert a == 1
 
     @pytest.mark.xfail(reason="stencil.return operation does not verify for i64")
     def test_forward_assignment(self):
