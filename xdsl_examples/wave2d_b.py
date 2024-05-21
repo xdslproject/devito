@@ -7,7 +7,7 @@ from devito import (TimeFunction, Eq, Operator, solve, norm,
 from devito.tools import as_tuple
 
 import argparse
-from fast.bench_utils import plot_2dfunc
+from xdsl_examples.bench_utils import plot_2dfunc
 
 np.set_printoptions(threshold=np.inf)
 
