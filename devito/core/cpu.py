@@ -13,6 +13,8 @@ from devito.passes.clusters import (Lift, blocking, buffering, cire, cse,
 from devito.passes.iet import (CTarget, OmpTarget, avoid_denormals, hoist_prodders,
                                linearize, mpiize, relax_incr_dimensions)
 
+from examples.seismic.source import PointSource
+
 
 __all__ = ['Cpu64NoopCOperator', 'Cpu64NoopOmpOperator', 'Cpu64AdvCOperator',
            'Cpu64AdvOmpOperator', 'Cpu64FsgCOperator', 'Cpu64FsgOmpOperator',

@@ -428,7 +428,7 @@ class ExtractDevitoStencilConversion:
         lbs = []
         ubs = []
         for interval in ispace[1:]:
-            lower = interval.lower
+            lower = interval.symbolic_min
             if isinstance(lower, Scalar):
                 lb = iet_ssa.LoadSymbolic.get(lower._C_name, builtin.IndexType())
             elif isinstance(lower, (Number, int)):
@@ -437,7 +437,7 @@ class ExtractDevitoStencilConversion:
                 raise NotImplementedError(f"Lower bound of type {type(lower)} not supported")
             lb.result.name_hint = f"{interval.dim.name}_m"
 
-            upper = interval.upper
+            upper = interval.symbolic_max
             if isinstance(upper, Scalar):
                 ub = iet_ssa.LoadSymbolic.get(upper._C_name, builtin.IndexType())
             elif isinstance(upper, (Number, int)):
@@ -450,7 +450,9 @@ class ExtractDevitoStencilConversion:
             lbs.append(lb)
             ubs.append(ub)
 
+
         steps = [arith.Constant.from_int_and_width(1, builtin.IndexType()).result]*len(ubs)
+        ubs = [arith.Addi(ub, steps[0]) for ub in ubs]
 
         with ImplicitBuilder(scf.ParallelOp(lbs, ubs, steps, [pblock := Block(arg_types=[builtin.IndexType()]*len(ubs))]).body):
             for arg, interval in zip(pblock.args, ispace[1:], strict=True):
@@ -513,7 +515,7 @@ class ExtractDevitoStencilConversion:
                     for f in retrieve_functions(eq):
                         functions.add(f.function)
                 elif isinstance(eq, Injection):
-                    import pdb; pdb.set_trace()
+                    # import pdb; pdb.set_trace()
                     functions.add(eq.field.function)
                     for f in retrieve_functions(eq.expr):
                         if isinstance(f, PointSource):
@@ -532,6 +534,7 @@ class ExtractDevitoStencilConversion:
                     case Function():
                         self.functions.append(f)
                     case PointSource():
+                        self.functions.append(f.coordinates)
                         self.functions.append(f)
                     case _:
                         raise NotImplementedError(f"Function of type {type(f)} not supported")
