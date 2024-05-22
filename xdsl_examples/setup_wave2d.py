@@ -6,7 +6,7 @@ import numpy as np
 from devito import (TimeFunction, Eq, Operator, solve, configuration)
 from examples.seismic import RickerSource
 from examples.seismic import Model, TimeAxis
-from fast.bench_utils import plot_2dfunc
+from xdsl_examples.bench_utils import plot_2dfunc
 from devito.tools import as_tuple
 
 import argparse
