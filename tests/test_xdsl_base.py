@@ -460,8 +460,7 @@ class TestAntiDepSupported(object):
         op = Operator(eqns)
         op.apply(time_M=2)
         devito_a = u.data_with_halo[:, :, :]
-        devito_b = v.data_with_halo[:, :, :]
-        
+
         # Re-initialize
         u.data[:, :, :] = 1
         v.data[:, :, :] = 1
@@ -470,9 +469,7 @@ class TestAntiDepSupported(object):
         xdsl_op.apply(time_M=2)
 
         xdsl_a = u.data_with_halo[:, :, :]
-        xdsl_b = v.data_with_halo[:, :, :]
 
-        import pdb;pdb.set_trace()
         assert np.all(devito_a == xdsl_a)
 
 
@@ -681,7 +678,6 @@ def test_xdsl_mul_eqs_VII():
 
     xdsl_op = Operator([eq0, eq1], opt="xdsl")
     xdsl_op.apply(time_M=4, dt=0.1)
-    import pdb;pdb.set_trace()
     assert np.isclose(norm(u), np.linalg.norm(devito_res_u))
     assert np.isclose(norm(v), np.linalg.norm(devito_res_v))
 
