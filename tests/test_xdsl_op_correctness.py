@@ -4,11 +4,13 @@ import pytest
 # flake8: noqa
 
 from xdsl.dialects.scf import For, Yield
-from xdsl.dialects.arith import Addi
+from xdsl.dialects.arith import Addi, Constant
 from xdsl.dialects.func import Call, Return
 from xdsl.dialects.stencil import FieldType, ApplyOp, LoadOp, StoreOp
 from xdsl.dialects.llvm import LLVMPointerType
 from xdsl.printer import Printer
+
+from devito.types.basic import Symbol
 
 def test_udx():
 
@@ -105,6 +107,23 @@ def test_u_and_v_conversion():
     assert type(ops[7] == Call)
     assert type(ops[8] == StoreOp)
     assert type(ops[9] == Return)
+
+def test_symbol_I():
+    # Define a simple Devito a = 1 operator
+
+    a = Symbol('a')
+    eq0 = Eq(a, 1)
+
+    op = Operator([eq0], opt='xdsl')
+
+    op.apply()
+
+    assert len(op._module.regions[0].blocks[0].ops.first.body.blocks[0].ops) == 2
+
+    ops = list(op._module.regions[0].blocks[0].ops.first.body.blocks[0].ops)
+    assert isinstance(ops[0], Constant)
+    assert ops[0].result.name_hint == a.name
+    assert type(ops[0] == Return)
 
 
 # This test should fail, as we are trying to use an inplace operation

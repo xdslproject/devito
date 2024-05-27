@@ -8,7 +8,7 @@ from devito import (TimeFunction, Eq, Operator, solve, norm,
                     configuration)
 from examples.seismic import RickerSource
 from examples.seismic import Model, TimeAxis
-from fast.bench_utils import plot_3dfunc
+from xdsl_examples.bench_utils import plot_3dfunc
 from devito.tools import as_tuple
 
 import argparse
