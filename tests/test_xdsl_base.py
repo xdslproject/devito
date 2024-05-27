@@ -739,7 +739,7 @@ def test_function_III():
 
     u = Function(name="u", grid=grid)
     v = TimeFunction(name="v", grid=grid)
-    w = Function(name="w", grid=grid)
+    w = TimeFunction(name="w", grid=grid)
 
     u.data[:, :] = 1.0
     v.data[:, :] = 2.0
