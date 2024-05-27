@@ -539,9 +539,6 @@ class TestAntiDepSupported(object):
         assert np.all(devito_a == xdsl_a)
 
 
-        import pdb;pdb.set_trace()
-
-
 @pytest.mark.xfail(reason="not supported in xDSL yet")
 class TestAntiDepNotSupported(object):
 
