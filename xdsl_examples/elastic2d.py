@@ -57,12 +57,11 @@ to = 1
 
 
 # Initial grid: km x km, with spacing
-shape = (args.shape)  # Number of grid point (nx, ny, nz)
+shape = args.shape  # Number of grid point (nx, nz)
 spacing = as_tuple(10.0 for _ in range(len(shape)))  # Grid spacing in m. The domain size is now 1km by 1km
 
 extent = tuple([s*(n-1) for s, n in zip(spacing, shape)])
 
-shape = args.shape
 x = SpaceDimension(name='x', spacing=Constant(name='h_x', value=extent[0]/(shape[0]-1)))
 z = SpaceDimension(name='z', spacing=Constant(name='h_z', value=extent[1]/(shape[1]-1)))
 grid = Grid(extent=extent, shape=shape, dimensions=(x, z))

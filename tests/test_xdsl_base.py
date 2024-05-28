@@ -4,6 +4,7 @@ import pytest
 from devito import (Grid, TensorTimeFunction, VectorTimeFunction, div, grad, diag, solve,
                     Operator, Eq, Constant, norm, SpaceDimension)
 from devito.types import Array, Function, TimeFunction
+from devito.tools import as_tuple
 
 from xdsl.dialects.scf import For, Yield
 from xdsl.dialects.arith import Addi
@@ -653,7 +654,6 @@ def test_xdsl_mul_eqs_VI():
     assert np.isclose(v.data_with_halo, devito_res_v).all()
 
 
-# @pytest.mark.xfail(reason=" .forward.dx cannot be handled")
 def test_xdsl_mul_eqs_VII():
     # Define a Devito Operator with multiple eqs
     grid = Grid(shape=(4, 4))
@@ -849,8 +849,10 @@ class TestElastic():
     def test_elastic_2D(self, shape, so, nt):
 
         # Initial grid: km x km, with spacing
-        extent = (1500., 1500.)
-        shape = shape
+        shape = shape  # Number of grid point (nx, nz)
+        spacing = as_tuple(10.0 for _ in range(len(shape)))
+        extent = tuple([s*(n-1) for s, n in zip(spacing, shape)])
+
         x = SpaceDimension(name='x', spacing=Constant(name='h_x', value=extent[0]/(shape[0]-1)))  # noqa
         z = SpaceDimension(name='z', spacing=Constant(name='h_z', value=extent[1]/(shape[1]-1)))  # noqa
         grid = Grid(extent=extent, shape=shape, dimensions=(x, z))
