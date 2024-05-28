@@ -97,10 +97,6 @@ class CodeSymbol(object):
         return
 
     @property
-    def _C_type_qualifier(self):
-        return ''
-
-    @property
     def _C_symbol(self):
         """
         The entry symbol. This may or may not coincide with the symbol used
@@ -979,10 +975,6 @@ class AbstractFunction(sympy.Function, Basic, Pickable, Evaluable):
         return self._name
 
     @property
-    def _C_type_qualifier(self):
-        return 'restrict'
-
-    @property
     def indices(self):
         """The indices of the object."""
         return DimensionTuple(*self.args, getters=self.dimensions)
@@ -1374,10 +1366,6 @@ class IndexedBase(sympy.IndexedBase, Basic, Pickable):
 
 
 class IndexedData(IndexedBase):
-
-    @property
-    def _C_type_qualifier(self):
-        return 'restrict'
 
     pass
 

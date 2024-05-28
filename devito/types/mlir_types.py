@@ -1,6 +1,9 @@
 import ctypes
 import numpy as np
 
+from xdsl.dialects import builtin
+
+
 f32 = ctypes.c_float
 f64 = ctypes.c_double
 
@@ -11,47 +14,15 @@ index = ctypes.c_size_t
 
 ptr_of = ctypes.POINTER
 
-
-def memref_of_type_and_rank(dtype, rank: int):
-    class Memref(ctypes.Structure):
-        """ Matches memref<?x?xf23> """
-        _fields_ = [
-            ('ptr', ptr_of(dtype)),
-            ('aligned', ptr_of(dtype)),
-            ('offset', index),
-            ('size', index * rank),
-            ('stride', index * rank)
-        ]
-
-        @property
-        def _C_ctype(self):
-            """
-            required so it blends in with other devito types
-            """
-            return self.__class__
-
-        @classmethod
-        def unpacked_argtypes(cls):
-            return [
-                ptr_of(dtype)
-            ]
-
-        def unpack_args(self):
-            return [
-                self.ptr
-            ]
-    return Memref
+__all__ = ['dtype_to_xdsltype']
 
 
-def make_memref_f32_struct_from_np(data: np.ndarray):
-    rank = len(data.shape)
-    memref_t = memref_of_type_and_rank(f32, rank)
-    data_ptr = data.ctypes.data_as(ptr_of(f32))
+def dtype_to_xdsltype(dtype):
+    """Map numpy types to xdsl datatypes."""
 
-    return memref_t(
-        data_ptr,
-        data_ptr,
-        0,
-        (ctypes.c_size_t * rank)(*data.shape),
-        (ctypes.c_size_t * rank)(*([1] * rank))
-    )
+    return {
+        np.float32: builtin.f32,
+        np.float64: builtin.f64,
+        np.int32: builtin.i32,
+        np.int64: builtin.i64,
+    }[dtype]

@@ -861,9 +861,6 @@ class Operator(Callable):
 
     # Performance profiling
 
-    def _construct_cfunction_args(self, args):
-        return [args[p.name] for p in self.parameters]
-
     def _emit_build_profiling(self):
         if not is_log_enabled_for('PERF'):
             return

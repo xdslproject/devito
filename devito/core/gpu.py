@@ -10,7 +10,8 @@ from devito.arch.archinfo import get_nvidia_cc
 
 from devito.core.operator import CoreOperator, CustomOperator, ParTile
 
-from devito.core.cpu import XdslAdvOperator, generate_mlir_pipeline, generate_pipeline
+from devito.core.cpu_xdsl import (XdslAdvOperator, generate_mlir_pipeline,
+                                  generate_pipeline)
 
 from devito.exceptions import InvalidOperator
 from devito.operator.operator import rcompile
