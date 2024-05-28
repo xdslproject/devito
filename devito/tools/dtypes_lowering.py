@@ -7,13 +7,11 @@ import ctypes
 import numpy as np
 from cgen import dtype_to_ctype as cgen_dtype_to_ctype
 
-from xdsl.dialects import builtin
-
 __all__ = ['int2', 'int3', 'int4', 'float2', 'float3', 'float4', 'double2',  # noqa
            'double3', 'double4', 'dtypes_vector_mapper', 'dtype_to_mpidtype',
            'dtype_to_cstr', 'dtype_to_ctype', 'dtype_to_mpitype', 'dtype_len',
            'ctypes_to_cstr', 'c_restrict_void_p', 'ctypes_vector_mapper',
-           'is_external_ctype', 'infer_dtype', 'dtype_to_xdsltype']
+           'is_external_ctype', 'infer_dtype']
 
 
 # *** Custom np.dtypes
@@ -131,17 +129,6 @@ def dtype_to_mpitype(dtype):
         np.float32: 'MPI_FLOAT',
         np.int64: 'MPI_LONG',
         np.float64: 'MPI_DOUBLE'
-    }[dtype]
-
-
-def dtype_to_xdsltype(dtype):
-    """Map numpy types to xdsl datatypes."""
-
-    return {
-        np.float32: builtin.f32,
-        np.float64: builtin.f64,
-        np.int32: builtin.i32,
-        np.int64: builtin.i64,
     }[dtype]
 
 

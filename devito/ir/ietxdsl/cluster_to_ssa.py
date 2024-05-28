@@ -22,10 +22,10 @@ from xdsl.builder import ImplicitBuilder
 from devito import Grid, SteppingDimension
 from devito.ir.equations import LoweredEq
 from devito.symbolics import retrieve_function_carriers
-from devito.tools.dtypes_lowering import dtype_to_xdsltype
 from devito.tools.data_structures import OrderedSet
 from devito.types.dense import DiscreteFunction, Function, TimeFunction
 from devito.types.equation import Eq
+from devito.types.mlir_types import dtype_to_xdsltype
 
 # ------------- devito-xdsl SSA imports -------------#
 from devito.ir.ietxdsl import iet_ssa
