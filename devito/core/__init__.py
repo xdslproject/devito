@@ -2,8 +2,9 @@ from devito.arch import Cpu64, Intel64, Arm, Power, Device
 from devito.core.cpu import (Cpu64NoopCOperator, Cpu64NoopOmpOperator,
                              Cpu64AdvCOperator, Cpu64AdvOmpOperator,
                              Cpu64FsgCOperator, Cpu64FsgOmpOperator,
-                             Cpu64CustomOperator, XdslnoopOperator,
-                             XdslAdvOperator)
+                             Cpu64CustomOperator)
+
+from devito.core.cpu_xdsl import XdslnoopOperator, XdslAdvOperator
 from devito.core.intel import (Intel64AdvCOperator, Intel64AdvOmpOperator,
                                Intel64FsgCOperator, Intel64FsgOmpOperator)
 from devito.core.arm import ArmAdvCOperator, ArmAdvOmpOperator
