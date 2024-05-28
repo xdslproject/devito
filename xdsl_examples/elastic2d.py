@@ -25,6 +25,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from devito import (Grid, TensorTimeFunction, VectorTimeFunction, div, grad, diag, solve,
                     Operator, Eq, Constant, norm, SpaceDimension)
+from devito.tools import as_tuple
 
 from examples.seismic.source import WaveletSource, RickerSource, TimeAxis
 from examples.seismic import plot_image
@@ -50,26 +51,20 @@ parser.add_argument("-plot", "--plot", default=False, type=bool, help="Plot2D")
 args = parser.parse_args()
 
 # Some variable declarations
-nx, ny = args.shape
 nt = args.nt
 so = args.space_order
 to = 1
 
 
 # Initial grid: km x km, with spacing
-extent = (1500., 1500.)
-shape = (nx, ny)
+shape = args.shape  # Number of grid point (nx, nz)
+spacing = as_tuple(10.0 for _ in range(len(shape)))  # Grid spacing in m. The domain size is now 1km by 1km
+
+extent = tuple([s*(n-1) for s, n in zip(spacing, shape)])
+
 x = SpaceDimension(name='x', spacing=Constant(name='h_x', value=extent[0]/(shape[0]-1)))
 z = SpaceDimension(name='z', spacing=Constant(name='h_z', value=extent[1]/(shape[1]-1)))
 grid = Grid(extent=extent, shape=shape, dimensions=(x, z))
-
-
-class DGaussSource(WaveletSource):
-
-    def wavelet(self, f0, t):
-        a = 0.004
-        return -2.*a*(t - 1/f0) * np.exp(-a * (t - 1/f0)**2)
-
 
 # Timestep size from Eq. 7 with V_p=6000. and dx=100
 t0, tn = 0., nt
@@ -77,9 +72,9 @@ dt = (10. / np.sqrt(2.)) / 6.
 time_range = TimeAxis(start=t0, stop=tn, step=dt)
 
 src = RickerSource(name='src', grid=grid, f0=0.01, time_range=time_range)
-src.coordinates.data[:] = [250., 250.]
+src.coordinates.data[:] = [int(extent[0]/2), int(extent[1]/2)]
 
-# Plor source
+# Plot source
 # src.show()
 
 # Now we create the velocity and pressure fields
@@ -142,42 +137,47 @@ if args.devito:
     print("norm v0:", norm(v[0]))
     print("norm tau0:", norm(tau[0]))
 
+if args.plot:
+    # Save the plotted images locally
+    plt.imsave('v0.pdf', v[0].data_with_halo[0], vmin=-.5*1e-2, vmax=.5*1e-2, cmap="seismic")
+    plt.imsave('v1.pdf', v[1].data_with_halo[0], vmin=-.5*1e-2, vmax=.5*1e-2, cmap="seismic")
+    plt.imsave('tau00.pdf', tau[0, 0].data_with_halo[0], vmin=-.5*1e-2, vmax=.5*1e-2, cmap="seismic")
+    plt.imsave('tau11.pdf', tau[1, 1].data_with_halo[0], vmin=-.5*1e-2, vmax=.5*1e-2, cmap="seismic")
+    plt.imsave('tau01.pdf', tau[0, 1].data_with_halo[0], vmin=-.5*1e-2, vmax=.5*1e-2, cmap="seismic")
 
-# plot_image(v[0].data[0], vmin=-.5*1e-1, vmax=.5*1e-1, cmap="seismic")
-# plot_image(v[1].data[0], vmin=-.5*1e-2, vmax=.5*1e-2, cmap="seismic")
-# plot_image(tau[0, 0].data[0], vmin=-.5*1e-2, vmax=.5*1e-2, cmap="seismic")
-# plot_image(tau[1, 1].data[0], vmin=-.5*1e-2, vmax=.5*1e-2, cmap="seismic")
-# plot_image(tau[0, 1].data[0], vmin=-.5*1e-2, vmax=.5*1e-2, cmap="seismic")
 
-op = Operator([u_v] + [u_t], opt='advanced')
-
+# Store the results
 v_xdsl = v[0].data[:, :], v[1].data[:, :]
 tau_xdsl = tau[0].data[:, :], tau[1].data[:, :], tau[2].data[:, :]
 
-# v[0].data[:, :], v[1].data[:, :] = v_init[0][:, :], v_init[1][:, :]
-# tau[0].data[:, :], tau[1].data[:, :], tau[2].data[:, :] = (
-#     tau_init[0][:, :],
-#     tau_init[1][:, :],
-#     tau_init[2][:, :],
-# )
+# Reset the initial conditions
+v[0].data[:, :], v[1].data[:, :] = v_init[0][:, :], v_init[1][:, :]
+tau[0].data[:, :], tau[1].data[:, :], tau[2].data[:, :] = (
+    tau_init[0][:, :],
+    tau_init[1][:, :],
+    tau_init[2][:, :],
+)
 
-op(dt=dt, time_M=1)
+# Now we run the same code with the Devito operator
+# We should get the same results
+op = Operator([u_v] + [u_t], opt='advanced')
+op(dt=dt, time_M=nt)
 
 print(norm(v[0]))
 print(norm(tau[0]))
 
-if args.plot:
-    # Save the plotted images locally
-    plt.imsave('/home/gb4018/workspace/xdslproject/devito/xdsl-examples/v0.pdf', v[0].data_with_halo[0], vmin=-.5*1e-2, vmax=.5*1e-2, cmap="seismic")
-    plt.imsave('/home/gb4018/workspace/xdslproject/devito/xdsl-examples/v1.pdf', v[1].data_with_halo[0], vmin=-.5*1e-2, vmax=.5*1e-2, cmap="seismic")
-    plt.imsave('/home/gb4018/workspace/xdslproject/devito/xdsl-examples/tau00.pdf', tau[0, 0].data_with_halo[0], vmin=-.5*1e-2, vmax=.5*1e-2, cmap="seismic")
-    plt.imsave('/home/gb4018/workspace/xdslproject/devito/xdsl-examples/tau11.pdf', tau[1, 1].data_with_halo[0], vmin=-.5*1e-2, vmax=.5*1e-2, cmap="seismic")
-    plt.imsave('/home/gb4018/workspace/xdslproject/devito/xdsl-examples/tau01.pdf', tau[0, 1].data_with_halo[0], vmin=-.5*1e-2, vmax=.5*1e-2, cmap="seismic")
+# Assert that the norms are the same
+assert np.isclose(norm(v[0]), np.linalg.norm(v_xdsl[0]), atol=1e-6, rtol=0)
+assert np.isclose(norm(v[1]), np.linalg.norm(v_xdsl[1]), atol=1e-6, rtol=0)
+assert np.isclose(norm(tau[0]), np.linalg.norm(tau_xdsl[0]), atol=1e-6, rtol=0)
+assert np.isclose(norm(tau[1]), np.linalg.norm(tau_xdsl[1]), atol=1e-6, rtol=0)
+assert np.isclose(norm(tau[2]), np.linalg.norm(tau_xdsl[2]), atol=1e-6, rtol=0)
 
+# Assert that the results are the same
 assert np.allclose(v_xdsl[0].data, v[0].data, rtol=1e-8)
 assert np.allclose(v_xdsl[1].data, v[1].data, rtol=1e-8)
 assert np.allclose(tau[0].data, tau_xdsl[0].data, rtol=1e-8)
 assert np.allclose(tau[1].data, tau_xdsl[1].data, rtol=1e-8)
 assert np.allclose(tau[2].data, tau_xdsl[2].data, rtol=1e-8)
 
-# assert np.isclose(norm(v[0]), 0.6285093, atol=1e-4, rtol=0)
+

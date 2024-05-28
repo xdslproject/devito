@@ -4,6 +4,7 @@ import pytest
 from devito import (Grid, TensorTimeFunction, VectorTimeFunction, div, grad, diag, solve,
                     Operator, Eq, Constant, norm, SpaceDimension)
 from devito.types import Array, Function, TimeFunction
+from devito.tools import as_tuple
 
 from xdsl.dialects.scf import For, Yield
 from xdsl.dialects.arith import Addi
@@ -415,12 +416,20 @@ class TestAntiDepSupported(object):
 
     @pytest.mark.xfail(reason="Cannot store to a field that is loaded from")
     @pytest.mark.parametrize('exprs,directions,expected,visit', [
-        # 6) WAR 1->2; WAW 1->3
-        # Basically like above, but with the time dimension. This should have no impact
-        (('Eq(tu[t+1,x,y,z], tu[t,x,y,z] + tv[t,x,y,z])',
-            'Eq(tv[t+1,x,y,z], tu[t+1,x,y,z+2])',
-            'Eq(tu[t+1,x,y,0], tu[t,x,y,0] + 1.)'),
+        # 6) No dependencies
+        (('Eq(u[t+1,x,y,z], u[t,x,y,z] + v[t,x,y,z])',
+            'Eq(v[t+1,x,y,z], u[t,x,y,z] + v[t,x,y,z])'),
             '+++++', ['txyz', 'txyz', 'txy'], 'txyzz'),
+        (('Eq(u[t+1,x,y,z], u[t,x,y,z] + v[t,x,y,z])',
+            'Eq(v[t+1,x,y,z], u[t,x,y,z] + v[t,x,y,z])'),
+            '+++++', ['txyz', 'txyz', 'txy'], 'txyzz'),
+        # 7)
+        (('Eq(u[t+1,x,y,z], u[t,x,y,z] + v[t,x,y,z])',
+            'Eq(v[t+1,x,y,z], u[t+1,x,y,z] + v[t,x,y,z])'),
+            '++++++', ['txyz', 'txyz', 'txyz'], 'txyzzz'),
+        (('Eq(u[t+1,x,y,z], u[t,x,y,z] + v[t,x,y,z])',
+            'Eq(v[t+1,x,y,z], u[t+1,x,y+1,z] + u[t+1,x,y,z] + v[t,x,y,z])'),
+            '++++++', ['txyz', 'txyz', 'txyz'], 'txyzzz'),
     ])
     def test_consistency_anti_dependences(self, exprs, directions, expected, visit):
         """
@@ -436,19 +445,33 @@ class TestAntiDepSupported(object):
         ti1 = Function(name='ti1', shape=grid.shape, dimensions=grid.dimensions)  # noqa
         ti3 = Function(name='ti3', shape=grid.shape, dimensions=grid.dimensions)  # noqa
         f = Function(name='f', grid=grid)  # noqa
-        tu = TimeFunction(name='tu', grid=grid)  # noqa
-        tv = TimeFunction(name='tv', grid=grid)  # noqa
-        tw = TimeFunction(name='tw', grid=grid)  # noqa
+
+        u = TimeFunction(name='u', grid=grid)  # noqa
+        v = TimeFunction(name='v', grid=grid)  # noqa
+        w = TimeFunction(name='w', grid=grid)  # noqa
 
         # List comprehension would need explicit locals/globals mappings to eval
         eqns = []
         for e in exprs:
             eqns.append(eval(e))
 
-        # Note: `topofuse` is a subset of `advanced` mode. We use it merely to
-        # bypass 'blocking', which would complicate the asserts below
-        op = Operator(eqns, opt='xdsl')
-        op.apply(time_M=1)
+        u.data[:, :, :] = 1
+        v.data[:, :, :] = 1
+
+        op = Operator(eqns)
+        op.apply(time_M=2)
+        devito_a = u.data_with_halo[:, :, :]
+
+        # Re-initialize
+        u.data[:, :, :] = 1
+        v.data[:, :, :] = 1
+
+        xdsl_op = Operator(eqns, opt='xdsl')
+        xdsl_op.apply(time_M=2)
+
+        xdsl_a = u.data_with_halo[:, :, :]
+
+        assert np.all(devito_a == xdsl_a)
 
 
 @pytest.mark.xfail(reason="not supported in xDSL yet")
@@ -631,7 +654,6 @@ def test_xdsl_mul_eqs_VI():
     assert np.isclose(v.data_with_halo, devito_res_v).all()
 
 
-@pytest.mark.xfail(reason=" .forward.dx cannot be handled")
 def test_xdsl_mul_eqs_VII():
     # Define a Devito Operator with multiple eqs
     grid = Grid(shape=(4, 4))
@@ -643,9 +665,9 @@ def test_xdsl_mul_eqs_VII():
     v.data[:, :, :] = 0.1
 
     eq0 = Eq(u.forward, u + 2)
-    eq1 = Eq(v, u.forward.dx * 2)
+    eq1 = Eq(v, u.forward * 2)
 
-    op = Operator([eq0, eq1], opt="advanced")
+    op = Operator([eq0, eq1], opt="noop")
     op.apply(time_M=4, dt=0.1)
 
     devito_res_u = u.data_with_halo[:, :, :]
@@ -654,9 +676,8 @@ def test_xdsl_mul_eqs_VII():
     u.data[:, :, :] = 0.1
     v.data[:, :, :] = 0.1
 
-    op = Operator([eq0, eq1], opt="xdsl")
-    op.apply(time_M=4, dt=0.1)
-
+    xdsl_op = Operator([eq0, eq1], opt="xdsl")
+    xdsl_op.apply(time_M=4, dt=0.1)
     assert np.isclose(norm(u), np.linalg.norm(devito_res_u))
     assert np.isclose(norm(v), np.linalg.norm(devito_res_v))
 
@@ -828,8 +849,10 @@ class TestElastic():
     def test_elastic_2D(self, shape, so, nt):
 
         # Initial grid: km x km, with spacing
-        extent = (1500., 1500.)
-        shape = shape
+        shape = shape  # Number of grid point (nx, nz)
+        spacing = as_tuple(10.0 for _ in range(len(shape)))
+        extent = tuple([s*(n-1) for s, n in zip(spacing, shape)])
+
         x = SpaceDimension(name='x', spacing=Constant(name='h_x', value=extent[0]/(shape[0]-1)))  # noqa
         z = SpaceDimension(name='z', spacing=Constant(name='h_z', value=extent[1]/(shape[1]-1)))  # noqa
         grid = Grid(extent=extent, shape=shape, dimensions=(x, z))
