@@ -38,8 +38,9 @@ jobs:
         pip install mpi4py
         pip install git+https://github.com/xdslproject/xdsl@210181350d926f91ee5fdb27f0eb5d1cf53a8997
 
-    - name: Test with MPI
+    - name: Test with MPI - no Openmp
       run: |
+        export DEVITO_LANGUAGE=C
         # Add mlir-opt to the path
         export PATH=/xdsl-sc/llvm-project/build/bin/:$PATH
         pytest -m "parallel" -k "not adjoint" tests/test_xdsl_* -vvv
