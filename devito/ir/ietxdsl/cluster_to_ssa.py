@@ -1,8 +1,11 @@
 # ------------- General imports -------------#
 
-from typing import Any, Iterable
+from functools import reduce
+from typing import Any, Iterable, cast
 from dataclasses import dataclass, field
-from sympy import Add, Expr, Float, Indexed, Integer, Mod, Mul, Number, Pow, Symbol, floor, im
+from sympy import Add, And, Expr, Float, GreaterThan, Indexed, Integer, LessThan, Mod, Mul, Number, Pow, StrictGreaterThan, StrictLessThan, Symbol, floor
+from sympy.core.relational import Relational
+from sympy.logic.boolalg import BooleanFunction
 from devito.ir.equations.equation import OpInc
 from devito.operations.interpolators import Injection
 from devito.operator.operator import Operator
@@ -42,6 +45,18 @@ from devito.types.mlir_types import dtype_to_xdsltype
 # ------------- devito-xdsl SSA imports -------------#
 from devito.ir.ietxdsl import iet_ssa
 from devito.ir.ietxdsl.utils import is_int, is_float
+import numpy as np
+
+from examples.seismic.source import PointSource
+from tests.test_interpolation import points
+from tests.test_timestepping import d
+
+dtypes_to_xdsltypes = {
+    np.float32: builtin.f32,
+    np.float64: builtin.f64,
+    np.int32: builtin.i32,
+    np.int64: builtin.i64,
+}
 
 # flake8: noqa
 
@@ -210,7 +225,8 @@ class ExtractDevitoStencilConversion:
             if node.name in self.symbol_values:
                 return self.symbol_values[node.name]
             else: 
-                symb = iet_ssa.LoadSymbolic.get(node.name, builtin.f32)
+                mlir_dtype = dtypes_to_xdsltypes[node.dtype]
+                symb = iet_ssa.LoadSymbolic.get(node.name, mlir_dtype)
                 return symb.result     
         # Handle Add Mul
         elif isinstance(node, (Add, Mul)):
@@ -260,6 +276,30 @@ class ExtractDevitoStencilConversion:
         elif isinstance(node, floor):
             assert len(node.args) == 1, "Expected single argument for floor."
             return math.FloorOp(self._visit_math_nodes(dim, node.args[0], output_indexed)).result
+        elif isinstance(node, And):
+            SSAargs = (self._visit_math_nodes(dim, arg, output_indexed) for arg in node.args)
+            return reduce(lambda x,y : arith.AndI(x,y).result, SSAargs)
+        elif isinstance(node, Relational):
+            if isinstance(node, GreaterThan):
+                mnemonic = "sge"
+            elif isinstance(node, LessThan):
+                mnemonic = "sle"
+            elif isinstance(node, StrictGreaterThan):
+                mnemonic = "sgt"
+            elif isinstance(node, StrictLessThan):
+                mnemonic = "slt"
+            else:
+                raise NotImplementedError(f"Unimplemented comparison {type(node)}")
+                
+            # import pdb;
+            # pdb.set_trace()
+            SSAargs = (self._visit_math_nodes(dim, arg, output_indexed) for arg in node.args)
+            # Operands must have the same type
+            # TODO: look at here if index stuff does not make sense
+            # The s in sgt means *signed* greater than
+            # Writer has no clue if this should rather be u for unsigned
+            return arith.Cmpi(*self._ensure_same_type(*SSAargs), mnemonic).result
+
         else:
             raise NotImplementedError(f"Unknown math:{type(node)} {node}", node)
 
@@ -333,7 +373,7 @@ class ExtractDevitoStencilConversion:
         store.temp_with_halo.name_hint = f"{write_function.name}_t{self.out_time_buffer[1]}_temp"  # noqa
         self.temps[self.out_time_buffer] = store.temp_with_halo
 
-    def build_generic_step(self, dim: SteppingDimension, eq: LoweredEq):
+    def build_generic_step_expression(self, dim: SteppingDimension, eq: LoweredEq):
         value = self._visit_math_nodes(dim, eq.rhs, None)
         temp = self.function_values[self.out_time_buffer]
         memtemp = builtin.UnrealizedConversionCastOp.get([temp], [StencilToMemRefType(temp.type)]).results[0]
@@ -352,6 +392,20 @@ class ExtractDevitoStencilConversion:
             case OpInc:
                 value = arith.Addf(value, memref.Load.get(memtemp, ssa_indices).res)
         memref.Store.get(value, memtemp, ssa_indices)
+
+    def build_condition(self, dim: SteppingDimension, eq: BooleanFunction):
+        return self._visit_math_nodes(dim, eq, None)
+
+    def build_generic_step(self, dim: SteppingDimension, eq: LoweredEq):
+        if eq.conditionals:
+            condition = And(*eq.conditionals.values(), evaluate=False)
+            cond = self.build_condition(dim, condition)
+            if_ = scf.If(cond, (), Region(Block()))
+            with ImplicitBuilder(if_.true_region.block):
+                self.build_generic_step_expression(dim, eq)
+                scf.Yield()
+        else:
+            self.build_generic_step_expression(dim, eq)
 
     def build_time_loop(
         self, eqs: list[Any], step_dim: SteppingDimension, **kwargs
@@ -465,7 +519,6 @@ class ExtractDevitoStencilConversion:
             ub.result.name_hint = f"{interval.dim.name}_M"
             lbs.append(lb)
             ubs.append(ub)
-
 
         steps = [arith.Constant.from_int_and_width(1, builtin.IndexType()).result]*len(ubs)
         ubs = [arith.Addi(ub, steps[0]) for ub in ubs]
