@@ -290,12 +290,12 @@ def test_source_only(shape, tn, factor, factor2):
 
     op = Operator([src_term], opt="advanced")
     op(time=time_range.num-1, dt=dt)
-    normdv = np.linalg.norm(u.data[0, :, :])
+    normdv = np.linalg.norm(u.data[0])
     u.data[:, :] = 0
 
     opx = Operator([src_term], opt="xdsl")
     opx(time=time_range.num-1, dt=dt)
-    normxdsl = np.linalg.norm(u.data[0, :, :])
+    normxdsl = np.linalg.norm(u.data[0])
 
     assert np.isclose(normdv, normxdsl, rtol=1e-04)
 
@@ -342,12 +342,15 @@ def test_forward_src_stencil(shape, tn, factor, factor2):
 
     op = Operator([stencil, src_term], opt="advanced")
     op(time=time_range.num-1, dt=dt)
-    normdv = np.linalg.norm(u.data[0, :, :])
+    # normdv = norm(u)
+    normdv = np.linalg.norm(u.data)
+
     u.data[:, :] = 0
 
     opx = Operator([stencil, src_term], opt="xdsl")
     opx(time=time_range.num-1, dt=dt)
-    normxdsl = np.linalg.norm(u.data[0, :, :])
+    normxdsl = np.linalg.norm(u.data)
+    # normxdsl = norm(u)
 
     import matplotlib.pyplot as plt
 
