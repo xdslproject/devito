@@ -248,9 +248,12 @@ def test_standard_mlir_rewrites(shape, so, to, nt):
     xdslop.apply(time=nt, dt=dt)
 
 
-def test_source_I():
-    shape = (101, 101)
-    extent = (1000, 1000)
+@pytest.mark.parametrize('shape', [(4, 4), (8, 8), (38, 38), ])
+@pytest.mark.parametrize('tn', [20, 40, 80])
+@pytest.mark.parametrize('factor', [0.1, 0.2, 0.5])
+def test_source_only(shape, tn, factor):
+    spacing = (10.0, 10.0)
+    extent = tuple(np.array(spacing) * (shape[0] - 1))
     origin = (0.0, 0.0)
 
     v = np.empty(shape, dtype=np.float32)
@@ -260,7 +263,8 @@ def test_source_I():
     grid = Grid(shape=shape, extent=extent, origin=origin)
 
     t0 = 0.0
-    tn = 10.0
+    # Comes from args
+    tn = tn
     dt = 1.6
     time_range = TimeAxis(start=t0, stop=tn, step=dt)
 
@@ -269,23 +273,24 @@ def test_source_I():
 
     domain_size = np.array(extent)
 
-    src.coordinates.data[0, :] = domain_size * 0.47
+    src.coordinates.data[0, :] = domain_size * factor
     src.coordinates.data[0, -1] = 19.0
 
-    u = TimeFunction(name="u", grid=grid, time_order=1, space_order=2)
+    u = TimeFunction(name="u", grid=grid, space_order=2)
     m = Function(name='m', grid=grid)
     m.data[:] = 1./(v*v)
 
     src_term = src.inject(field=u.forward, expr=src * dt**2 / m)
 
     op = Operator([src_term], opt="advanced")
-
     op(time=time_range.num-1, dt=dt)
+    normdv = np.linalg.norm(u.data[0, :, :])
+    u.data[:, :] = 0
 
-    import pdb;
-    pdb.set_trace()
-    print(bytes(norm(u)))
-
+    opx = Operator([src_term], opt="xdsl")
+    opx(time=time_range.num-1, dt=dt)
+    normxdsl = np.linalg.norm(u.data[0, :, :])
+    assert np.isclose(normdv, normxdsl, rtol=1e-04)
 
 
 
