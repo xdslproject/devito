@@ -300,6 +300,67 @@ def test_source_only(shape, tn, factor, factor2):
     assert np.isclose(normdv, normxdsl, rtol=1e-04)
 
 
+@switchconfig(openmp=False)
+@pytest.mark.parametrize('shape', [(38, 38), ])
+@pytest.mark.parametrize('tn', [20, 80])
+@pytest.mark.parametrize('factor', [0.5, 0.8])
+@pytest.mark.parametrize('factor2', [0.5, 0.8])
+def test_forward_src_stencil(shape, tn, factor, factor2):
+    spacing = (10.0, 10.0)
+    extent = tuple(np.array(spacing) * (shape[0] - 1))
+    origin = (0.0, 0.0)
+
+    v = np.empty(shape, dtype=np.float32)
+    v[:, :51] = 1.5
+    v[:, 51:] = 2.5
+
+    grid = Grid(shape=shape, extent=extent, origin=origin)
+
+    t0 = 0.0
+    # Comes from args
+    tn = tn
+    dt = 1.6
+    time_range = TimeAxis(start=t0, stop=tn, step=dt)
+
+    f0 = 0.010
+    src = RickerSource(name="src", grid=grid, f0=f0, npoint=5, time_range=time_range)
+
+    domain_size = np.array(extent)
+
+    src.coordinates.data[0, :] = domain_size * factor
+    src.coordinates.data[0, -1] = 100.0 * factor2
+
+    u = TimeFunction(name="u", grid=grid, space_order=2, time_order=2)
+    m = Function(name='m', grid=grid)
+    m.data[:] = 1./(v*v)
+
+    src_term = src.inject(field=u.forward, expr=src * dt**2 / m)
+
+    pde = u.dt2 - u.laplace
+    eq0 = solve(pde, u.forward)
+    stencil = Eq(u.forward, eq0)
+
+    op = Operator([stencil, src_term], opt="advanced")
+    op(time=time_range.num-1, dt=dt)
+    normdv = np.linalg.norm(u.data[0, :, :])
+    u.data[:, :] = 0
+
+    opx = Operator([stencil, src_term], opt="xdsl")
+    opx(time=time_range.num-1, dt=dt)
+    normxdsl = np.linalg.norm(u.data[0, :, :])
+
+    import matplotlib.pyplot as plt
+
+    # Plot and save the field
+    plt.imshow(u.data[0, :, :], cmap='jet')
+    plt.colorbar()
+    plt.savefig('figure.png')
+    plt.show()
+
+    assert not np.isclose(normdv, 0.0, rtol=1e-04)
+    assert np.isclose(normdv, normxdsl, rtol=1e-04)
+
+
 def test_xdsl_mul_eqs_I():
     # Define a Devito Operator with multiple eqs
     grid = Grid(shape=(4, 4))
