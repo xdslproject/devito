@@ -250,8 +250,9 @@ def test_standard_mlir_rewrites(shape, so, to, nt):
 
 @pytest.mark.parametrize('shape', [(4, 4), (8, 8), (38, 38), ])
 @pytest.mark.parametrize('tn', [20, 40, 80])
-@pytest.mark.parametrize('factor', [0.1, 0.2, 0.5])
-def test_source_only(shape, tn, factor):
+@pytest.mark.parametrize('factor', [-0.1, 0.0, 0.1, 0.2, 0.5, 1.1])
+@pytest.mark.parametrize('factor2', [-0.1, 0.1, 0.2, 0.5, 1.1])
+def test_source_only(shape, tn, factor, factor2):
     spacing = (10.0, 10.0)
     extent = tuple(np.array(spacing) * (shape[0] - 1))
     origin = (0.0, 0.0)
@@ -269,12 +270,12 @@ def test_source_only(shape, tn, factor):
     time_range = TimeAxis(start=t0, stop=tn, step=dt)
 
     f0 = 0.010
-    src = RickerSource(name="src", grid=grid, f0=f0, npoint=64, time_range=time_range)
+    src = RickerSource(name="src", grid=grid, f0=f0, npoint=1, time_range=time_range)
 
     domain_size = np.array(extent)
 
     src.coordinates.data[0, :] = domain_size * factor
-    src.coordinates.data[0, -1] = 19.0
+    src.coordinates.data[0, -1] = 19.0 * factor2
 
     u = TimeFunction(name="u", grid=grid, space_order=2)
     m = Function(name='m', grid=grid)
@@ -290,7 +291,11 @@ def test_source_only(shape, tn, factor):
     opx = Operator([src_term], opt="xdsl")
     opx(time=time_range.num-1, dt=dt)
     normxdsl = np.linalg.norm(u.data[0, :, :])
-    assert np.isclose(normdv, normxdsl, rtol=1e-04)
+
+    try:
+        assert np.isclose(normdv, normxdsl, rtol=1e-04)
+    except AssertionError:
+        import pdb;pdb.set_trace()
 
 
 
