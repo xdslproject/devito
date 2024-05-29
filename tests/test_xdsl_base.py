@@ -352,14 +352,6 @@ def test_forward_src_stencil(shape, tn, factor, factor2):
     normxdsl = np.linalg.norm(u.data)
     # normxdsl = norm(u)
 
-    import matplotlib.pyplot as plt
-
-    # Plot and save the field
-    plt.imshow(u.data[0, :, :], cmap='jet')
-    plt.colorbar()
-    plt.savefig('figure.png')
-    plt.show()
-
     assert not np.isclose(normdv, 0.0, rtol=1e-04)
     assert np.isclose(normdv, normxdsl, rtol=1e-04)
 
