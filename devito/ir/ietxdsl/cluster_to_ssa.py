@@ -3,6 +3,7 @@
 from typing import Any, Iterable
 from dataclasses import dataclass, field
 from sympy import Add, Expr, Float, Indexed, Integer, Mod, Mul, Number, Pow, Symbol, floor, im
+from devito.ir.equations.equation import OpInc
 from devito.operations.interpolators import Injection
 from devito.operator.operator import Operator
 from devito.symbolics.search import retrieve_dimensions, retrieve_functions
@@ -337,6 +338,12 @@ class ExtractDevitoStencilConversion:
         for i, ssa_i in enumerate(ssa_indices):
             if isinstance(ssa_i.type, builtin.IntegerType):
                 ssa_indices[i] = arith.IndexCastOp(ssa_i, builtin.IndexType())
+
+        match eq.operation:
+            case None:
+                pass
+            case OpInc:
+                value = arith.Addf(value, memref.Load.get(memtemp, ssa_indices).res)
         memref.Store.get(value, memtemp, ssa_indices)
 
     def build_time_loop(
