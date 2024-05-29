@@ -11,7 +11,7 @@ from devito.logger import info, perf
 from devito.operator.profiling import create_profile
 from devito.ir.iet import Callable, MetaCall
 
-from devito.tools import flatten, filter_sorted, OrderedSet
+from devito.tools import flatten, filter_sorted
 
 from devito.ir.ietxdsl.cluster_to_ssa import (ExtractDevitoStencilConversion,
                                               apply_timers,
@@ -441,7 +441,7 @@ class XdslnoopOperator(Cpu64OperatorMixin, CoreOperator):
             self._jit_kernel_constants = args
 
         cfunction = self.cfunction
-        
+
         try:
             # Invoke kernel function with args
             arg_values = self._construct_cfunction_args(args)
@@ -483,7 +483,7 @@ class XdslnoopOperator(Cpu64OperatorMixin, CoreOperator):
         if self._cfunction is None:
             self._cfunction = getattr(self._lib, self.name)
             # Associate a C type to each argument for runtime type check
-            argtypes = self._construct_cfunction_types(self._jit_kernel_constants)
+            # argtypes = self._construct_cfunction_types(self._jit_kernel_constants)
             # self._cfunction.argtypes = argtypes
 
         return self._cfunction
