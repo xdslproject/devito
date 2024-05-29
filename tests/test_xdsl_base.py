@@ -264,7 +264,7 @@ def test_source_I():
     grid = Grid(shape=shape, extent=extent, origin=origin)
 
     t0 = 0.0
-    tn = 1000.0
+    tn = 10.0
     dt = 1.6
     time_range = TimeAxis(start=t0, stop=tn, step=dt)
 
@@ -273,8 +273,8 @@ def test_source_I():
 
     domain_size = np.array(extent)
 
-    src.coordinates.data[0, :] = domain_size * 0.5
-    src.coordinates.data[0, -1] = 20.0
+    src.coordinates.data[0, :] = domain_size * 0.47
+    src.coordinates.data[0, -1] = 19.0
 
     u = TimeFunction(name="u", grid=grid, time_order=1, space_order=2)
     m = Function(name='m', grid=grid)
@@ -282,11 +282,13 @@ def test_source_I():
 
     src_term = src.inject(field=u.forward, expr=src * dt**2 / m)
 
-    op = Operator([src_term], opt="xdsl")
+    op = Operator([src_term], opt="advanced")
 
     op(time=time_range.num-1, dt=dt)
 
-    print(norm(u))
+    import pdb;
+    pdb.set_trace()
+    print(bytes(norm(u)))
 
 
 
