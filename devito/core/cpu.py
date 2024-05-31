@@ -14,7 +14,7 @@ from typing import Iterable
 
 from devito.core.operator import CoreOperator, CustomOperator, ParTile
 from devito.exceptions import InvalidOperator
-from devito.ir.iet.nodes import Section
+from devito.ir.iet.nodes import Section, Callable, MetaCall
 from devito.ir.iet.visitors import FindNodes
 from devito.passes.equations import collect_derivatives
 from devito.passes.clusters import (Lift, blocking, buffering, cire, cse,
@@ -27,7 +27,6 @@ from devito.tools import timed_pass
 
 from devito.logger import info, perf
 from devito.operator.profiling import create_profile
-from devito.ir.iet import Callable, MetaCall
 
 from devito.tools import flatten, filter_sorted
 
@@ -36,14 +35,12 @@ from devito.ir.ietxdsl.cluster_to_ssa import (ExtractDevitoStencilConversion,
                                               finalize_module_with_globals)  # noqa
 
 from devito.tools.utils import as_tuple
-from devito.types import TimeFunction
-from devito.types.dense import DiscreteFunction, Function
+from devito.types.dense import DiscreteFunction, TimeFunction, Function
+from devito.types.sparse import SparseFunction
 from devito.types.mlir_types import ptr_of, f32
 
 from xdsl.printer import Printer
 from xdsl.xdsl_opt_main import xDSLOptMain
-
-from examples.seismic.source import PointSource
 
 
 __all__ = ['Cpu64NoopCOperator', 'Cpu64NoopOmpOperator', 'Cpu64AdvCOperator',
@@ -550,7 +547,8 @@ class XdslnoopOperator(Cpu64OperatorMixin, CoreOperator):
             elif isinstance(arg, Function):
                 args[arg._C_name] = arg._data[...].ctypes.data_as(ptr_of(f32))
 
-            elif isinstance(arg, PointSource):
+            elif isinstance(arg, SparseFunction):
+                import pdb;pdb.set_trace()
                 args[arg._C_name] = arg._data[...].ctypes.data_as(ptr_of(f32))
             else:
                 raise NotImplementedError(f"type {type(arg)} not implemented")

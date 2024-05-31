@@ -7,7 +7,7 @@ from sympy import Add, And, Expr, Float, GreaterThan, Indexed, Integer, LessThan
 from sympy.core.relational import Relational
 from sympy.logic.boolalg import BooleanFunction
 from devito.ir.equations.equation import OpInc
-from devito.operations.interpolators import Injection
+from devito.operations.interpolators import Injection, Interpolation
 from devito.operator.operator import Operator
 from devito.symbolics.search import retrieve_dimensions, retrieve_functions
 from devito.symbolics.extended_sympy import INT
@@ -44,7 +44,7 @@ from devito.ir.ietxdsl import iet_ssa
 from devito.ir.ietxdsl.utils import is_int, is_float
 import numpy as np
 
-from examples.seismic.source import PointSource
+from examples.seismic.source import PointSource, Receiver
 from tests.test_interpolation import points
 from tests.test_timestepping import d
 
@@ -172,7 +172,7 @@ class ExtractDevitoStencilConversion:
             # If we have a time function, we compute its time offset
             if isinstance(node.function, TimeFunction):
                 time_offset = (node.indices[dim] - dim) % node.function.time_size
-            elif isinstance(node.function, (Function, PointSource)):
+            elif isinstance(node.function, (Function, PointSource, Receiver)):
                 time_offset = 0
             else:
                 raise NotImplementedError(f"reading function of type {type(node.func)} not supported")
@@ -185,6 +185,7 @@ class ExtractDevitoStencilConversion:
                 return access.res
             # Otherwise, generate a load op
             else:
+                import pdb;pdb.set_trace()
                 temp = self.function_values[(node.function, time_offset)]
                 memtemp = builtin.UnrealizedConversionCastOp.get(temp, StencilToMemRefType(temp.type)).results[0]
                 memtemp.name_hint = temp.name_hint + "_mem"
@@ -296,6 +297,9 @@ class ExtractDevitoStencilConversion:
         read_functions = set()
         for f in retrieve_function_carriers(eq.rhs):
             if isinstance(f.function, PointSource):
+                time_offset = 0
+            elif isinstance(f.function, Receiver):
+                import pdb;pdb.set_trace()  
                 time_offset = 0
             elif isinstance(f.function, TimeFunction):
                 time_offset = (f.indices[dim]-dim) % f.function.time_size
@@ -461,6 +465,9 @@ class ExtractDevitoStencilConversion:
             elif isinstance(eq, Injection):
                 lowered = self.operator._lower_exprs(as_tuple(eq), **kwargs)
                 self._lower_injection(lowered)
+            elif isinstance(eq, Interpolation):
+                lowered = self.operator._lower_exprs(as_tuple(eq), **kwargs)
+                self._lower_interpolation(lowered)
             else:
                 raise NotImplementedError(f"Expression {eq} of type {type(eq)} not supported")
 
@@ -470,7 +477,61 @@ class ExtractDevitoStencilConversion:
         """
         # We assert that all equations of one Injection share the same iteration space!
         ispaces = [e.ispace for e in eqs]
-        assert all(ispaces[0] == isp for isp in ispaces[1:])
+        try:
+            assert all(ispaces[0] == isp for isp in ispaces[1:])
+        except AssertionError:
+            pass
+        ispace = ispaces[0]
+        assert isinstance(ispace.dimensions[0], TimeDimension)
+
+        lbs = []
+        ubs = []
+        for interval in ispace[1:]:
+            lower = interval.symbolic_min
+            if isinstance(lower, Scalar):
+                lb = iet_ssa.LoadSymbolic.get(lower._C_name, builtin.IndexType())
+            elif isinstance(lower, (Number, int)):
+                lb = arith.Constant.from_int_and_width(int(lower), builtin.IndexType())
+            else:
+                raise NotImplementedError(f"Lower bound of type {type(lower)} not supported")
+            lb.result.name_hint = f"{interval.dim.name}_m"
+
+            upper = interval.symbolic_max
+            if isinstance(upper, Scalar):
+                ub = iet_ssa.LoadSymbolic.get(upper._C_name, builtin.IndexType())
+            elif isinstance(upper, (Number, int)):
+                ub = arith.Constant.from_int_and_width(int(upper), builtin.IndexType())
+            else:
+                raise NotImplementedError(
+                    f"Upper bound of type {type(upper)} not supported"
+                )
+            ub.result.name_hint = f"{interval.dim.name}_M"
+            lbs.append(lb)
+            ubs.append(ub)
+
+        steps = [arith.Constant.from_int_and_width(1, builtin.IndexType()).result]*len(ubs)
+        ubs = [arith.Addi(ub, steps[0]) for ub in ubs]
+
+        with ImplicitBuilder(scf.ParallelOp(lbs, ubs, steps, [pblock := Block(arg_types=[builtin.IndexType()]*len(ubs))]).body):
+            for arg, interval in zip(pblock.args, ispace[1:], strict=True):
+                arg.name_hint = interval.dim.name
+                self.symbol_values[interval.dim.name] = arg
+            for eq in eqs:
+                self._convert_eq(eq)
+            scf.Yield()
+            # raise NotImplementedError("Injections not supported yet")
+
+
+    def _lower_interpolation(self, eqs: list[LoweredEq]):
+        """
+        Lower an Interpolation to xDSL.
+        """
+        # We assert that all equations of one Injection share the same iteration space!
+        ispaces = [e.ispace for e in eqs]
+        try:
+            assert all(ispaces[0] == isp for isp in ispaces[1:])
+        except AssertionError:
+            pass
         ispace = ispaces[0]
         assert isinstance(ispace.dimensions[0], TimeDimension)
 
@@ -569,8 +630,15 @@ class ExtractDevitoStencilConversion:
                         if isinstance(f, PointSource):
                             functions.add(f._coordinates)
                         functions.add(f.function)
-
+                elif isinstance(eq, Interpolation):
+                    # import pdb; pdb.set_trace()
+                    # functions.add(eq.field.function)
+                    for f in retrieve_functions(eq.expr):
+                        if isinstance(f, PointSource):
+                            functions.add(f._coordinates)
+                        functions.add(f.function)               
                 else:
+                    import pdb;pdb.set_trace()                   
                     raise NotImplementedError(f"Expression {eq} of type {type(eq)} not supported")
             self.time_buffers : list[TimeFunction] = []
             self.functions : list[Function] = []

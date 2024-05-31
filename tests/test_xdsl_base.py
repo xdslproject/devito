@@ -5,7 +5,7 @@ from devito import Grid, TimeFunction, Eq, Operator, solve, norm, Function
 from devito.types import Array
 from devito import switchconfig
 
-from examples.seismic.source import RickerSource, TimeAxis
+from examples.seismic.source import RickerSource, TimeAxis, Receiver
 from xdsl.dialects.scf import For, Yield
 from xdsl.dialects.arith import Addi
 from xdsl.dialects.func import Call, Return
@@ -295,6 +295,65 @@ def test_source_only(shape, tn, factor, factor2):
     normxdsl = np.linalg.norm(u.data[0])
 
     assert np.isclose(normdv, normxdsl, rtol=1e-04)
+
+
+@switchconfig(openmp=False)
+@pytest.mark.parametrize('shape', [(8, 8), (38, 38), ])
+@pytest.mark.parametrize('tn', [20, 80])
+@pytest.mark.parametrize('factor', [0.1])
+@pytest.mark.parametrize('factor2', [0.1])
+def test_src_rec_only(shape, tn, factor, factor2):
+    spacing = (10.0, 10.0)
+    extent = tuple(np.array(spacing) * (shape[0] - 1))
+    origin = (0.0, 0.0)
+
+    v = np.empty(shape, dtype=np.float32)
+    v[:, :51] = 1.5
+    v[:, 51:] = 2.5
+
+    grid = Grid(shape=shape, extent=extent, origin=origin)
+
+    t0 = 0.0
+    # Comes from args
+    tn = tn
+    dt = 1.6
+    time_range = TimeAxis(start=t0, stop=tn, step=dt)
+
+    f0 = 0.010
+    src = RickerSource(name="src", grid=grid, f0=f0, npoint=5, time_range=time_range)
+
+    rec = Receiver(name='rec', grid=grid, time_range=time_range, npoint=5)
+
+    domain_size = np.array(extent)
+
+    src.coordinates.data[0, :] = domain_size * factor
+    src.coordinates.data[0, -1] = 19.0 * factor2
+
+    u = TimeFunction(name="u", grid=grid, space_order=2)
+    m = Function(name='m', grid=grid)
+    m.data[:] = 1./(v*v)
+
+    src_term = src.inject(field=u.forward, expr=src * dt**2 / m)
+
+    # Create interpolation expression for receivers
+    rec_term = rec.interpolate(expr=u.forward)
+
+    op = Operator([src_term, rec_term], opt="advanced")
+    op(time=time_range.num-1, dt=dt)
+    import pdb; pdb.set_trace()
+    normdv = np.linalg.norm(u.data[0])
+    u.data[:, :] = 0
+    rec.data[:, :] = 0
+
+    opx = Operator([src_term, rec_term], opt="xdsl")
+    opx(time=time_range.num-1, dt=dt)
+    normxdsl = np.linalg.norm(u.data[0])
+
+    assert np.isclose(normdv, normxdsl, rtol=1e-04)
+
+
+
+
 
 
 @switchconfig(openmp=False)
