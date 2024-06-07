@@ -4,7 +4,7 @@ from devito.core.cpu import (Cpu64NoopCOperator, Cpu64NoopOmpOperator,
                              Cpu64FsgCOperator, Cpu64FsgOmpOperator,
                              Cpu64CustomOperator)
 
-from devito.core.cpu_xdsl import XdslnoopOperator, XdslAdvOperator
+from devito.xdsl_core.xdsl_cpu import XdslnoopOperator, XdslAdvOperator
 from devito.core.intel import (Intel64AdvCOperator, Intel64AdvOmpOperator,
                                Intel64FsgCOperator, Intel64FsgOmpOperator)
 from devito.core.arm import ArmAdvCOperator, ArmAdvOmpOperator
@@ -12,8 +12,7 @@ from devito.core.power import PowerAdvCOperator, PowerAdvOmpOperator
 from devito.core.gpu import (DeviceNoopOmpOperator, DeviceNoopAccOperator,
                              DeviceAdvOmpOperator, DeviceAdvAccOperator,
                              DeviceFsgOmpOperator, DeviceFsgAccOperator,
-                             DeviceCustomOmpOperator, DeviceCustomAccOperator,
-                             XdslAdvDeviceOperator)
+                             DeviceCustomOmpOperator, DeviceCustomAccOperator)
 from devito.operator.registry import operator_registry
 
 # Register CPU Operators
@@ -56,11 +55,3 @@ operator_registry.add(DeviceAdvAccOperator, Device, 'advanced', 'openacc')
 operator_registry.add(DeviceFsgOmpOperator, Device, 'advanced-fsg', 'C')
 operator_registry.add(DeviceFsgOmpOperator, Device, 'advanced-fsg', 'openmp')
 operator_registry.add(DeviceFsgAccOperator, Device, 'advanced-fsg', 'openacc')
-
-# Register XDSL Operators
-operator_registry.add(XdslnoopOperator, Cpu64, 'xdsl-noop', 'C')
-operator_registry.add(XdslAdvOperator, Cpu64, 'xdsl-noop', 'openmp')
-
-operator_registry.add(XdslAdvOperator, Cpu64, 'xdsl', 'C')
-operator_registry.add(XdslAdvOperator, Cpu64, 'xdsl', 'openmp')
-operator_registry.add(XdslAdvDeviceOperator, Device, 'xdsl', 'openacc')

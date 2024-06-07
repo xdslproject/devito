@@ -267,10 +267,9 @@ class Operator(Callable):
 
         return IRs(expressions, clusters, stree, uiet, iet), byproduct
 
-    @classmethod
-    def _rcompile_wrapper(cls, **kwargs0):
-        def wrapper(expressions, **kwargs1):
-            return rcompile(expressions, {**kwargs0, **kwargs1})
+    def _rcompile_wrapper(cls, **kwargs):
+        def wrapper(expressions, kwargs=kwargs):
+            return rcompile(expressions, kwargs)
         return wrapper
 
     @classmethod
@@ -837,7 +836,6 @@ class Operator(Callable):
 
         # Invoke kernel function with args
         arg_values = [args[p.name] for p in self.parameters]
-
         try:
             cfunction = self.cfunction
             with self._profiler.timer_on('apply', comm=args.comm):

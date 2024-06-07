@@ -4,12 +4,11 @@ from devito.core.operator import CoreOperator, CustomOperator, ParTile
 from devito.exceptions import InvalidOperator
 from devito.passes.equations import collect_derivatives
 from devito.passes.clusters import (Lift, blocking, buffering, cire, cse,
-                                    factorize, fission, fuse, optimize_pows,
-                                    optimize_hyperplanes)
-from devito.passes.iet import (CTarget, OmpTarget, avoid_denormals, linearize, mpiize,
-                               hoist_prodders, relax_incr_dimensions)
+                                    factorize, fission, fuse, optimize_hyperplanes,
+                                    optimize_pows)
+from devito.passes.iet import (CTarget, OmpTarget, avoid_denormals, hoist_prodders,
+                               linearize, mpiize, relax_incr_dimensions)
 from devito.tools import timed_pass
-
 
 __all__ = ['Cpu64NoopCOperator', 'Cpu64NoopOmpOperator', 'Cpu64AdvCOperator',
            'Cpu64AdvOmpOperator', 'Cpu64FsgCOperator', 'Cpu64FsgOmpOperator',

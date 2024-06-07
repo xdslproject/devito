@@ -46,15 +46,8 @@ from devito.types.equation import Eq
 from devito.types.mlir_types import dtype_to_xdsltype
 
 # ------------- devito-xdsl SSA imports -------------#
-from devito.ir.ietxdsl import iet_ssa
-from devito.ir.ietxdsl.utils import is_int, is_float, dtypes_to_xdsltypes
-from devito.types.mlir_types import f32, ptr_of
-
-
-from examples.seismic.source import PointSource
-from tests.test_interpolation import points
-from tests.test_timestepping import d
-
+from devito.ir.xdsl_iet import iet_ssa
+from devito.ir.xdsl_iet.utils import is_int, is_float
 
 # flake8: noqa
 
