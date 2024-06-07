@@ -16,6 +16,7 @@ from devito.logger import info, perf
 from xdsl.printer import Printer
 from xdsl.xdsl_opt_main import xDSLOptMain
 from devito.passes.iet import DeviceOmpTarget
+from devito.xdsl_core.utils import generate_pipeline, generate_mlir_pipeline
 
 
 class XdslAdvDeviceOperator(XdslAdvOperator):
