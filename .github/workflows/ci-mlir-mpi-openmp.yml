@@ -43,4 +43,4 @@ jobs:
         export DEVITO_LANGUAGE=openmp
         # Add mlir-opt to the path
         export PATH=/xdsl-sc/llvm-project/build/bin/:$PATH
-        pytest -m "parallel" -k "not adjoint" tests/test_xdsl_* -vvv
+        mpirun -n 4 pytest -m "parallel" -k "not adjoint" tests/test_xdsl_* -vvv
