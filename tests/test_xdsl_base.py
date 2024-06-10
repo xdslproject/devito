@@ -1,9 +1,12 @@
 import numpy as np
 import pytest
 
-from devito import Grid, TimeFunction, Eq, Operator, solve, norm, Function
+from devito import (Grid, TimeFunction, Eq, Operator, solve, norm, Function,
+                    switchconfig, Constant, div, diag, grad)
 from devito.types import Array
-from devito import switchconfig
+from devito.types.dimension import SpaceDimension
+from devito.types.tensor import VectorTimeFunction, TensorTimeFunction
+from devito.tools import as_tuple
 
 from examples.seismic.source import RickerSource, TimeAxis
 from xdsl.dialects.scf import For, Yield
@@ -11,8 +14,6 @@ from xdsl.dialects.arith import Addi
 from xdsl.dialects.func import Call, Return
 from xdsl.dialects.stencil import FieldType, ApplyOp, LoadOp, StoreOp
 from xdsl.dialects.llvm import LLVMPointerType
-
-from examples.seismic.source import RickerSource, TimeAxis
 
 
 def test_xdsl_I():

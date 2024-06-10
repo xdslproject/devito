@@ -19,10 +19,11 @@ from devito.logger import info, perf
 from devito.mpi import MPI
 from devito.operator.profiling import create_profile
 from devito.tools import filter_sorted, flatten, OrderedSet
+from devito.tools.utils import as_tuple
 from devito.types import TimeFunction
 from devito.types.dense import DiscreteFunction, Function
 from devito.types.mlir_types import f32, ptr_of
-
+from examples.seismic.source import PointSource
 from xdsl.printer import Printer
 from xdsl.xdsl_opt_main import xDSLOptMain
 
@@ -57,12 +58,12 @@ class XdslnoopOperator(Cpu64OperatorMixin, CoreOperator):
         Callable.__init__(op, **op.args)
 
         # Header files, etc.
-        op._headers = OrderedSet(*cls._default_headers)
-        op._headers.update(byproduct.headers)
-        op._globals = OrderedSet(*cls._default_globals)
-        op._includes = OrderedSet(*cls._default_includes)
-        op._includes.update(profiler._default_includes)
-        op._includes.update(byproduct.includes)
+        # op._headers = OrderedSet(*cls._default_headers)
+        # op._headers.update(byproduct.headers)
+        # op._globals = OrderedSet(*cls._default_globals)
+        # op._includes = OrderedSet(*cls._default_includes)
+        # op._includes.update(profiler._default_includes)
+        # op._includes.update(byproduct.includes)
 
         # Required for the jit-compilation
         op._compiler = kwargs['compiler']
@@ -94,7 +95,7 @@ class XdslnoopOperator(Cpu64OperatorMixin, CoreOperator):
         op._dtype, op._dspace = irs.clusters.meta
         op._profiler = profiler
         kwargs['xdsl_num_sections'] = len(FindNodes(Section).visit(irs.iet))
-        module = cls._lower_stencil(irs.expressions, **kwargs)
+        module = cls._lower_stencil(expressions, **kwargs)
         op._module = module
 
         return op
@@ -107,8 +108,8 @@ class XdslnoopOperator(Cpu64OperatorMixin, CoreOperator):
         Apply timers to the module
         """
 
-        conv = ExtractDevitoStencilConversion()
-        module = conv.convert(expressions, **kwargs)
+        conv = ExtractDevitoStencilConversion(cls)
+        module = conv.convert(as_tuple(expressions), **kwargs)
         # print(module)
         apply_timers(module, timed=True, **kwargs)
 
@@ -309,9 +310,9 @@ class XdslnoopOperator(Cpu64OperatorMixin, CoreOperator):
         if self._cfunction is None:
             self._cfunction = getattr(self._lib, self.name)
             # Associate a C type to each argument for runtime type check
-            argtypes = self._construct_cfunction_args(self._jit_kernel_constants,
-                                                      get_types=True)
-            self._cfunction.argtypes = argtypes
+            # argtypes = self._construct_cfunction_args(self._jit_kernel_constants,
+            #                                           get_types=True)
+            # self._cfunction.argtypes = argtypes
 
         return self._cfunction
 
@@ -356,26 +357,21 @@ class XdslnoopOperator(Cpu64OperatorMixin, CoreOperator):
                 data = arg._data
                 for t in range(data.shape[0]):
                     args[f'{arg._C_name}{t}'] = data[t, ...].ctypes.data_as(ptr_of(f32))
-            if isinstance(arg, Function):
-                args[f'{arg._C_name}'] = arg._data[...].ctypes.data_as(ptr_of(f32))
+            elif isinstance(arg, Function):
+                args[arg._C_name] = arg._data[...].ctypes.data_as(ptr_of(f32))
+
+            elif isinstance(arg, PointSource):
+                args[arg._C_name] = arg._data[...].ctypes.data_as(ptr_of(f32))
+            else:
+                raise NotImplementedError(f"type {type(arg)} not implemented")
 
         self._jit_kernel_constants.update(args)
 
-    def _construct_cfunction_args(self, args, get_types=False):
-        """
-        Either construct the args for the cfunction, or construct the
-        arg types for it.
-        """
-        ps = {
-            p._C_name: p._C_ctype for p in self.parameters
-        }
+    def _construct_cfunction_types(self, args):
+        ps = {p._C_name: p._C_ctype for p in self.parameters}
 
-        objects = []
         objects_types = []
-
         for name in get_arg_names_from_module(self._module):
-            object = args[name]
-            objects.append(object)
             if name in ps:
                 object_type = ps[name]
                 if object_type == DiscreteFunction._C_ctype:
@@ -383,11 +379,20 @@ class XdslnoopOperator(Cpu64OperatorMixin, CoreOperator):
                 objects_types.append(object_type)
             else:
                 objects_types.append(type(object))
+        return objects_types
 
-        if get_types:
-            return objects_types
-        else:
-            return objects
+    def _construct_cfunction_args(self, args):
+        """
+        Either construct the args for the cfunction, or construct the
+        arg types for it.
+        """
+
+        objects = []
+        for name in get_arg_names_from_module(self._module):
+            object = args[name]
+            objects.append(object)
+
+        return objects
 
 
 class XdslAdvOperator(XdslnoopOperator):

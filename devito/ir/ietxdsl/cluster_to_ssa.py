@@ -366,11 +366,11 @@ class ExtractDevitoStencilConversion:
             apply.res[0],
             self.function_values[self.out_time_buffer],
             stencil.StencilBoundsAttr(zip(lb, ub)),
-            stencil.TempType(len(shape),
-                             element_type=dtype_to_xdsltype(write_function.dtype))
+            stencil.TempType(len(shape), element_type=dtypes_to_xdsltypes[write_function.dtype])
         )
 
         store.temp_with_halo.name_hint = f"{write_function.name}_t{self.out_time_buffer[1]}_temp"  # noqa
+        import pdb; pdb.set_trace() 
         self.temps[self.out_time_buffer] = store.temp_with_halo
 
     def build_generic_step_expression(self, dim: SteppingDimension, eq: LoweredEq):
