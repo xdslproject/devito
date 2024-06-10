@@ -63,3 +63,75 @@ class TestOperatorSimple(object):
         xdsl_norm = norm(u)
 
         assert np.isclose(devito_norm, xdsl_norm, rtol=1e-04).all()
+
+
+class TestTopology(object):
+
+    @pytest.mark.parallel(mode=[2])
+    @pytest.mark.parametrize('shape', [(10, 10, 10)])
+    @pytest.mark.parametrize('to', [2])
+    @pytest.mark.parametrize('nt', [10])
+    def test_topology(self, shape, to, nt):
+
+        grid = Grid(shape=shape)
+        dt = 0.0001
+
+        # Define the wavefield with the size of the model and the time dimension
+        u = TimeFunction(name="u", grid=grid, time_order=to)
+
+        stencil = Eq(u.forward, u + 1)
+        u.data[:, :, :] = 0
+
+        # XDSL Operator
+        xdslop = Operator([stencil], opt='xdsl')
+        topology, _ = xdslop.mpi_shape
+
+        assert topology == (2, 1, 1)
+
+        xdslop.apply(time=nt, dt=dt)
+
+    @pytest.mark.parallel(mode=[4])
+    @pytest.mark.parametrize('shape', [(10, 10, 10)])
+    @pytest.mark.parametrize('to', [2])
+    @pytest.mark.parametrize('nt', [10])
+    def test_topology_4(self, shape, to, nt):
+
+        grid = Grid(shape=shape)
+        dt = 0.0001
+
+        # Define the wavefield with the size of the model and the time dimension
+        u = TimeFunction(name="u", grid=grid, time_order=to)
+
+        stencil = Eq(u.forward, u + 1)
+        u.data[:, :, :] = 0
+
+        # XDSL Operator
+        xdslop = Operator([stencil], opt='xdsl')
+        topology, _ = xdslop.mpi_shape
+
+        assert topology == (2, 2, 1)
+
+        xdslop.apply(time=nt, dt=dt)
+
+    @pytest.mark.parallel(mode=[8])
+    @pytest.mark.parametrize('shape', [(10, 10, 10)])
+    @pytest.mark.parametrize('to', [2])
+    @pytest.mark.parametrize('nt', [10])
+    def test_topology_8(self, shape, to, nt):
+
+        grid = Grid(shape=shape)
+        dt = 0.0001
+
+        # Define the wavefield with the size of the model and the time dimension
+        u = TimeFunction(name="u", grid=grid, time_order=to)
+
+        stencil = Eq(u.forward, u + 1)
+        u.data[:, :, :] = 0
+
+        # XDSL Operator
+        xdslop = Operator([stencil], opt='xdsl')
+        topology, _ = xdslop.mpi_shape
+
+        assert topology == (2, 2, 2)
+
+        xdslop.apply(time=nt, dt=dt)
