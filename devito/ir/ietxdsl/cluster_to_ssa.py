@@ -369,10 +369,9 @@ class ExtractDevitoStencilConversion:
 
         match eq.operation:
             case None:
-                pass
+                memref.Store.get(value, memtemp, ssa_indices)
             case OpInc:
-                value = arith.Addf(value, memref.Load.get(memtemp, ssa_indices).res)
-        memref.Store.get(value, memtemp, ssa_indices)
+                memref.AtomicRMWOp(operands=[value, memtemp, ssa_indices], result_types=[value.type], properties={"kind" : builtin.IntegerAttr(0, builtin.i64)})
 
     def build_condition(self, dim: SteppingDimension, eq: BooleanFunction):
         return self._visit_math_nodes(dim, eq, None)
