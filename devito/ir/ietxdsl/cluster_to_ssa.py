@@ -64,6 +64,7 @@ def field_from_function(f: DiscreteFunction) -> stencil.FieldType:
     bounds = [(-h[0], s+h[1]) for h, s in zip(halo, shape)]
     if isinstance(f, TimeFunction):
         bounds = bounds[1:]
+
     return stencil.FieldType(bounds, element_type=dtypes_to_xdsltypes[f.dtype])
 
 
@@ -104,9 +105,11 @@ class ExtractDevitoStencilConversion:
             raise NotImplementedError(f"Function of type {type(write_function)} not supported")
 
         dims = retrieve_dimensions(eq.lhs.indices)
+
         if not all(isinstance(d, (SteppingDimension, SpaceDimension)) for d in dims):
             self.build_generic_step(step_dim, eq)
-        else:# Get the function carriers of the equation
+        else:
+            # Get the function carriers of the equation
             self.build_stencil_step(step_dim, eq)
 
     def convert_symbol_eq(self, symbol: Symbol, rhs: LoweredEq, **kwargs):
@@ -333,6 +336,7 @@ class ExtractDevitoStencilConversion:
             apply_arg.name_hint = apply_op.name_hint.replace("temp", "blk")
 
         self.apply_temps = {k:v for k,v in zip(read_functions, apply.region.block.args)}
+        # Update the function values with the new temps
         self.function_values |= self.apply_temps
 
         with ImplicitBuilder(apply.region.block):
@@ -355,6 +359,7 @@ class ExtractDevitoStencilConversion:
         self.temps[self.out_time_buffer] = store.temp_with_halo
 
     def build_generic_step_expression(self, dim: SteppingDimension, eq: LoweredEq):
+        # Sources
         value = self._visit_math_nodes(dim, eq.rhs, None)
         temp = self.function_values[self.out_time_buffer]
         memtemp = builtin.UnrealizedConversionCastOp.get([temp], [StencilToMemRefType(temp.type)]).results[0]
@@ -385,6 +390,7 @@ class ExtractDevitoStencilConversion:
                 self.build_generic_step_expression(dim, eq)
                 scf.Yield()
         else:
+            # Build the expression
             self.build_generic_step_expression(dim, eq)
 
     def build_time_loop(
@@ -455,8 +461,10 @@ class ExtractDevitoStencilConversion:
         # Lower equations to their xDSL equivalent
         for eq in eqs:
             if isinstance(eq, Eq):
-                lowered = self.operator._lower_exprs(as_tuple(eq), **kwargs)[0]
-                self._convert_eq(lowered, **kwargs)
+                # Nested lowering? TO re-think approach
+                lowered = self.operator._lower_exprs(as_tuple(eq), **kwargs)
+                for lo in lowered:
+                    self._convert_eq(lo)
             elif isinstance(eq, Injection):
                 lowered = self.operator._lower_exprs(as_tuple(eq), **kwargs)
                 self._lower_injection(lowered)
@@ -559,8 +567,9 @@ class ExtractDevitoStencilConversion:
             functions = OrderedSet()
             for eq in eqs:
                 if isinstance(eq, Eq):
-                    for f in retrieve_functions(eq):
+                    for f in retrieve_function_carriers(eq):
                         functions.add(f.function)
+
                 elif isinstance(eq, Injection):
                     # import pdb; pdb.set_trace()
                     functions.add(eq.field.function)
@@ -571,6 +580,7 @@ class ExtractDevitoStencilConversion:
 
                 else:
                     raise NotImplementedError(f"Expression {eq} of type {type(eq)} not supported")
+
             self.time_buffers : list[TimeFunction] = []
             self.functions : list[Function] = []
             for f in functions:
@@ -603,8 +613,10 @@ class ExtractDevitoStencilConversion:
                 xdsl_func.body.block.args[i].name_hint = f._C_name + str(t)
                 self.function_args[(f, t)] = xdsl_func.body.block.args[i]
             for i, f in enumerate(self.functions):
+                # Sources
                 xdsl_func.body.block.args[len(self.time_buffers)+i].name_hint = f._C_name
                 self.function_args[(f, 0)] = xdsl_func.body.block.args[len(self.time_buffers)+i]
+
 
             self.function_values |= self.function_args
 
@@ -632,6 +644,7 @@ class ExtractDevitoStencilConversion:
         if all(isinstance(val.type, builtin.IntegerAttr) for val in vals):
             return vals
         if all(isinstance(val.type, builtin.IndexType) for val in vals):
+            # Sources
             return vals
         if all(is_float(val) for val in vals):
             return vals
