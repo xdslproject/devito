@@ -567,6 +567,13 @@ class ExtractDevitoStencilConversion:
             functions = OrderedSet()
             for eq in eqs:
                 if isinstance(eq, Eq):
+                    funcs = retrieve_function_carriers(eq)
+                    carriers = retrieve_function_carriers(eq)
+                    try:
+                        assert funcs == carriers
+                    except:
+                        import pdb;pdb.set_trace()
+
                     for f in retrieve_function_carriers(eq):
                         functions.add(f.function)
 
