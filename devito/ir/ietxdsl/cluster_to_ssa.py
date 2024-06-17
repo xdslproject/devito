@@ -29,6 +29,7 @@ from xdsl.pattern_rewriter import (
     PatternRewriteWalker,
     RewritePattern,
     op_type_rewrite_pattern,
+    InsertPoint
 )
 from xdsl.builder import ImplicitBuilder
 from xdsl.transforms.experimental.convert_stencil_to_ll_mlir import StencilToMemRefType
@@ -765,9 +766,9 @@ class MakeFunctionTimed(TimerRewritePattern):
         self.seen_ops.add(op)
 
         # Insert timer start and end calls
-        rewriter.insert_op_at_start([
+        rewriter.insert_op([
             t0 := func.Call('timer_start', [], [builtin.f64])
-        ], op.body.block)
+        ], InsertPoint.at_start(op.body.block))
 
         ret = op.get_return_op()
         assert ret is not None
@@ -778,10 +779,10 @@ class MakeFunctionTimed(TimerRewritePattern):
             llvm.StoreOp(t1, timers),
         ], ret)
 
-        rewriter.insert_op_after_matched_op([
+        rewriter.insert_op([
             func.FuncOp.external('timer_start', [], [builtin.f64]),
-            func.FuncOp.external('timer_end', [builtin.f64], [builtin.f64])
-        ])
+            func.FuncOp.external('timer_end', [builtin.f64], [builtin.f64]),
+        ], InsertPoint.after(rewriter.current_operation))
 
 
 def get_containing_func(op: Operation) -> func.FuncOp | None:
