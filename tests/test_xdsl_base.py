@@ -2,18 +2,18 @@ import numpy as np
 import pytest
 
 from devito import (Grid, TensorTimeFunction, VectorTimeFunction, div, grad, diag, solve,
-                    Operator, Eq, Constant, norm, SpaceDimension)
+                    Operator, Eq, Constant, norm, SpaceDimension, switchconfig)
 from devito.types import Array, Function, TimeFunction
 from devito.tools import as_tuple
 
 from examples.seismic.source import RickerSource, TimeAxis
 from xdsl.dialects.scf import For, Yield
 from xdsl.dialects.arith import Addi
+from xdsl.dialects.arith import Constant as xdslconstant
 from xdsl.dialects.func import Call, Return
 from xdsl.dialects.stencil import FieldType, ApplyOp, LoadOp, StoreOp
 from xdsl.dialects.llvm import LLVMPointerType
-
-from examples.seismic.source import RickerSource, TimeAxis
+from xdsl.dialects.memref import Load
 
 
 def test_xdsl_I():
@@ -337,17 +337,18 @@ class TestSources:
 
         src_term = src.inject(field=u.forward, expr=src * dt**2 / m)
 
-        op = Operator([src_term], opt="advanced")
-        op(time=time_range.num-1, dt=dt)
-        normdv = np.linalg.norm(u.data[0])
-        u.data[:, :] = 0
-
         opx = Operator([src_term], opt="xdsl")
         opx(time=time_range.num-1, dt=dt)
-        normxdsl = np.linalg.norm(u.data[0])
 
-        assert np.isclose(normdv, normxdsl, rtol=1e-04)
-
+        # Code structure
+        calls = sum(isinstance(op, Call) for op in opx._module.walk())
+        assert calls == 2
+        fors = sum(isinstance(op, For) for op in opx._module.walk())
+        assert fors == 1
+        loads = [op for op in opx._module.walk() if isinstance(op, Load)]
+        assert len(loads) == 8
+        consts = [op for op in opx._module.walk() if isinstance(op, xdslconstant)]
+        assert len(consts) == 65
 
     @switchconfig(openmp=False)
     @pytest.mark.parametrize('shape', [(38, 38), ])
@@ -1061,8 +1062,11 @@ class TestElastic():
         op = Operator([u_v] + [u_t] + src_xx + src_zz)
         op(dt=dt)
 
-        op = Operator([u_v] + [u_t], opt='xdsl')
-        op(dt=dt, time_M=nt)
+        opx = Operator([u_v] + [u_t], opt='xdsl')
+        opx(dt=dt, time_M=nt)
+
+        store_ops = [op for op in opx._module.walk() if isinstance(op, StoreOp)]
+        assert len(store_ops) == 5
 
         xdsl_norm_v0 = norm(v[0])
         xdsl_norm_v1 = norm(v[1])

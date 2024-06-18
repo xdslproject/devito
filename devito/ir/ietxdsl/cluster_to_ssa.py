@@ -1,3 +1,4 @@
+from functools import reduce
 # ------------- General imports -------------#
 
 from typing import Any, Iterable
@@ -454,7 +455,9 @@ class ExtractDevitoStencilConversion:
         )
 
         # Name the 'time' step iterator
-        loop.body.block.args[0].name_hint = step_dim.root.name  # 'time'
+        loop.body.block.args[0].name_hint = "time"
+        # Store for later reference
+        self.symbol_values["time"] = loop.body.block.args[0]
 
         # Store a mapping from time_buffers to their corresponding block
         # arguments for easier access later.
@@ -586,14 +589,10 @@ class ExtractDevitoStencilConversion:
             functions = OrderedSet()
             for eq in eqs:
                 if isinstance(eq, Eq):
-                    funcs = retrieve_function_carriers(eq)
-                    carriers = retrieve_function_carriers(eq)
-                    try:
-                        assert funcs == carriers
-                    except:
-                        import pdb;pdb.set_trace()
+                    # Use funcs not carriers
+                    funcs = retrieve_functions(eq)
 
-                    for f in retrieve_function_carriers(eq):
+                    for f in funcs:
                         functions.add(f.function)
 
                 elif isinstance(eq, Injection):
@@ -868,17 +867,6 @@ class _LowerLoadSymbolicToFuncArgs(RewritePattern):
 
         rewriter.erase_matched_op()
         parent.update_function_type()
-
-
-def apply_timers(module, **kwargs):
-    """
-    Apply timers to a module
-    """
-    if kwargs['xdsl_num_sections'] < 1:
-        return
-    name = kwargs.get("name", "Kernel")
-    grpa = GreedyRewritePatternApplier([MakeFunctionTimed(name)])
-    PatternRewriteWalker(grpa, walk_regions_first=True).rewrite_module(module)
 
 
 def finalize_module_with_globals(module: builtin.ModuleOp, known_symbols: dict[str, Any],
