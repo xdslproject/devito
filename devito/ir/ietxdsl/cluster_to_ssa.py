@@ -572,8 +572,8 @@ class ExtractDevitoStencilConversion:
                     carriers = retrieve_function_carriers(eq)
                     try:
                         assert funcs == carriers
-                    except:
-                        import pdb;pdb.set_trace()
+                    except AssertionError:
+                        raise AssertionError(f"Function carriers {carriers} do not match functions {funcs}")  # noqa
 
                     for f in retrieve_function_carriers(eq):
                         functions.add(f.function)
