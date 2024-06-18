@@ -347,7 +347,6 @@ class TestSources:
 
         assert np.isclose(normdv, normxdsl, rtol=1e-04)
 
-
     @switchconfig(openmp=False)
     @pytest.mark.parametrize('shape', [(38, 38), ])
     @pytest.mark.parametrize('tn', [20, 80])
