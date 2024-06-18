@@ -568,14 +568,10 @@ class ExtractDevitoStencilConversion:
             functions = OrderedSet()
             for eq in eqs:
                 if isinstance(eq, Eq):
-                    funcs = retrieve_function_carriers(eq)
-                    carriers = retrieve_function_carriers(eq)
-                    try:
-                        assert funcs == carriers
-                    except AssertionError:
-                        raise AssertionError(f"Function carriers {carriers} do not match functions {funcs}")  # noqa
+                    # Use funcs not carriers
+                    funcs = retrieve_functions(eq)
 
-                    for f in retrieve_function_carriers(eq):
+                    for f in funcs:
                         functions.add(f.function)
 
                 elif isinstance(eq, Injection):
