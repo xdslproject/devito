@@ -1,0 +1,42 @@
+name: CI - lit-based Testing
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+on:
+  # Trigger the workflow on push or pull request,
+  # but only for the master branch
+  push:
+    branches:
+      - master
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container: papychacal/xdsl-llvm:98e674c9f16d677d95c67bc130e267fae331e43c
+    steps:
+    - name: Checkout Devito
+      uses: actions/checkout@v3
+
+    - name: Install native dependencies
+      run: |
+        apt-get update && apt install curl mpich -y
+
+    - name: Upgrade pip
+      run: |
+        pip install --upgrade pip
+
+    - name: Install requirements and xDSL
+      run: |
+        pip install -e .[tests]
+        pip install mpi4py
+        pip install git+https://github.com/xdslproject/xdsl@f8bb935880276cf077e0a80f1905105d0a98eb33
+
+    - name: Execute lit tests
+      run: |
+        export PYTHONPATH=$(pwd)
+        export PATH=/xdsl-sc/llvm-project/build/bin/:$PATH
+        lit -v tests/filecheck/

@@ -5,4 +5,5 @@ codecov
 flake8>=2.1.0
 nbval
 scipy
+lit<19.0.0
 pooch; python_version >= "3.8"

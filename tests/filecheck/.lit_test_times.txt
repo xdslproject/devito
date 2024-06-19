@@ -1,0 +1,3 @@
+3.295047e-01 example.mlir
+3.190060e-01 shape_inference.mlir
+5.976017e-01 xdsl_pipeline.mlir

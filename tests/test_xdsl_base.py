@@ -8,7 +8,7 @@ from devito.tools import as_tuple
 
 from examples.seismic.source import RickerSource, TimeAxis
 from xdsl.dialects.scf import For, Yield
-from xdsl.dialects.arith import Addi
+from xdsl.dialects.arith import Addi, Addf, Mulf
 from xdsl.dialects.arith import Constant as xdslconstant
 from xdsl.dialects.func import Call, Return
 from xdsl.dialects.stencil import FieldType, ApplyOp, LoadOp, StoreOp
@@ -22,8 +22,12 @@ def test_xdsl_I():
     u = TimeFunction(name='u', grid=grid)
 
     eq = Eq(u.forward, u + 1)
-    op = Operator([eq], opt='xdsl')
-    op.apply(time_M=1)
+    opx = Operator([eq], opt='xdsl')
+    opx.apply(time_M=1)
+
+    assert len([op for op in opx._module.walk() if isinstance(op, Addi)]) == 1
+    assert len([op for op in opx._module.walk() if isinstance(op, Addf)]) == 1
+
     assert (u.data[1, :] == 1.).all()
     assert (u.data[0, :] == 2.).all()
 
@@ -89,8 +93,11 @@ def test_diffusion_2D():
     f2 = TimeFunction(name='f2', grid=grid, space_order=2)
     f2.data[:] = 1
     eqn = Eq(f2.dt, 0.5 * f2.laplace)
-    op = Operator(Eq(f2.forward, solve(eqn, f2.forward)), opt='xdsl')
-    op.apply(time_M=1, dt=0.1)
+    opx = Operator(Eq(f2.forward, solve(eqn, f2.forward)), opt='xdsl')
+    opx.apply(time_M=1, dt=0.1)
+
+    assert len([op for op in opx._module.walk() if isinstance(op, Addf)]) == 6
+    assert len([op for op in opx._module.walk() if isinstance(op, Mulf)]) == 12
 
     assert np.isclose(f.data, f2.data, rtol=1e-06).all()
 
