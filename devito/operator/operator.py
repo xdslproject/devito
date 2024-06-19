@@ -271,6 +271,7 @@ class Operator(Callable):
     def _rcompile_wrapper(cls, **kwargs0):
         def wrapper(expressions, **kwargs1):
             return rcompile(expressions, {**kwargs0, **kwargs1})
+
         return wrapper
 
     @classmethod
@@ -837,7 +838,6 @@ class Operator(Callable):
 
         # Invoke kernel function with args
         arg_values = [args[p.name] for p in self.parameters]
-
         try:
             cfunction = self.cfunction
             with self._profiler.timer_on('apply', comm=args.comm):

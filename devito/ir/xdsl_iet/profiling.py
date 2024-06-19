@@ -1,7 +1,7 @@
 
 from dataclasses import dataclass, field
 
-from devito.ir.ietxdsl import iet_ssa
+from devito.ir.xdsl_iet import iet_ssa
 from xdsl.dialects import builtin, func, llvm
 
 from xdsl.pattern_rewriter import (RewritePattern, op_type_rewrite_pattern,

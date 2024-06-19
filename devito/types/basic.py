@@ -1366,7 +1366,6 @@ class IndexedBase(sympy.IndexedBase, Basic, Pickable):
 
 
 class IndexedData(IndexedBase):
-
     pass
 
 
