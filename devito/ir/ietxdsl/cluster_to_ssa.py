@@ -1,4 +1,6 @@
 from functools import reduce
+import numpy as np
+
 # ------------- General imports -------------#
 
 from typing import Any, Iterable
@@ -45,19 +47,14 @@ from devito.types.mlir_types import dtype_to_xdsltype
 
 # ------------- devito-xdsl SSA imports -------------#
 from devito.ir.ietxdsl import iet_ssa
-from devito.ir.ietxdsl.utils import is_int, is_float
-import numpy as np
+from devito.ir.ietxdsl.utils import is_int, is_float, dtypes_to_xdsltypes
+from devito.types.mlir_types import f32, ptr_of
+
 
 from examples.seismic.source import PointSource
 from tests.test_interpolation import points
 from tests.test_timestepping import d
 
-dtypes_to_xdsltypes = {
-    np.float32: builtin.f32,
-    np.float64: builtin.f64,
-    np.int32: builtin.i32,
-    np.int64: builtin.i64,
-}
 
 # flake8: noqa
 
@@ -72,6 +69,27 @@ def field_from_function(f: DiscreteFunction) -> stencil.FieldType:
 
     return stencil.FieldType(bounds, element_type=dtypes_to_xdsltypes[f.dtype])
 
+
+def setup_memref_args(functions):
+    """
+    Add memrefs to args dictionary so they can be passed to the cfunction
+    """
+    args = dict()
+    for arg in functions:
+        # For every TimeFunction add memref
+        if isinstance(arg, TimeFunction):
+            data = arg._data
+            for t in range(data.shape[0]):
+                args[f'{arg._C_name}{t}'] = data[t, ...].ctypes.data_as(ptr_of(f32))
+        elif isinstance(arg, Function):
+            args[arg._C_name] = arg._data[...].ctypes.data_as(ptr_of(f32))
+
+        elif isinstance(arg, PointSource):
+            args[arg._C_name] = arg._data[...].ctypes.data_as(ptr_of(f32))
+        else:
+            raise NotImplementedError(f"type {type(arg)} not implemented")
+
+    return args
 
 class ExtractDevitoStencilConversion:
     """

@@ -19,21 +19,18 @@ from devito.logger import info, perf
 from devito.mpi import MPI
 from devito.operator.profiling import create_profile
 from devito.tools import filter_sorted, flatten, as_tuple
-from devito.types import TimeFunction
-from devito.types.dense import DiscreteFunction, Function
-from devito.types.mlir_types import f32, ptr_of
 
 from xdsl.printer import Printer
 from xdsl.xdsl_opt_main import xDSLOptMain
 
 from devito.ir.ietxdsl.cluster_to_ssa import (ExtractDevitoStencilConversion,
-                                              finalize_module_with_globals)  # noqa
+                                              finalize_module_with_globals,
+                                              setup_memref_args)  # noqa
 
 from devito.ir.ietxdsl.profiling import apply_timers
 from devito.passes.iet import CTarget, OmpTarget
 from devito.core.cpu import Cpu64OperatorMixin
 
-from examples.seismic.source import PointSource
 
 __all__ = ['XdslnoopOperator', 'XdslAdvOperator']
 
@@ -304,7 +301,7 @@ class XdslnoopOperator(Cpu64OperatorMixin, CoreOperator):
                                                            suffix=".o", delete=delete)
             self._make_interop_o()
             self._jit_compile()
-            self.setup_memref_args()
+            self._jit_kernel_constants.update(setup_memref_args(self.functions))
             self._lib = self._compiler.load(self._tf.name)
             self._lib.name = self._tf.name
 
@@ -347,35 +344,15 @@ class XdslnoopOperator(Cpu64OperatorMixin, CoreOperator):
 
         return stdout
 
-    def setup_memref_args(self):
-        """
-        Add memrefs to args dictionary so they can be passed to the cfunction
-        """
-        args = dict()
-        for arg in self.functions:
-            # For every TimeFunction add memref
-            if isinstance(arg, TimeFunction):
-                data = arg._data
-                for t in range(data.shape[0]):
-                    args[f'{arg._C_name}{t}'] = data[t, ...].ctypes.data_as(ptr_of(f32))
-            elif isinstance(arg, Function):
-                args[arg._C_name] = arg._data[...].ctypes.data_as(ptr_of(f32))
-
-            elif isinstance(arg, PointSource):
-                args[arg._C_name] = arg._data[...].ctypes.data_as(ptr_of(f32))
-            else:
-                raise NotImplementedError(f"type {type(arg)} not implemented")
-
-        self._jit_kernel_constants.update(args)
-
     def _construct_cfunction_types(self, args):
+        # Unused, maybe drop
         ps = {p._C_name: p._C_ctype for p in self.parameters}
 
         objects_types = []
         for name in get_arg_names_from_module(self._module):
             if name in ps:
                 object_type = ps[name]
-                if object_type == DiscreteFunction._C_ctype:
+                if object_type == DiscreteFunction._C_ctype:  # noqa
                     object_type = dict(object_type._type_._fields_)['data']
                 objects_types.append(object_type)
             else:
