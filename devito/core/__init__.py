@@ -4,7 +4,6 @@ from devito.core.cpu import (Cpu64NoopCOperator, Cpu64NoopOmpOperator,
                              Cpu64FsgCOperator, Cpu64FsgOmpOperator,
                              Cpu64CustomOperator)
 
-from devito.core.cpu_xdsl import XdslnoopOperator, XdslAdvOperator
 from devito.core.intel import (Intel64AdvCOperator, Intel64AdvOmpOperator,
                                Intel64FsgCOperator, Intel64FsgOmpOperator)
 from devito.core.arm import ArmAdvCOperator, ArmAdvOmpOperator
@@ -12,9 +11,12 @@ from devito.core.power import PowerAdvCOperator, PowerAdvOmpOperator
 from devito.core.gpu import (DeviceNoopOmpOperator, DeviceNoopAccOperator,
                              DeviceAdvOmpOperator, DeviceAdvAccOperator,
                              DeviceFsgOmpOperator, DeviceFsgAccOperator,
-                             DeviceCustomOmpOperator, DeviceCustomAccOperator,
-                             XdslAdvDeviceOperator)
+                             DeviceCustomOmpOperator, DeviceCustomAccOperator)
 from devito.operator.registry import operator_registry
+
+# Import XDSL Operators
+from devito.xdsl_core.xdsl_cpu import XdslnoopOperator, XdslAdvOperator
+from devito.xdsl_core.xdsl_gpu import XdslAdvDeviceOperator
 
 # Register CPU Operators
 operator_registry.add(Cpu64CustomOperator, Cpu64, 'custom', 'C')

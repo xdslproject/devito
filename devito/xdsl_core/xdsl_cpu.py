@@ -9,8 +9,6 @@ import tempfile
 
 from io import StringIO
 
-from typing import Iterable
-
 from devito.core.operator import CoreOperator
 from devito.ir.iet import Callable, MetaCall
 from devito.ir.iet.nodes import Section
@@ -23,13 +21,14 @@ from devito.tools import filter_sorted, flatten, as_tuple
 from xdsl.printer import Printer
 from xdsl.xdsl_opt_main import xDSLOptMain
 
-from devito.ir.ietxdsl.cluster_to_ssa import (ExtractDevitoStencilConversion,
-                                              finalize_module_with_globals,
-                                              setup_memref_args)  # noqa
+from devito.ir.xdsl_iet.cluster_to_ssa import (ExtractDevitoStencilConversion,
+                                               finalize_module_with_globals,
+                                               setup_memref_args)  # noqa
 
-from devito.ir.ietxdsl.profiling import apply_timers
+from devito.ir.xdsl_iet.profiling import apply_timers
 from devito.passes.iet import CTarget, OmpTarget
 from devito.core.cpu import Cpu64OperatorMixin
+from devito.xdsl_core.utils import generate_pipeline, generate_mlir_pipeline
 
 
 __all__ = ['XdslnoopOperator', 'XdslAdvOperator']
@@ -636,17 +635,6 @@ def generate_XDSL_MPI_PIPELINE(decomp, nb_tiled_dims):
     ]
 
     return generate_pipeline(passes)
-
-
-def generate_pipeline(passes: Iterable[str]):
-    'Generate a pipeline string from a list of passes'
-    passes_string = ",".join(passes)
-    return f'"{passes_string}"'
-
-
-def generate_mlir_pipeline(passes: Iterable[str]):
-    passes_string = ",".join(passes)
-    return f'mlir-opt[{passes_string}]'
 
 
 # small interop shim script for stuff that we don't want to implement in mlir-ir
