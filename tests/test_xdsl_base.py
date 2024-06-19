@@ -2,17 +2,18 @@ import numpy as np
 import pytest
 
 from devito import (Grid, TensorTimeFunction, VectorTimeFunction, div, grad, diag, solve,
-                    Operator, Eq, Constant, norm, SpaceDimension)
+                    Operator, Eq, Constant, norm, SpaceDimension, switchconfig)
 from devito.types import Array, Function, TimeFunction
 from devito.tools import as_tuple
 
+from examples.seismic.source import RickerSource, TimeAxis
 from xdsl.dialects.scf import For, Yield
 from xdsl.dialects.arith import Addi
+from xdsl.dialects.arith import Constant as xdslconstant
 from xdsl.dialects.func import Call, Return
 from xdsl.dialects.stencil import FieldType, ApplyOp, LoadOp, StoreOp
 from xdsl.dialects.llvm import LLVMPointerType
-
-from examples.seismic.source import RickerSource, TimeAxis
+from xdsl.dialects.memref import Load
 
 
 def test_xdsl_I():
@@ -249,6 +250,160 @@ def test_standard_mlir_rewrites(shape, so, to, nt):
     # XDSL Operator
     xdslop = Operator([stencil], opt='xdsl')
     xdslop.apply(time=nt, dt=dt)
+
+
+class TestSources:
+
+    @switchconfig(openmp=False)
+    @pytest.mark.parametrize('shape', [(8, 8), (38, 38), ])
+    @pytest.mark.parametrize('tn', [20, 80])
+    @pytest.mark.parametrize('factor', [-0.1, 0.0, 0.1, 0.5, 1.1])
+    @pytest.mark.parametrize('factor2', [-0.1, 0.1, 0.5, 1.1])
+    def test_source_only(self, shape, tn, factor, factor2):
+        spacing = (10.0, 10.0)
+        extent = tuple(np.array(spacing) * (shape[0] - 1))
+        origin = (0.0, 0.0)
+
+        v = np.empty(shape, dtype=np.float32)
+        v[:, :51] = 1.5
+        v[:, 51:] = 2.5
+
+        grid = Grid(shape=shape, extent=extent, origin=origin)
+
+        t0 = 0.0
+        # Comes from args
+        tn = tn
+        dt = 1.6
+        time_range = TimeAxis(start=t0, stop=tn, step=dt)
+
+        f0 = 0.010
+        src = RickerSource(name="src", grid=grid, f0=f0, npoint=5, time_range=time_range)
+
+        domain_size = np.array(extent)
+
+        src.coordinates.data[0, :] = domain_size * factor
+        src.coordinates.data[0, -1] = 19.0 * factor2
+
+        u = TimeFunction(name="u", grid=grid, space_order=2)
+        m = Function(name='m', grid=grid)
+        m.data[:] = 1./(v*v)
+
+        src_term = src.inject(field=u.forward, expr=src * dt**2 / m)
+
+        op = Operator([src_term], opt="advanced")
+        op(time=time_range.num-1, dt=dt)
+        normdv = np.linalg.norm(u.data[0])
+        u.data[:, :] = 0
+
+        opx = Operator([src_term], opt="xdsl")
+        opx(time=time_range.num-1, dt=dt)
+        normxdsl = np.linalg.norm(u.data[0])
+
+        assert np.isclose(normdv, normxdsl, rtol=1e-04)
+
+    @switchconfig(openmp=False)
+    @pytest.mark.parametrize('shape', [(8, 8)])
+    @pytest.mark.parametrize('tn', [20, 80])
+    @pytest.mark.parametrize('factor', [-0.1, 0.0, 0.1, 0.5, 1.1])
+    @pytest.mark.parametrize('factor2', [-0.1, 0.1, 0.5, 1.1])
+    def test_source_structure(self, shape, tn, factor, factor2):
+        spacing = (10.0, 10.0)
+        extent = tuple(np.array(spacing) * (shape[0] - 1))
+        origin = (0.0, 0.0)
+
+        v = np.empty(shape, dtype=np.float32)
+        v[:, :51] = 1.5
+        v[:, 51:] = 2.5
+
+        grid = Grid(shape=shape, extent=extent, origin=origin)
+
+        t0 = 0.0
+        # Comes from args
+        tn = tn
+        dt = 1.6
+        time_range = TimeAxis(start=t0, stop=tn, step=dt)
+
+        f0 = 0.010
+        src = RickerSource(name="src", grid=grid, f0=f0, npoint=5, time_range=time_range)
+
+        domain_size = np.array(extent)
+
+        src.coordinates.data[0, :] = domain_size * factor
+        src.coordinates.data[0, -1] = 19.0 * factor2
+
+        u = TimeFunction(name="u", grid=grid, space_order=2)
+        m = Function(name='m', grid=grid)
+        m.data[:] = 1./(v*v)
+
+        src_term = src.inject(field=u.forward, expr=src * dt**2 / m)
+
+        opx = Operator([src_term], opt="xdsl")
+        opx(time=time_range.num-1, dt=dt)
+
+        # Code structure
+        calls = sum(isinstance(op, Call) for op in opx._module.walk())
+        assert calls == 2
+        fors = sum(isinstance(op, For) for op in opx._module.walk())
+        assert fors == 1
+        loads = [op for op in opx._module.walk() if isinstance(op, Load)]
+        assert len(loads) == 8
+        consts = [op for op in opx._module.walk() if isinstance(op, xdslconstant)]
+        assert len(consts) == 65
+
+    @switchconfig(openmp=False)
+    @pytest.mark.parametrize('shape', [(38, 38), ])
+    @pytest.mark.parametrize('tn', [20, 80])
+    @pytest.mark.parametrize('factor', [0.5, 0.8])
+    @pytest.mark.parametrize('factor2', [0.5, 0.8])
+    def test_forward_src_stencil(self, shape, tn, factor, factor2):
+        spacing = (10.0, 10.0)
+        extent = tuple(np.array(spacing) * (shape[0] - 1))
+        origin = (0.0, 0.0)
+
+        v = np.empty(shape, dtype=np.float32)
+        v[:, :51] = 1.5
+        v[:, 51:] = 2.5
+
+        grid = Grid(shape=shape, extent=extent, origin=origin)
+
+        t0 = 0.0
+        # Comes from args
+        tn = tn
+        dt = 1.6
+        time_range = TimeAxis(start=t0, stop=tn, step=dt)
+
+        f0 = 0.010
+        src = RickerSource(name="src", grid=grid, f0=f0, npoint=5, time_range=time_range)
+
+        domain_size = np.array(extent)
+
+        src.coordinates.data[0, :] = domain_size * factor
+        src.coordinates.data[0, -1] = 100.0 * factor2
+
+        u = TimeFunction(name="u", grid=grid, space_order=2, time_order=2)
+        m = Function(name='m', grid=grid)
+        m.data[:] = 1./(v*v)
+
+        src_term = src.inject(field=u.forward, expr=src * dt**2 / m)
+
+        pde = u.dt2 - u.laplace
+        eq0 = solve(pde, u.forward)
+        stencil = Eq(u.forward, eq0)
+
+        op = Operator([stencil, src_term], opt="advanced")
+        op(time=time_range.num-1, dt=dt)
+        # normdv = norm(u)
+        normdv = np.linalg.norm(u.data)
+
+        u.data[:, :] = 0
+
+        opx = Operator([stencil, src_term], opt="xdsl")
+        opx(time=time_range.num-1, dt=dt)
+        normxdsl = np.linalg.norm(u.data)
+        # normxdsl = norm(u)
+
+        assert not np.isclose(normdv, 0.0, rtol=1e-04)
+        assert np.isclose(normdv, normxdsl, rtol=1e-04)
 
 
 def test_xdsl_mul_eqs_I():
@@ -907,8 +1062,11 @@ class TestElastic():
         op = Operator([u_v] + [u_t] + src_xx + src_zz)
         op(dt=dt)
 
-        op = Operator([u_v] + [u_t], opt='xdsl')
-        op(dt=dt, time_M=nt)
+        opx = Operator([u_v] + [u_t], opt='xdsl')
+        opx(dt=dt, time_M=nt)
+
+        store_ops = [op for op in opx._module.walk() if isinstance(op, StoreOp)]
+        assert len(store_ops) == 5
 
         xdsl_norm_v0 = norm(v[0])
         xdsl_norm_v1 = norm(v[1])
