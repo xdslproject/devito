@@ -14,6 +14,10 @@ from devito.core.gpu import (DeviceNoopOmpOperator, DeviceNoopAccOperator,
                              DeviceCustomOmpOperator, DeviceCustomAccOperator)
 from devito.operator.registry import operator_registry
 
+# Import XDSL Operators
+from devito.xdsl_core.xdsl_cpu import XdslnoopOperator, XdslAdvOperator
+from devito.xdsl_core.xdsl_gpu import XdslAdvDeviceOperator
+
 # Register CPU Operators
 operator_registry.add(Cpu64CustomOperator, Cpu64, 'custom', 'C')
 operator_registry.add(Cpu64CustomOperator, Cpu64, 'custom', 'openmp')
@@ -54,3 +58,11 @@ operator_registry.add(DeviceAdvAccOperator, Device, 'advanced', 'openacc')
 operator_registry.add(DeviceFsgOmpOperator, Device, 'advanced-fsg', 'C')
 operator_registry.add(DeviceFsgOmpOperator, Device, 'advanced-fsg', 'openmp')
 operator_registry.add(DeviceFsgAccOperator, Device, 'advanced-fsg', 'openacc')
+
+# Register XDSL Operators
+operator_registry.add(XdslnoopOperator, Cpu64, 'xdsl-noop', 'C')
+operator_registry.add(XdslAdvOperator, Cpu64, 'xdsl-noop', 'openmp')
+
+operator_registry.add(XdslAdvOperator, Cpu64, 'xdsl', 'C')
+operator_registry.add(XdslAdvOperator, Cpu64, 'xdsl', 'openmp')
+operator_registry.add(XdslAdvDeviceOperator, Device, 'xdsl', 'openacc')

@@ -19,6 +19,9 @@ from devito.passes.iet import DeviceOmpTarget
 from devito.xdsl_core.utils import generate_pipeline, generate_mlir_pipeline
 
 
+__all__ = ['XdslAdvDeviceOperator']
+
+
 class XdslAdvDeviceOperator(XdslAdvOperator):
 
     _Target = DeviceOmpTarget

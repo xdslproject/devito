@@ -22,7 +22,8 @@ from xdsl.printer import Printer
 from xdsl.xdsl_opt_main import xDSLOptMain
 
 from devito.ir.xdsl_iet.cluster_to_ssa import (ExtractDevitoStencilConversion,
-                                              finalize_module_with_globals)  # noqa
+                                               finalize_module_with_globals,
+                                               setup_memref_args)  # noqa
 
 from devito.ir.xdsl_iet.profiling import apply_timers
 from devito.passes.iet import CTarget, OmpTarget
