@@ -1,3 +1,13 @@
 3.295047e-01 example.mlir
-3.190060e-01 shape_inference.mlir
-5.976017e-01 xdsl_pipeline.mlir
+3.913834e-01 shape_inference.mlir
+6.140559e-01 xdsl_pipeline.mlir
+4.248352e-01 xdsl_mpi_pipeline.mlir
+-3.151250e-01 xdsl_mpi_pipeline copy 2.mlir
+-3.891385e-01 xdsl_mpi_pipeline copy 3.mlir
+-2.953565e-01 xdsl_mpi_pipeline copy 4.mlir
+-2.704916e-01 xdsl_mpi_pipeline copy 5.mlir
+-3.050661e-01 xdsl_mpi_pipeline copy 6.mlir
+4.297736e-01 xdsl_mpi_pipeline_b.mlir
+8.846741e-01 xdsl_mpi_pipeline_c.mlir
+9.084816e-01 xdsl_mpi_pipeline_d.mlir
+9.922724e-01 xdsl_mpi_pipeline_e.mlir
