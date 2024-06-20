@@ -9,6 +9,8 @@ from examples.seismic.source import RickerSource, TimeAxis
 
 import numpy as np
 
+# flake8: noqa
+
 if __name__ == "__main__":
 
     shape = (101, 101)

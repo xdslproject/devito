@@ -32,11 +32,9 @@ jobs:
     - name: Install requirements and xDSL
       run: |
         pip install -e .[tests]
-        pip install mpi4py
         pip install git+https://github.com/xdslproject/xdsl@f8bb935880276cf077e0a80f1905105d0a98eb33
 
     - name: Execute lit tests
       run: |
-        export PYTHONPATH=$(pwd)
         export PATH=/xdsl-sc/llvm-project/build/bin/:$PATH
         lit -v tests/filecheck/
