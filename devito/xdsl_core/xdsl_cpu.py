@@ -501,7 +501,6 @@ class XdslAdvOperator(XdslnoopOperator):
                 # mlir-translate to translate to LLVM-IR
                 mlir_translate_cmd = 'mlir-translate --mlir-to-llvmir'
                 out = self.compile(mlir_translate_cmd, out2.getvalue())
-
                 # Compile with clang and get LLVM-IR
                 clang_cmd = f'{cc} {cflags} -o {self._tf.name} {self._interop_tf.name} -xir -'  # noqa
                 out = self.compile(clang_cmd, out)
