@@ -321,7 +321,7 @@ class ExtractDevitoStencilConversion:
         Returns:
             None
         """
-        read_functions = set()
+        read_functions = OrderedSet()
         for f in retrieve_function_carriers(eq.rhs):
             if isinstance(f.function, PointSource):
                 time_offset = 0
