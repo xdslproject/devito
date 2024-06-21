@@ -395,8 +395,7 @@ class XdslAdvOperator(XdslnoopOperator):
                 raise RuntimeError("Cannot run OMP+GPU!")
 
             # specialize the code for the specific apply parameters
-            finalize_module_with_globals(self._module, self._jit_kernel_constants,
-                                         gpu_boilerplate=is_gpu)
+            finalize_module_with_globals(self._module, self._jit_kernel_constants)
 
             # print module as IR
             module_str = StringIO()
