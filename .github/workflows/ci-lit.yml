@@ -42,4 +42,5 @@ jobs:
     - name: Execute lit tests
       run: |
         export PATH=/xdsl-sc/llvm-project/build/bin/:$PATH
+        export PYTHONPATH=$(pwd):$PYTHONPATH
         lit -v tests/filecheck/

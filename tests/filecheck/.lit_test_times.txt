@@ -1,0 +1,8 @@
+3.982296e+00 elastic.py
+2.302151e-01 shape_inference.mlir
+2.383659e-01 xdsl_mpi_pipeline.mlir
+2.410605e-01 xdsl_mpi_pipeline_b.mlir
+4.511077e-01 xdsl_mpi_pipeline_c.mlir
+4.622371e-01 xdsl_mpi_pipeline_d.mlir
+4.970684e-01 xdsl_mpi_pipeline_e.mlir
+3.136935e-01 xdsl_pipeline.mlir
