@@ -28,6 +28,11 @@ jobs:
       run: |
         apt-get update && apt install curl mpich -y
 
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: 3.10
+
     - name: Upgrade pip
       run: |
         pip install --upgrade pip
