@@ -39,7 +39,7 @@ class XdslAdvDeviceOperator(XdslAdvOperator):
 
             if is_mpi and is_gpu:
                 raise RuntimeError("Cannot run MPI+GPU for now!")
-            
+
             # specialize the code for the specific apply parameters
             finalize_module_with_globals(self._module, self._jit_kernel_constants,
                                          self.name)
