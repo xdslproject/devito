@@ -42,7 +42,7 @@ class XdslAdvDeviceOperator(XdslAdvOperator):
 
             # specialize the code for the specific apply parameters
             finalize_module_with_globals(self._module, self._jit_kernel_constants,
-                                         gpu_boilerplate=is_gpu)
+                                         self.name)
 
             # print module as IR
             module_str = StringIO()

@@ -770,8 +770,8 @@ class WrapFunctionWithTransfers(GPURewritePattern):
         for arg in wrapper.args:
             shapetype = arg.type
             if isinstance(shapetype, stencil.FieldType):              
-                memref_type = memref.MemRefType.from_element_type_and_shape(shapetype.get_element_type(), shapetype.get_shape())
-                alloc = gpu.AllocOp(memref.MemRefType.from_element_type_and_shape(shapetype.get_element_type(), shapetype.get_shape()))
+                memref_type = memref.MemRefType(shapetype.get_element_type(), shapetype.get_shape())
+                alloc = gpu.AllocOp(memref.MemRefType(shapetype.get_element_type(), shapetype.get_shape()))
                 outcast = UnrealizedConversionCastOp.get(alloc, shapetype)
                 arg.replace_by(outcast.results[0])
                 incast = UnrealizedConversionCastOp.get(arg, memref_type)
@@ -852,7 +852,7 @@ class _LowerLoadSymbolicToFuncArgs(RewritePattern):
 
 
 def finalize_module_with_globals(module: ModuleOp, known_symbols: dict[str, Any],
-                                 gpu_boilerplate):
+                                 gpu_kernel_name : str | None = None):
     """
     This function finalizes a module by replacing all symbolic constants with their
     values in the module. This is necessary to have a complete module that can be
@@ -864,8 +864,9 @@ def finalize_module_with_globals(module: ModuleOp, known_symbols: dict[str, Any]
     ]
     rewriter = GreedyRewritePatternApplier(patterns)
     PatternRewriteWalker(rewriter).rewrite_module(module)
-
     # GPU boilerplate
-    if gpu_boilerplate:
-        walker = PatternRewriteWalker(GreedyRewritePatternApplier([WrapFunctionWithTransfers('apply_kernel')]))  # noqa
+    if gpu_kernel_name:
+        walker = PatternRewriteWalker(
+            GreedyRewritePatternApplier([WrapFunctionWithTransfers(gpu_kernel_name)])
+        )  # noqa
         walker.rewrite_module(module)
