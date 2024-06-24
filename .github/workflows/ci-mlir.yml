@@ -28,11 +28,6 @@ jobs:
       run: |
         apt-get update && apt install curl mpich -y
 
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.10'
-
     - name: Upgrade pip
       run: |
         pip install --upgrade pip
@@ -40,7 +35,6 @@ jobs:
     - name: Install requirements and xDSL
       run: |
         pip install -e .[tests]
-        pip install mpi4py
         pip install git+https://github.com/xdslproject/xdsl@f8bb935880276cf077e0a80f1905105d0a98eb33
         
     - name: Test no-MPI, no-Openmp
