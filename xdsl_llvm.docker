@@ -4,7 +4,8 @@ ARG mlirhash=98e674c9f16d677d95c67bc130e267fae331e43c
 
 # base requirements
 RUN apt-get update \
- && apt-get install --yes --no-install-recommends git cmake build-essential ca-certificates ninja-build clang lld python3.10-dev pip \
+ && apt-get install --yes --no-install-recommends git cmake build-essential \
+ && apt-get install --yes ca-certificates ninja-build clang lld python3 python3-dev python3-pip python3-venv pip \
  && apt-get install --yes libstdc++-12-dev binutils-dev
 
 WORKDIR /xdsl-sc
@@ -31,3 +32,10 @@ RUN git init llvm-project \
  && ninja install \
  && cd ../../ \
  && rm -rf llvm-project
+
+
+
+# Build dockerfile
+# Example name: <gbisbas/llvm-xdsl:0.4>
+# docker build --network=host --file xdsl_llvm.docker --tag <name> .
+# docker push <name>

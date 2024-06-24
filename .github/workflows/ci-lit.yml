@@ -16,19 +16,10 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    container: papychacal/xdsl-llvm:98e674c9f16d677d95c67bc130e267fae331e43c
+    container: gbisbas/llvm-xdsl:0.4
     steps:
     - name: Checkout Devito
       uses: actions/checkout@v4
-
-    - name: Install native dependencies
-      run: |
-        apt-get update && apt install curl mpich -y
-
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.10'
 
     - name: Upgrade pip
       run: |
@@ -36,11 +27,9 @@ jobs:
 
     - name: Install requirements and xDSL
       run: |
-        pip install -e .[tests]
         pip install git+https://github.com/xdslproject/xdsl@f8bb935880276cf077e0a80f1905105d0a98eb33
+        pip install -e .[tests]
 
     - name: Execute lit tests
       run: |
-        export PATH=/xdsl-sc/llvm-project/build/bin/:$PATH
-        export PYTHONPATH=$(pwd):$PYTHONPATH
         lit -v tests/filecheck/
