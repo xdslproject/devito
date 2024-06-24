@@ -25,8 +25,8 @@ parser.add_argument("-bls", "--blevels", default=2, type=int, nargs="+",
                     help="Block levels")
 parser.add_argument("-devito", "--devito", default=False, type=bool, help="Devito run")
 parser.add_argument("-xdsl", "--xdsl", default=False, type=bool, help="xDSL run")
-args = parser.parse_args()
 parser.add_argument("-plot", "--plot", default=False, type=bool, help="Plot2D")
+args = parser.parse_args()
 
 
 mpiconf = configuration['mpi']
