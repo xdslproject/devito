@@ -57,8 +57,7 @@ def apply_timers(module, **kwargs):
     """
     Apply timers to a module
     """
-    if kwargs['xdsl_num_sections'] < 1:
-        return
+
     name = kwargs.get("name", "Kernel")
     grpa = GreedyRewritePatternApplier([MakeFunctionTimed(name)])
     PatternRewriteWalker(grpa, walk_regions_first=True).rewrite_module(module)
