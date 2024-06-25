@@ -17,7 +17,7 @@ from devito.tools.data_structures import OrderedSet
 from devito.tools.utils import as_tuple
 from devito.types.basic import Scalar
 from devito.types.dense import DiscreteFunction, Function, TimeFunction
-from devito.types.dimension import SpaceDimension, TimeDimension
+from devito.types.dimension import SpaceDimension, TimeDimension, ConditionalDimension
 from devito.types.equation import Eq
 
 # ------------- xdsl imports -------------#
@@ -101,9 +101,10 @@ class ExtractDevitoStencilConversion:
         self.operator = operator
 
     def convert_function_eq(self, eq: LoweredEq, **kwargs):
-        # Read the grid containing necessary discretization information
-        # (size, halo width, ...)
+
+        # Get the LHS of the equation, where we write
         write_function = eq.lhs.function
+        # Get Grid and stepping dimension
         grid: Grid = write_function.grid
         step_dim = grid.stepping_dim
 
@@ -118,10 +119,9 @@ class ExtractDevitoStencilConversion:
 
         dims = retrieve_dimensions(eq.lhs.indices)
 
-        if not all(isinstance(d, (SteppingDimension, SpaceDimension)) for d in dims):
-            self.build_generic_step(step_dim, eq)
+        if any(isinstance(d, (ConditionalDimension)) for d in dims):
+            self.build_condition(step_dim, eq)
         else:
-            # Get the function carriers of the equation
             self.build_stencil_step(step_dim, eq)
 
     def convert_symbol_eq(self, symbol: Symbol, rhs: LoweredEq, **kwargs):
@@ -387,8 +387,10 @@ class ExtractDevitoStencilConversion:
         memtemp = UnrealizedConversionCastOp.get([temp], [StencilToMemRefType(temp.type)]).results[0]
         memtemp.name_hint = temp.name_hint + "_mem"
         indices = eq.lhs.indices
+
         if isinstance(eq.lhs.function, TimeFunction):
             indices = indices[1:]
+
         ssa_indices = [self._visit_math_nodes(dim, i, None) for i in indices]
         for i, ssa_i in enumerate(ssa_indices):
             if isinstance(ssa_i.type, builtin.IntegerType):
@@ -405,36 +407,40 @@ class ExtractDevitoStencilConversion:
                                    properties={"kind": attr})
 
     def build_condition(self, dim: SteppingDimension, eq: BooleanFunction):
-        return self._visit_math_nodes(dim, eq, None)
 
-    def build_generic_step(self, dim: SteppingDimension, eq: LoweredEq):
-        if eq.conditionals:
-            condition = And(*eq.conditionals.values(), evaluate=False)
-            cond = self.build_condition(dim, condition)
-            if_ = scf.If(cond, (), Region(Block()))
-            with ImplicitBuilder(if_.true_region.block):
-                self.build_generic_step_expression(dim, eq)
-                scf.Yield()
-        else:
-            # Build the expression
+        assert eq.conditionals
+
+        # Parse condition and build the condition block
+        condition = And(*eq.conditionals.values(), evaluate=False)
+        cond = self._visit_math_nodes(dim, condition, None)
+
+        if_ = scf.If(cond, (), Region(Block()))
+        with ImplicitBuilder(if_.true_region.block):
+            # Use the builder for the inner expression
+            assert eq.is_Increment
             self.build_generic_step_expression(dim, eq)
+            scf.Yield()
+
 
     def build_time_loop(
         self, eqs: list[Any], step_dim: SteppingDimension, **kwargs
     ):
-        # Bounds and step boilerpalte
+        # Bounds and step boilerplate
         lb = iet_ssa.LoadSymbolic.get(
             step_dim.symbolic_min._C_name, IndexType()
         )
         ub = iet_ssa.LoadSymbolic.get(
             step_dim.symbolic_max._C_name, IndexType()
         )
+        
         one = arith.Constant.from_int_and_width(1, IndexType())
+
         # Devito iterates from time_m to time_M *inclusive*, MLIR only takes
         # exclusive upper bounds, so we increment here.
         ub = arith.Addi(ub, one)
 
         # Take the exact time_step from Devito
+
         try:
             step = arith.Constant.from_int_and_width(
                 int(step_dim.symbolic_incr), IndexType()
@@ -461,9 +467,10 @@ class ExtractDevitoStencilConversion:
         )
 
         # Name the 'time' step iterator
-        loop.body.block.args[0].name_hint = "time"
+        assert step_dim.root.name is 'time'
+        loop.body.block.args[0].name_hint = step_dim.root.name
         # Store for later reference
-        self.symbol_values["time"] = loop.body.block.args[0]
+        self.symbol_values[step_dim.root.name] = loop.body.block.args[0]
 
         # Store a mapping from time_buffers to their corresponding block
         # arguments for easier access later.

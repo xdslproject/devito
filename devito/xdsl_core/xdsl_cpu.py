@@ -86,7 +86,7 @@ class XdslnoopOperator(Cpu64OperatorMixin, CoreOperator):
 
         num_sections = len(FindNodes(Section).visit(irs.iet))
         if num_sections:
-            apply_timers(module, timed=True, **kwargs)
+            apply_timers(module, **kwargs)
 
         op._module = module
 
@@ -99,7 +99,6 @@ class XdslnoopOperator(Cpu64OperatorMixin, CoreOperator):
         [Eq] -> [xdsl]
         Apply timers to the module
         """
-
         conv = ExtractDevitoStencilConversion(cls)
         module = conv.convert(as_tuple(expressions), **kwargs)
 
