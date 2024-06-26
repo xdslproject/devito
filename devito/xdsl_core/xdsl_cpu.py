@@ -54,14 +54,6 @@ class XdslnoopOperator(Cpu64OperatorMixin, CoreOperator):
         op = Callable.__new__(cls, **irs.iet.args)
         Callable.__init__(op, **op.args)
 
-        # Header files, etc.
-        # op._headers = OrderedSet(*cls._default_headers)
-        # op._headers.update(byproduct.headers)
-        # op._globals = OrderedSet(*cls._default_globals)
-        # op._includes = OrderedSet(*cls._default_includes)
-        # op._includes.update(profiler._default_includes)
-        # op._includes.update(byproduct.includes)
-
         # Required for the jit-compilation
         op._compiler = kwargs['compiler']
         op._language = kwargs['language']
@@ -80,10 +72,6 @@ class XdslnoopOperator(Cpu64OperatorMixin, CoreOperator):
                                            for i in profiler._ext_calls]))
         op._func_table.update(OrderedDict([(i.root.name, i) for i in byproduct.funcs]))
 
-        # Internal mutable state to store information about previous runs, autotuning
-        # reports, etc
-        op._state = cls._initialize_state(**kwargs)
-
         # Produced by the various compilation passes
 
         op._reads = filter_sorted(flatten(e.reads for e in irs.expressions))
@@ -91,8 +79,15 @@ class XdslnoopOperator(Cpu64OperatorMixin, CoreOperator):
         op._dimensions = set().union(*[e.dimensions for e in irs.expressions])
         op._dtype, op._dspace = irs.clusters.meta
         op._profiler = profiler
-        kwargs['xdsl_num_sections'] = len(FindNodes(Section).visit(irs.iet))
+
+        # This has to be moved outside and drop this _build from here
+
         module = cls._lower_stencil(expressions, **kwargs)
+
+        num_sections = len(FindNodes(Section).visit(irs.iet))
+        if num_sections:
+            apply_timers(module, **kwargs)
+
         op._module = module
 
         return op
@@ -104,11 +99,8 @@ class XdslnoopOperator(Cpu64OperatorMixin, CoreOperator):
         [Eq] -> [xdsl]
         Apply timers to the module
         """
-
         conv = ExtractDevitoStencilConversion(cls)
         module = conv.convert(as_tuple(expressions), **kwargs)
-        # print(module)
-        apply_timers(module, timed=True, **kwargs)
 
         return module
 
