@@ -34,6 +34,8 @@ def test_xdsl_noop_structure():
     op1.apply(time_M=1)
 
     op2 = Operator([eq], opt='xdsl')
+    op2.apply(time_M=1)
+    # No correctness check, just running
 
     assert Printer().print(op1._module) == Printer().print(op2._module)
 
