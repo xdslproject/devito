@@ -36,6 +36,8 @@ __all__ = ['XdslnoopOperator', 'XdslAdvOperator']
 
 class XdslnoopOperator(Cpu64OperatorMixin, CoreOperator):
 
+    # This operator needs more testing as we currently compare the starting
+    # initial generated code against the advanced one
     _Target = CTarget
 
     @classmethod
@@ -442,9 +444,9 @@ class XdslAdvOperator(XdslnoopOperator):
                     cflags += ' -lmpi '
                     cc = "mpicc -cc=clang"
                 if is_omp:
-                    cflags += " -fopenmp "
+                    cflags += " -fopenmp"
                 if is_gpu:
-                    cflags += " -lmlir_cuda_runtime "
+                    cflags += " -lmlir_cuda_runtime"
 
                 cflags += " -shared "
 
@@ -652,6 +654,9 @@ def generate_tiling_arg(nb_tiled_dims: int):
     """
     if nb_tiled_dims < 1:
         return 'parallel-loop-tile-sizes=0'
+
+    # TOFIX: 64 is hardcoded, should be a parameter
+    # TOFIX: Zero is also hardcoded, should be a parameter
     return "parallel-loop-tile-sizes=" + ",".join(["64"]*nb_tiled_dims) + ",0"
 
 

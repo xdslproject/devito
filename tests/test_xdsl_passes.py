@@ -31,6 +31,8 @@ def test_xdsl_noop_structure():
     eq = Eq(u.forward, u + 1)
 
     op1 = Operator([eq], opt='xdsl-noop')
+    op1.apply(time_M=1)
+
     op2 = Operator([eq], opt='xdsl')
 
     assert Printer().print(op1._module) == Printer().print(op2._module)
@@ -58,6 +60,7 @@ def test_acoustic_3D(shape, so, to, nt):
     op1 = Operator([stencil], opt='xdsl-noop')
     op2 = Operator([stencil], opt='xdsl')
 
+    # We here test only the initial code, so not really useful
     assert Printer().print(op1._module) == Printer().print(op2._module)
 
 
