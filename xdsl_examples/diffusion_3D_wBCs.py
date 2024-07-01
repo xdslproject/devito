@@ -82,6 +82,7 @@ if args.xdsl:
     u.data[:, :, :, :] = 0
     u.data[:, :, :, int(nz/2)] = 1
     op = Operator([eq_stencil], name='xDSLDiffusionOperator', opt='xdsl')
+
     # Apply the xdsl operator for a number of timesteps
     op.apply(time=nt, dt=dt, a=nu)
     print("XDSL Field norm is:", norm(u))

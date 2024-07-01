@@ -36,6 +36,8 @@ __all__ = ['XdslnoopOperator', 'XdslAdvOperator']
 
 class XdslnoopOperator(Cpu64OperatorMixin, CoreOperator):
 
+    # This operator needs more testing as we currently compare the starting
+    # initial generated code against the advanced one
     _Target = CTarget
 
     @classmethod
@@ -400,7 +402,9 @@ class XdslAdvOperator(XdslnoopOperator):
             mlir_pipeline = generate_MLIR_CPU_PIPELINE()
 
             if is_omp:
-                mlir_pipeline = generate_MLIR_OPENMP_PIPELINE()
+                # We collapse as many loops as we tile
+                kwargs = {'num_loops': to_tile}
+                mlir_pipeline = generate_MLIR_OPENMP_PIPELINE(kwargs)
 
             if is_mpi:
                 shape, _ = self.mpi_shape
@@ -442,9 +446,9 @@ class XdslAdvOperator(XdslnoopOperator):
                     cflags += ' -lmpi '
                     cc = "mpicc -cc=clang"
                 if is_omp:
-                    cflags += " -fopenmp "
+                    cflags += " -fopenmp"
                 if is_gpu:
-                    cflags += " -lmlir_cuda_runtime "
+                    cflags += " -lmlir_cuda_runtime"
 
                 cflags += " -shared "
 
@@ -552,7 +556,9 @@ def generate_MLIR_CPU_noop_PIPELINE():
     return generate_mlir_pipeline(passes)
 
 
-def generate_MLIR_OPENMP_PIPELINE():
+def generate_MLIR_OPENMP_PIPELINE(kwargs):
+    num_loops = kwargs.get('num_loops')
+
     return generate_pipeline([
         generate_mlir_pipeline([
             "canonicalize",
@@ -572,7 +578,7 @@ def generate_MLIR_OPENMP_PIPELINE():
             # "canonicalize",
             # "cse",
         ]),
-        "convert-scf-to-openmp{collapse=1}",
+        f"convert-scf-to-openmp{{{generate_collapse_arg(num_loops)}}}",
         generate_mlir_pipeline([
             "finalize-memref-to-llvm",
             "convert-scf-to-cf"
@@ -652,7 +658,24 @@ def generate_tiling_arg(nb_tiled_dims: int):
     """
     if nb_tiled_dims < 1:
         return 'parallel-loop-tile-sizes=0'
+
+    # TOFIX: 64 is hardcoded, should be a parameter
+    # TOFIX: Zero is also hardcoded, should be a parameter
     return "parallel-loop-tile-sizes=" + ",".join(["64"]*nb_tiled_dims) + ",0"
+
+
+def generate_collapse_arg(num_loops: int):
+    """
+    Generate the number of loops that will be collapsed
+    Resort to 1 if no number of loops is provided
+    """
+
+    if num_loops < 1:
+        num_loops = 1
+
+    ret_arg = "collapse=" + "".join(str(num_loops))  # noqa
+
+    return ret_arg
 
 
 def get_arg_names_from_module(op):

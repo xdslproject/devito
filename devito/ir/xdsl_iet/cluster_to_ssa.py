@@ -470,7 +470,7 @@ class ExtractDevitoStencilConversion:
         )
 
         # Name the 'time' step iterator
-        assert step_dim.root.name is 'time'
+        assert step_dim.root.name == 'time'
         loop.body.block.args[0].name_hint = step_dim.root.name
         # Store for later reference
         self.symbol_values[step_dim.root.name] = loop.body.block.args[0]
