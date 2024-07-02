@@ -6,7 +6,7 @@ from typing import Any, Iterable
 from dataclasses import dataclass, field
 from sympy import (Add, And, Expr, Float, GreaterThan, Indexed, Integer, LessThan,
                    Number, Pow, StrictGreaterThan, StrictLessThan, Symbol, floor,
-                   Mul)
+                   Mul, sin, cos)
 from sympy.core.relational import Relational
 from sympy.logic.boolalg import BooleanFunction
 from devito.operations.interpolators import Injection
@@ -189,8 +189,10 @@ class ExtractDevitoStencilConversion:
         if isinstance(node, Indexed):
             # If we have a time function, we compute its time offset
             if isinstance(node.function, TimeFunction):
+                import pdb;pdb.set_trace()
                 time_offset = (node.indices[dim] - dim) % node.function.time_size
             elif isinstance(node.function, (Function, PointSource)):
+                import pdb;pdb.set_trace()
                 time_offset = 0
             else:
                 raise NotImplementedError(f"reading function of type {type(node.func)} not supported")
@@ -288,6 +290,20 @@ class ExtractDevitoStencilConversion:
             SSAargs = (self._visit_math_nodes(dim, arg, output_indexed)
                        for arg in node.args)
             return reduce(lambda x, y : arith.AndI(x, y).result, SSAargs)
+        
+        elif isinstance(node, sin):
+            assert len(node.args) == 1, "Expected single argument for sin."
+            import pdb; pdb.set_trace()
+            return math.SinOp(self._visit_math_nodes(dim, node.args[0], output_indexed)).result
+
+        elif isinstance(node, cos):
+            assert len(node.args) == 1, "Expected single argument for cos."
+            import pdb; pdb.set_trace()
+            return math.CosOp(self._visit_math_nodes(dim, node.args[0], output_indexed)).result
+        
+            # import pdb; pdb.set_trace()
+            # return reduce(lambda x, y : arith.AndI(x, y).result, SSAargs)
+        
         elif isinstance(node, Relational):
             if isinstance(node, GreaterThan):
                 mnemonic = "sge"
@@ -310,6 +326,7 @@ class ExtractDevitoStencilConversion:
             return arith.Cmpi(*self._ensure_same_type(*SSAargs), mnemonic).result
 
         else:
+            import pdb; pdb.set_trace()
             raise NotImplementedError(f"Unknown math:{type(node)} {node}", node)
 
     def build_stencil_step(self, dim: SteppingDimension, eq: LoweredEq) -> None:
@@ -499,6 +516,7 @@ class ExtractDevitoStencilConversion:
     def lower_devito_Eqs(self, eqs: list[Any], **kwargs):
         # Lower devito Equations to xDSL
         
+        import pdb; pdb.set_trace()
         for eq in eqs:
             lowered = self.operator._lower_exprs(as_tuple(eq), **kwargs)
             if isinstance(eq, Eq):
