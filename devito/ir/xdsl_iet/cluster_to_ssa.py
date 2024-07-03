@@ -192,7 +192,7 @@ class ExtractDevitoStencilConversion:
                 import pdb;pdb.set_trace()
                 time_offset = (node.indices[dim] - dim) % node.function.time_size
             elif isinstance(node.function, (Function, PointSource)):
-                import pdb;pdb.set_trace()
+                # import pdb;pdb.set_trace()
                 time_offset = 0
             else:
                 raise NotImplementedError(f"reading function of type {type(node.func)} not supported")
@@ -293,13 +293,15 @@ class ExtractDevitoStencilConversion:
         
         elif isinstance(node, sin):
             assert len(node.args) == 1, "Expected single argument for sin."
-            import pdb; pdb.set_trace()
-            return math.SinOp(self._visit_math_nodes(dim, node.args[0], output_indexed)).result
+            #import pdb; pdb.set_trace()
+            return math.SinOp(self._visit_math_nodes(dim, node.args[0],
+                              output_indexed)).result
 
         elif isinstance(node, cos):
             assert len(node.args) == 1, "Expected single argument for cos."
-            import pdb; pdb.set_trace()
-            return math.CosOp(self._visit_math_nodes(dim, node.args[0], output_indexed)).result
+            # import pdb; pdb.set_trace()
+            return math.CosOp(self._visit_math_nodes(dim, node.args[0],
+                              output_indexed)).result
         
             # import pdb; pdb.set_trace()
             # return reduce(lambda x, y : arith.AndI(x, y).result, SSAargs)
@@ -516,7 +518,7 @@ class ExtractDevitoStencilConversion:
     def lower_devito_Eqs(self, eqs: list[Any], **kwargs):
         # Lower devito Equations to xDSL
         
-        import pdb; pdb.set_trace()
+        # import pdb; pdb.set_trace()
         for eq in eqs:
             lowered = self.operator._lower_exprs(as_tuple(eq), **kwargs)
             if isinstance(eq, Eq):
