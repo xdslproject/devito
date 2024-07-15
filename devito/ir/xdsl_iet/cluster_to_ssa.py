@@ -189,7 +189,6 @@ class ExtractDevitoStencilConversion:
         if isinstance(node, Indexed):
             # If we have a time function, we compute its time offset
             if isinstance(node.function, TimeFunction):
-                import pdb;pdb.set_trace()
                 time_offset = (node.indices[dim] - dim) % node.function.time_size
             elif isinstance(node.function, (Function, PointSource)):
                 # import pdb;pdb.set_trace()
