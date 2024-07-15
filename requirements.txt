@@ -1,7 +1,7 @@
 cloudpickle
 pip>=9.0.1
 numpy>1.16
-sympy>=1.9,<1.13
+sympy>=1.9,<1.14
 cached-property
 psutil>=5.1.0,<7.0
 py-cpuinfo<10
