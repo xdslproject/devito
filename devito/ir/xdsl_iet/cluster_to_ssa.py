@@ -52,7 +52,6 @@ from examples.seismic import PointSource
 
 
 def field_from_function(f: DiscreteFunction) -> stencil.FieldType:
-    # import pdb;pdb.set_trace()
     halo = [f.halo[d] for d in f.dimensions]
     shape = f.shape
     bounds = [(-h[0], s+h[1]) for h, s in zip(halo, shape)]
@@ -191,7 +190,6 @@ class ExtractDevitoStencilConversion:
             if isinstance(node.function, TimeFunction):
                 time_offset = (node.indices[dim] - dim) % node.function.time_size
             elif isinstance(node.function, (Function, PointSource)):
-                # import pdb;pdb.set_trace()
                 time_offset = 0
             else:
                 raise NotImplementedError(f"reading function of type {type(node.func)} not supported")
