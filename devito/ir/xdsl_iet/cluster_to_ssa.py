@@ -6,7 +6,7 @@ from typing import Any, Iterable
 from dataclasses import dataclass, field
 from sympy import (Add, And, Expr, Float, GreaterThan, Indexed, Integer, LessThan,
                    Number, Pow, StrictGreaterThan, StrictLessThan, Symbol, floor,
-                   Mul)
+                   Mul, sin, cos)
 from sympy.core.relational import Relational
 from sympy.logic.boolalg import BooleanFunction
 from devito.operations.interpolators import Injection
@@ -52,7 +52,6 @@ from examples.seismic import PointSource
 
 
 def field_from_function(f: DiscreteFunction) -> stencil.FieldType:
-    # import pdb;pdb.set_trace()
     halo = [f.halo[d] for d in f.dimensions]
     shape = f.shape
     bounds = [(-h[0], s+h[1]) for h, s in zip(halo, shape)]
@@ -288,6 +287,19 @@ class ExtractDevitoStencilConversion:
             SSAargs = (self._visit_math_nodes(dim, arg, output_indexed)
                        for arg in node.args)
             return reduce(lambda x, y : arith.AndI(x, y).result, SSAargs)
+        
+        elif isinstance(node, sin):
+            assert len(node.args) == 1, "Expected single argument for sin."
+            return math.SinOp(self._visit_math_nodes(dim, node.args[0],
+                              output_indexed)).result
+
+        elif isinstance(node, cos):
+            assert len(node.args) == 1, "Expected single argument for cos."
+            
+            return math.CosOp(self._visit_math_nodes(dim, node.args[0],
+                              output_indexed)).result
+        
+                   
         elif isinstance(node, Relational):
             if isinstance(node, GreaterThan):
                 mnemonic = "sge"
@@ -499,6 +511,7 @@ class ExtractDevitoStencilConversion:
     def lower_devito_Eqs(self, eqs: list[Any], **kwargs):
         # Lower devito Equations to xDSL
         
+        
         for eq in eqs:
             lowered = self.operator._lower_exprs(as_tuple(eq), **kwargs)
             if isinstance(eq, Eq):
@@ -631,7 +644,7 @@ class ExtractDevitoStencilConversion:
                         functions.add(f.function)
 
                 elif isinstance(eq, Injection):
-                    # import pdb; pdb.set_trace()
+                    
                     functions.add(eq.field.function)
                     for f in retrieve_functions(eq.expr):
                         if isinstance(f, PointSource):

@@ -1,16 +1,17 @@
 import numpy as np
-from devito import Grid, TimeFunction, Eq, Operator, norm, switchconfig, Function, NODE, div, grad
+from devito import (Grid, TimeFunction, Eq, Operator, norm, switchconfig,
+                    Function, NODE, div, grad, solve)
 import pytest
-# flake8: noqa
 
 from xdsl.dialects.scf import For, Yield
 from xdsl.dialects.arith import Addi, Constant
 from xdsl.dialects.func import Call, Return
 from xdsl.dialects.stencil import FieldType, ApplyOp, LoadOp, StoreOp
-from xdsl.dialects.llvm import LLVMPointerType
-from xdsl.printer import Printer
 
 from devito.types.basic import Symbol
+
+from examples.seismic import demo_model, TimeAxis, RickerSource
+
 
 def test_udx():
 
@@ -28,9 +29,10 @@ def test_udx():
     xdsl_op = Operator([eq], opt='xdsl')
     xdsl_op.apply(time_M=5)
     norm2 = norm(u)
-    
-    assert np.isclose(norm1, norm2,   atol=1e-5, rtol=0)
+
+    assert np.isclose(norm1, norm2, atol=1e-5, rtol=0)
     assert np.isclose(norm1, 14636.3955, atol=1e-5, rtol=0)
+
 
 def test_u_plus1_conversion():
     # Define a simple Devito Operator
@@ -41,7 +43,7 @@ def test_u_plus1_conversion():
     op = Operator([eq])
     op.apply(time_M=5)
     norm1 = norm(u)
-    
+
     u.data[:] = 0
     xdsl_op = Operator([eq], opt='xdsl')
     xdsl_op.apply(time_M=5)
@@ -88,7 +90,7 @@ def test_u_and_v_conversion():
     assert type(ops[6] == For)
 
     scffor_ops = list(ops[6].regions[0].blocks[0].ops)
-    
+
     assert len(scffor_ops) == 7
 
     # First
@@ -107,6 +109,7 @@ def test_u_and_v_conversion():
     assert type(ops[7] == Call)
     assert type(ops[8] == StoreOp)
     assert type(ops[9] == Return)
+
 
 def test_symbol_I():
     # Define a simple Devito a = 1 operator
@@ -169,7 +172,7 @@ def test_extraction_from_lifted_ispace(rotate):
     # Operator
     op0 = Operator(eqns, opt='xdsl')
     op1 = Operator(eqns, opt=('advanced', {'openmp': True, 'cire-mingain': 1,
-                                            'cire-rotate': rotate}))
+                              'cire-rotate': rotate}))
 
     # Check numerical output
     op0(time_M=1)
@@ -180,3 +183,51 @@ def test_extraction_from_lifted_ispace(rotate):
     # Also check against expected operation count to make sure
     # all redundancies have been detected correctly
     assert summary[('section0', None)].ops == 93
+
+
+@pytest.mark.parametrize('shape', [(101, 101), (201, 201)])
+@pytest.mark.parametrize('nt', [10, 20, ])
+def test_dt2_sources_script(shape, nt):
+
+    spacing = (10., 10.)  # spacing of 10 meters
+    nbl = 1  # number of pad layers
+
+    model = demo_model('layers-tti', spacing=spacing, space_order=4,
+                       shape=shape, nbl=nbl, nlayers=nbl)
+
+    # Compute the dt and set time range
+    t0 = 0.  # Simulation time start
+    dt = model.critical_dt
+
+    time_range = TimeAxis(start=t0, stop=nt, step=dt)
+
+    p = TimeFunction(name="p", grid=model.grid, time_order=2, space_order=8)
+
+    # Main equations
+    stencil_p = solve(p.dt2, p.forward)
+    update_p = Eq(p.forward, stencil_p)
+
+    # Create stencil and boundary condition expressions
+    x, z = model.grid.dimensions
+
+    # set source and receivers
+    src = RickerSource(name='src', grid=model.grid, f0=0.02, npoint=1,
+                       time_range=time_range)
+
+    src.coordinates.data[:, 0] = model.domain_size[0] * .5
+    src.coordinates.data[:, 1] = model.domain_size[0] * .5
+    # Define the source injection
+
+    src_term = src.inject(field=p.forward, expr=src)
+
+    optime = Operator([update_p] + src_term)
+    optime.apply(time=time_range.num-1, dt=dt)
+    norm0 = norm(p)
+
+    p.data[:] = 0.
+
+    optime = Operator([update_p] + src_term, opt='xdsl')
+    optime.apply(time=time_range.num-1, dt=dt)
+    norm1 = norm(p)
+
+    assert np.isclose(norm0, norm1, atol=1e-5, rtol=0)
