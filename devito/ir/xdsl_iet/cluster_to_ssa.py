@@ -290,7 +290,6 @@ class ExtractDevitoStencilConversion:
         
         elif isinstance(node, sin):
             assert len(node.args) == 1, "Expected single argument for sin."
-            #import pdb; pdb.set_trace()
             return math.SinOp(self._visit_math_nodes(dim, node.args[0],
                               output_indexed)).result
 

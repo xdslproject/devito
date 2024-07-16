@@ -1,8 +1,9 @@
 import numpy as np
 import pytest
+from sympy import S
 
 from devito import (Grid, TensorTimeFunction, VectorTimeFunction, div, grad, diag, solve,
-                    Operator, Eq, Constant, norm, SpaceDimension, switchconfig)
+                    Operator, Eq, Constant, norm, SpaceDimension, switchconfig, sin, cos)
 from devito.types import Array, Function, TimeFunction
 from devito.tools import as_tuple
 
@@ -968,6 +969,37 @@ def test_function_IV():
     op.apply()
 
     assert np.isclose(norm(u), devito_norm_u)
+
+
+class TestTrigonometric(object):
+
+    @pytest.mark.parametrize('deg, exp', ([90.0, 3.5759869], [30.0, 3.9521265],
+                             [45.0, 3.403614]))
+    def test_sine(self, deg, exp):
+        grid = Grid(shape=(4, 4))
+
+        u = Function(name="u", grid=grid)
+        u.data[:, :] = 0
+
+        eq0 = Eq(u, sin(deg))
+
+        op = Operator([eq0], opt='xdsl')
+        op.apply()
+        assert np.isclose(norm(u), exp, rtol=1e-4)
+
+    @pytest.mark.parametrize('deg, exp', ([90.0, 1.7922944], [30.0, 0.6170056],
+                             [45.0, 2.101288]))
+    def test_cosine(self, deg, exp):
+        grid = Grid(shape=(4, 4))
+
+        u = Function(name="u", grid=grid)
+        u.data[:, :] = 0
+
+        eq0 = Eq(u, cos(deg))
+
+        op = Operator([eq0], opt='xdsl')
+        op.apply()
+        assert np.isclose(norm(u), exp, rtol=1e-4)
 
 
 class TestOperatorUnsupported(object):
