@@ -296,11 +296,11 @@ class ExtractDevitoStencilConversion:
 
         elif isinstance(node, cos):
             assert len(node.args) == 1, "Expected single argument for cos."
-            # import pdb; pdb.set_trace()
+            
             return math.CosOp(self._visit_math_nodes(dim, node.args[0],
                               output_indexed)).result
         
-            # import pdb; pdb.set_trace()
+            
             # return reduce(lambda x, y : arith.AndI(x, y).result, SSAargs)
         
         elif isinstance(node, Relational):
@@ -515,7 +515,7 @@ class ExtractDevitoStencilConversion:
     def lower_devito_Eqs(self, eqs: list[Any], **kwargs):
         # Lower devito Equations to xDSL
         
-        # import pdb; pdb.set_trace()
+        
         for eq in eqs:
             lowered = self.operator._lower_exprs(as_tuple(eq), **kwargs)
             if isinstance(eq, Eq):
@@ -648,7 +648,7 @@ class ExtractDevitoStencilConversion:
                         functions.add(f.function)
 
                 elif isinstance(eq, Injection):
-                    # import pdb; pdb.set_trace()
+                    
                     functions.add(eq.field.function)
                     for f in retrieve_functions(eq.expr):
                         if isinstance(f, PointSource):

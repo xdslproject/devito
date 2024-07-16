@@ -187,7 +187,7 @@ def test_extraction_from_lifted_ispace(rotate):
 
 @pytest.mark.parametrize('shape', [(101, 101), (201, 201)])
 @pytest.mark.parametrize('nt', [10, 20, ])
-def test_dt2_script(shape, nt):
+def test_dt2_sources_script(shape, nt):
 
     spacing = (10., 10.)  # spacing of 10 meters
     nbl = 1  # number of pad layers
