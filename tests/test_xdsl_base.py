@@ -1,6 +1,5 @@
 import numpy as np
 import pytest
-from sympy import S
 
 from devito import (Grid, TensorTimeFunction, VectorTimeFunction, div, grad, diag, solve,
                     Operator, Eq, Constant, norm, SpaceDimension, switchconfig, sin, cos)

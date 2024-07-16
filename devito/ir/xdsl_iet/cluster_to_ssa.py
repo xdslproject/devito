@@ -299,9 +299,7 @@ class ExtractDevitoStencilConversion:
             return math.CosOp(self._visit_math_nodes(dim, node.args[0],
                               output_indexed)).result
         
-            
-            # return reduce(lambda x, y : arith.AndI(x, y).result, SSAargs)
-        
+                   
         elif isinstance(node, Relational):
             if isinstance(node, GreaterThan):
                 mnemonic = "sge"
@@ -324,7 +322,6 @@ class ExtractDevitoStencilConversion:
             return arith.Cmpi(*self._ensure_same_type(*SSAargs), mnemonic).result
 
         else:
-            import pdb; pdb.set_trace()
             raise NotImplementedError(f"Unknown math:{type(node)} {node}", node)
 
     def build_stencil_step(self, dim: SteppingDimension, eq: LoweredEq) -> None:
