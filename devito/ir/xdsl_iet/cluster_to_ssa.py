@@ -6,7 +6,7 @@ from typing import Any, Iterable
 from dataclasses import dataclass, field
 from sympy import (Add, And, Expr, Float, GreaterThan, Indexed, Integer, LessThan,
                    Number, Pow, StrictGreaterThan, StrictLessThan, Symbol, floor,
-                   Mul, sin, cos)
+                   Mul, sin, cos, tan)
 from sympy.core.relational import Relational
 from sympy.logic.boolalg import BooleanFunction
 from devito.operations.interpolators import Injection
@@ -288,17 +288,22 @@ class ExtractDevitoStencilConversion:
                        for arg in node.args)
             return reduce(lambda x, y : arith.AndI(x, y).result, SSAargs)
         
+        # Trigonometric functions
         elif isinstance(node, sin):
             assert len(node.args) == 1, "Expected single argument for sin."
             return math.SinOp(self._visit_math_nodes(dim, node.args[0],
                               output_indexed)).result
 
         elif isinstance(node, cos):
-            assert len(node.args) == 1, "Expected single argument for cos."
-            
+            assert len(node.args) == 1, "Expected single argument for cos."           
             return math.CosOp(self._visit_math_nodes(dim, node.args[0],
                               output_indexed)).result
         
+        elif isinstance(node, tan):
+            assert len(node.args) == 1, "Expected single argument for TanOp."
+            
+            return math.TanOp(self._visit_math_nodes(dim, node.args[0],
+                              output_indexed)).result
                    
         elif isinstance(node, Relational):
             if isinstance(node, GreaterThan):
@@ -311,9 +316,7 @@ class ExtractDevitoStencilConversion:
                 mnemonic = "slt"
             else:
                 raise NotImplementedError(f"Unimplemented comparison {type(node)}")
-                
-            # import pdb;
-            # pdb.set_trace()
+
             SSAargs = (self._visit_math_nodes(dim, arg, output_indexed) for arg in node.args)
             # Operands must have the same type
             # TODO: look at here if index stuff does not make sense

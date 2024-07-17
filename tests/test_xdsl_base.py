@@ -1,8 +1,9 @@
 import numpy as np
 import pytest
 
-from devito import (Grid, TensorTimeFunction, VectorTimeFunction, div, grad, diag, solve,
-                    Operator, Eq, Constant, norm, SpaceDimension, switchconfig, sin, cos)
+from devito import (Grid, TensorTimeFunction, VectorTimeFunction, div, grad,
+                    diag, solve, Operator, Eq, Constant, norm, SpaceDimension,
+                    switchconfig, sin, cos, tan)
 from devito.types import Array, Function, TimeFunction
 from devito.tools import as_tuple
 
@@ -14,6 +15,7 @@ from xdsl.dialects.func import Call, Return
 from xdsl.dialects.stencil import FieldType, ApplyOp, LoadOp, StoreOp
 from xdsl.dialects.llvm import LLVMPointerType
 from xdsl.dialects.memref import Load
+from xdsl.dialects.experimental import math
 
 
 def test_xdsl_I():
@@ -980,10 +982,13 @@ class TestTrigonometric(object):
         u = Function(name="u", grid=grid)
         u.data[:, :] = 0
 
-        eq0 = Eq(u, sin(deg))
+        deg0 = Constant(name='deg', value=deg)
+        eq0 = Eq(u, sin(deg0))
 
-        op = Operator([eq0], opt='xdsl')
-        op.apply()
+        opx = Operator([eq0], opt='xdsl')
+        opx.apply()
+
+        assert len([op for op in opx._module.walk() if isinstance(op, math.SinOp)]) == 1
         assert np.isclose(norm(u), exp, rtol=1e-4)
 
     @pytest.mark.parametrize('deg, exp', ([90.0, 1.7922944], [30.0, 0.6170056],
@@ -994,10 +999,32 @@ class TestTrigonometric(object):
         u = Function(name="u", grid=grid)
         u.data[:, :] = 0
 
-        eq0 = Eq(u, cos(deg))
+        deg0 = Constant(name='deg', value=deg)
+        eq0 = Eq(u, cos(deg0))
 
-        op = Operator([eq0], opt='xdsl')
-        op.apply()
+        opx = Operator([eq0], opt='xdsl')
+        opx.apply()
+
+        assert len([op for op in opx._module.walk() if isinstance(op, math.CosOp)]) == 1
+
+        assert np.isclose(norm(u), exp, rtol=1e-4)
+
+    @pytest.mark.parametrize('deg, exp', ([2.0, 8.74016], [30.0, 25.621325],
+                             [45.0, 6.4791]))
+    def test_tan(self, deg, exp):
+        grid = Grid(shape=(4, 4))
+
+        u = Function(name="u", grid=grid)
+        u.data[:, :] = 0
+
+        deg0 = Constant(name='deg', value=deg)
+        eq0 = Eq(u, tan(deg0))
+
+        opx = Operator([eq0], opt='xdsl')
+        opx.apply()
+
+        assert len([op for op in opx._module.walk() if isinstance(op, math.TanOp)]) == 1
+
         assert np.isclose(norm(u), exp, rtol=1e-4)
 
 
