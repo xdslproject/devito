@@ -107,11 +107,25 @@ class ExtractDevitoStencilConversion:
         grid: Grid = write_function.grid
         step_dim = grid.stepping_dim
 
-        if isinstance(write_function, TimeFunction):
+        buf_mapper = {}
+        buf_index = 0
+
+        import pdb;pdb.set_trace()
+        
+        mapper2 = { t + 1 :}
+
+        mapper3 = {}
+
+
+
+        if isinstance(write_function, TimeFunction):       
             time_size = write_function.time_size
             output_time_offset = (eq.lhs.indices[step_dim] - step_dim) % time_size
-            self.out_time_buffer = (write_function, output_time_offset)
+            buf_mapper.update({output_time_offset : buf_index})
+            # self.out_time_buffer = (write_function, mapper[output_time_offset])
+            self.out_time_buffer = (write_function, buf_mapper[output_time_offset])
         elif isinstance(write_function, Function):
+            import pdb;pdb.set_trace()
             self.out_time_buffer = (write_function, 0)
         else:
             raise NotImplementedError(f"Function of type {type(write_function)} not supported")
@@ -121,7 +135,7 @@ class ExtractDevitoStencilConversion:
         if any(isinstance(d, (ConditionalDimension)) for d in dims):
             self.build_condition(step_dim, eq)
         else:
-            self.build_stencil_step(step_dim, eq)
+            self.build_stencil_step(step_dim, eq, buf_mapper)
 
     def lower_Symbol(self, symbol: Symbol, rhs: LoweredEq, **kwargs):
         """
@@ -327,7 +341,8 @@ class ExtractDevitoStencilConversion:
         else:
             raise NotImplementedError(f"Unknown math:{type(node)} {node}", node)
 
-    def build_stencil_step(self, dim: SteppingDimension, eq: LoweredEq) -> None:
+    def build_stencil_step(self, dim: SteppingDimension, eq: LoweredEq,
+                           mapper: dict) -> None:
         """
         Builds the body of the step function for a given dimension and equation.
 
@@ -343,7 +358,18 @@ class ExtractDevitoStencilConversion:
         for f in retrieve_function_carriers(eq.rhs):
             if isinstance(f.function, TimeFunction):
                 # Works but should think of how to improve the derivation
+                # We need a better solution
                 time_offset = (f.indices[dim]-dim) % f.function.time_size
+                try:
+                    time_offset = mapper[time_offset]
+                except KeyError:
+                    try:
+                        time_offset = mapper[time_offset - 1]
+                        mapper[time_offset] = time_offset
+                    except KeyError:
+                        import pdb;pdb.set_trace()
+                        time_offset = mapper[time_offset - 1]
+                       
             elif isinstance(f.function, Function):
                 time_offset = 0
             else:

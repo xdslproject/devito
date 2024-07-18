@@ -19,7 +19,7 @@ from xdsl.dialects.experimental import math
 
 
 @pytest.mark.parametrize('shape, rtol', [(5, 1e-7), (100, 1e-6)])
-def test_xdsl_I(shape, rtol):
+def test_precision_I(shape, rtol):
     # Define an upper bound of precision
 
     nt = 10
@@ -39,4 +39,48 @@ def test_xdsl_I(shape, rtol):
     opx.apply(time_M=nt)
     xnorm = norm(u)
 
+    assert np.isclose(dnorm, xnorm, atol=0, rtol=rtol)
+
+
+@pytest.mark.parametrize('shape, rtol', [(5, 1e-5), (100, 1e-6)])
+def test_precision_II(shape, rtol):
+    # Define an upper bound of precision
+
+    nt = 1
+    grid = Grid(shape=(shape,))
+    u = TimeFunction(name='u', grid=grid, time_order=2, space_order=2)
+
+    init0 = 1.
+    init1 = 2.
+    init2 = 3.
+
+    dt = 0.1
+    u.data[0, :] = init0
+    u.data[1, :] = init1
+    u.data[2, :] = init2
+
+    import pdb; pdb.set_trace()
+
+    pde = u.dt2 - u.laplace
+    stencil = Eq(u.forward, solve(pde, u.forward))
+
+    opd = Operator([stencil])
+    opd.apply(time_M=nt, dt=dt)
+    dnorm = norm(u)
+    dnorm0 = np.linalg.norm(u.data[0])
+
+    import pdb; pdb.set_trace()
+
+    u.data[0, :] = init0
+    u.data[1, :] = init1
+    u.data[2, :] = init2
+
+    opx = Operator([stencil], opt='xdsl')
+    opx.apply(time_M=nt, dt=dt)
+    xnorm = norm(u)
+    xnorm0 = np.linalg.norm(u.data[0])
+
+    import pdb; pdb.set_trace()
+
+    assert np.isclose(dnorm0, xnorm0, atol=0, rtol=rtol)
     assert np.isclose(dnorm, xnorm, atol=0, rtol=rtol)
