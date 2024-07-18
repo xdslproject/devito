@@ -165,6 +165,8 @@ class ExtractDevitoStencilConversion:
         """
         # Get the LHS, "write function" telling us where to here because it tells us
         # Where to write the results of each step.
+
+        # import pdb; pdb.set_trace()
         write_function = eq.lhs
 
         match write_function:
@@ -344,6 +346,8 @@ class ExtractDevitoStencilConversion:
             if isinstance(f.function, TimeFunction):
                 # Works but should think of how to improve the derivation
                 time_offset = (f.indices[dim]-dim) % f.function.time_size
+                if (f.indices[dim]-dim) < 0:
+                    import pdb; pdb.set_trace()
             elif isinstance(f.function, Function):
                 time_offset = 0
             else:
@@ -357,6 +361,8 @@ class ExtractDevitoStencilConversion:
                 self.temps[(f, t)].name_hint = f"{f.name}_t{t}_temp"
 
         apply_args = [self.temps[f] for f in read_functions]
+
+        import pdb; pdb.set_trace()
 
         write_function = self.out_time_buffer[0]
         shape = write_function.grid.shape_local
@@ -524,6 +530,7 @@ class ExtractDevitoStencilConversion:
 
         for eq in eqs:
             lowered = self.operator._lower_exprs(as_tuple(eq), **kwargs)
+            # import pdb; pdb.set_trace()
             if isinstance(eq, Eq):
                 # Nested lowering? TO re-think approach
                 for lo in lowered:
