@@ -84,6 +84,13 @@ class XdslnoopOperator(Cpu64OperatorMixin, CoreOperator):
 
         # This has to be moved outside and drop this _build from here
 
+        import pdb; pdb.set_trace()
+        
+        # (Pdb) p irs.clusters[1]
+        # Cluster([Eq(u[t1, x + 1, y + 1], -u[t0, x + 1, y + 1]/h_x + u[t0, x + 2, y + 1]/h_x)])
+        # (Pdb) p expressions
+        # [Eq(u(t + dt, x, y), Derivative(u(t, x, y), x))]
+        
         module = cls._lower_stencil(expressions, **kwargs)
 
         num_sections = len(FindNodes(Section).visit(irs.iet))
@@ -102,6 +109,7 @@ class XdslnoopOperator(Cpu64OperatorMixin, CoreOperator):
         Apply timers to the module
         """
         conv = ExtractDevitoStencilConversion(cls)
+        import pdb; pdb.set_trace()
         module = conv.convert(as_tuple(expressions), **kwargs)
 
         return module
