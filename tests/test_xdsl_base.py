@@ -218,9 +218,7 @@ def test_acoustic_3D(shape, so, to, nt):
     # Devito Operator
     op = Operator([stencil])
     op.apply(time=nt, dt=dt)
-    devito_norm = norm(u)
-
-    import pdb; pdb.set_trace()
+    d_norm = norm(u)
 
     u.data[:, :, :] = 0
     u.data[:, 40:50, 40:50] = 1
@@ -228,10 +226,10 @@ def test_acoustic_3D(shape, so, to, nt):
     # XDSL Operator
     xdslop = Operator([stencil], opt='xdsl')
     xdslop.apply(time=nt, dt=dt)
-    xdsl_norm = norm(u)
+    x_norm = norm(u)
     import pdb; pdb.set_trace()
 
-    assert np.isclose(devito_norm, xdsl_norm, rtol=1e-04).all()
+    assert np.isclose(d_norm, x_norm, rtol=1e-04).all()
 
 
 @pytest.mark.parametrize('shape', [(21, 21, 21)])

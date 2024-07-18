@@ -110,6 +110,7 @@ class ExtractDevitoStencilConversion:
         if isinstance(write_function, TimeFunction):
             time_size = write_function.time_size
             output_time_offset = (eq.lhs.indices[step_dim] - step_dim) % time_size
+            import pdb;pdb.set_trace()
             self.out_time_buffer = (write_function, output_time_offset)
         elif isinstance(write_function, Function):
             self.out_time_buffer = (write_function, 0)
