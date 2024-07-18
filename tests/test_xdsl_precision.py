@@ -18,11 +18,12 @@ from xdsl.dialects.memref import Load
 from xdsl.dialects.experimental import math
 
 
-def test_xdsl_I():
-    # Define a simple Devito Operator
+@pytest.mark.parametrize('shape, rtol', [(5, 1e-7), (100, 1e-6)])
+def test_xdsl_I(shape, rtol):
+    # Define an upper bound of precision
 
     nt = 10
-    grid = Grid(shape=(5,))
+    grid = Grid(shape=(shape,))
     u = TimeFunction(name='u', grid=grid, space_order=2)
 
     init = 1.
@@ -38,4 +39,4 @@ def test_xdsl_I():
     opx.apply(time_M=nt)
     xnorm = norm(u)
 
-    assert np.isclose(dnorm, xnorm, atol=0, rtol=1.e-7)
+    assert np.isclose(dnorm, xnorm, atol=0, rtol=rtol)
