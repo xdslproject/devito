@@ -232,6 +232,7 @@ def test_dt2_sources_script(shape, nt):
 
     assert np.isclose(norm0, norm1, atol=1e-5, rtol=0)
 
+
 @pytest.mark.xfail(reason="time_m is required in ambiguous setting")
 @pytest.mark.parametrize('shape, rtol', [(5, 1e-5), (100, 1e-6)])
 def test_precision_I(shape, rtol):
