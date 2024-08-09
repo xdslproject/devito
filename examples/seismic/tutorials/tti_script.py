@@ -85,26 +85,31 @@ term1_p = q.dx
 # term4_p = ( delta*sin4theta - 4*epsilon*sin2theta*costheta**2)*((q.dy).dx3)
 # term5_p = (-delta*sin4theta - 4*epsilon*sin2theta*sintheta**2)*((q.dy3).dx)
 
-stencil_p = solve(m*p.dt2 - term1_p, p.forward)
+stencil_p = solve(m*p.dt2 - 0.01, p.forward)
+# update_p = Eq(p.forward, stencil_p)
 update_p = Eq(p.forward, stencil_p)
 
-import pdb; pdb.set_trace()
+p.data[:] = 0.1
+print("Norm xdsl(p) before is ", norm(p))
+opx = Operator([update_p], opt='xdsl')
+opx.apply(time_m=0, time_M=time_range.num-2, dt=dt)
+print("Norm xdsl(p) after is ", norm(p))
+
+xnorm0 = np.linalg.norm(p.data[0])
+xnorm1 = np.linalg.norm(p.data[1])
+xnorm2 = np.linalg.norm(p.data[2])
 
 p.data[:] = 0.1
-optime = Operator([update_p], opt='xdsl')
-optime(time_M=time_range.num-2, dt=dt)
-print("Norm xdsl(p) is ", norm(p))
-
-import pdb; pdb.set_trace()
-
-
-p.data[:] = 0.1
-optime = Operator([update_p])
-optime(time_M=time_range.num-2, dt=dt)
+print("Norm xdsl(p) before is ", norm(p))
+opd = Operator([update_p])
+opd.apply(time_m=0, time_M=time_range.num-2, dt=dt)
 print("Norm devito(p) is ", norm(p))
 
-from devito import norm
+dnorm0 = np.linalg.norm(p.data[0])
+dnorm1 = np.linalg.norm(p.data[1])
+dnorm2 = np.linalg.norm(p.data[2])
+
 
 print("Norm p is ", norm(p))
 
-# import pdb; pdb.set_trace()
+import pdb; pdb.set_trace()
