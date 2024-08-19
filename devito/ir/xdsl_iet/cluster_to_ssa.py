@@ -287,7 +287,7 @@ class ExtractDevitoStencilConversion:
             SSAargs = (self._visit_math_nodes(dim, arg, output_indexed)
                        for arg in node.args)
             return reduce(lambda x, y : arith.AndI(x, y).result, SSAargs)
-        
+
         # Trigonometric functions
         elif isinstance(node, sin):
             assert len(node.args) == 1, "Expected single argument for sin."
@@ -298,13 +298,13 @@ class ExtractDevitoStencilConversion:
             assert len(node.args) == 1, "Expected single argument for cos."           
             return math.CosOp(self._visit_math_nodes(dim, node.args[0],
                               output_indexed)).result
-        
+
         elif isinstance(node, tan):
             assert len(node.args) == 1, "Expected single argument for TanOp."
-            
+
             return math.TanOp(self._visit_math_nodes(dim, node.args[0],
                               output_indexed)).result
-                   
+
         elif isinstance(node, Relational):
             if isinstance(node, GreaterThan):
                 mnemonic = "sge"
@@ -391,12 +391,10 @@ class ExtractDevitoStencilConversion:
             apply.res[0],
             self.function_values[self.out_time_buffer],
             stencil.StencilBoundsAttr(zip(lb, ub)),
-            stencil.TempType(len(shape),
-                             element_type=dtype_to_xdsltype(write_function.dtype))
         )
-
-        store.temp_with_halo.name_hint = f"{write_function.name}_t{self.out_time_buffer[1]}_temp"  # noqa
-        self.temps[self.out_time_buffer] = store.temp_with_halo
+        load = stencil.LoadOp.get(self.function_values[self.out_time_buffer])
+        load.res.name_hint = f"{write_function.name}_t{self.out_time_buffer[1]}_temp"  # noqa
+        self.temps[self.out_time_buffer] = load.res
 
     def build_generic_step_expression(self, dim: SteppingDimension, eq: LoweredEq):
         # Sources
@@ -439,7 +437,6 @@ class ExtractDevitoStencilConversion:
             self.build_generic_step_expression(dim, eq)
             scf.Yield()
 
-
     def build_time_loop(
         self, eqs: list[Any], step_dim: SteppingDimension, **kwargs
     ):
@@ -450,7 +447,7 @@ class ExtractDevitoStencilConversion:
         ub = iet_ssa.LoadSymbolic.get(
             step_dim.symbolic_max._C_name, IndexType()
         )
-        
+
         one = arith.Constant.from_int_and_width(1, IndexType())
 
         # Devito iterates from time_m to time_M *inclusive*, MLIR only takes
@@ -497,7 +494,7 @@ class ExtractDevitoStencilConversion:
             for i, (f, t) in enumerate(self.time_buffers)
         }
         self.function_values |= self.block_args
-        
+
         # Name the block argument for debugging
         for (f, t), arg in self.block_args.items():
             arg.name_hint = f"{f.name}_t{t}"
@@ -513,8 +510,7 @@ class ExtractDevitoStencilConversion:
 
     def lower_devito_Eqs(self, eqs: list[Any], **kwargs):
         # Lower devito Equations to xDSL
-        
-        
+
         for eq in eqs:
             lowered = self.operator._lower_exprs(as_tuple(eq), **kwargs)
             if isinstance(eq, Eq):
@@ -546,7 +542,7 @@ class ExtractDevitoStencilConversion:
                 lb = arith.Constant.from_int_and_width(int(lower), IndexType())
             else:
                 raise NotImplementedError(f"Lower bound of type {type(lower)} not supported")
-            
+
             try:
                 name = interval.dim.symbolic_min.name
             except:
@@ -633,7 +629,7 @@ class ExtractDevitoStencilConversion:
         # Instantiate the module.
         self.function_values: dict[tuple[Function, int], SSAValue] = {}
         self.symbol_values: dict[str, SSAValue] = {}
-        
+
         module = ModuleOp(Region([block := Block([])]))
         with ImplicitBuilder(block):
             # Get all functions used in the equations
@@ -647,7 +643,7 @@ class ExtractDevitoStencilConversion:
                         functions.add(f.function)
 
                 elif isinstance(eq, Injection):
-                    
+
                     functions.add(eq.field.function)
                     for f in retrieve_functions(eq.expr):
                         if isinstance(f, PointSource):
