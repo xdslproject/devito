@@ -1,4 +1,4 @@
-// RUN: xdsl-opt -p shape-inference,convert-stencil-to-ll-mlir,scf-parallel-loop-tiling{parallel-loop-tile-sizes=64,0},printf-to-llvm,canonicalize %s | filecheck %s
+// RUN: xdsl-opt -p canonicalize,cse,shape-inference,stencil-bufferize,convert-stencil-to-ll-mlir,scf-parallel-loop-tiling{parallel-loop-tile-sizes=64,0},printf-to-llvm,canonicalize %s | filecheck %s
 
 builtin.module {
   func.func @Kernel(%f2_vec0 : !stencil.field<[-2,5]x[-2,5]xf32>, %f2_vec1 : !stencil.field<[-2,5]x[-2,5]xf32>, %timers : !llvm.ptr) {

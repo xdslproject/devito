@@ -1,4 +1,4 @@
-// RUN: xdsl-opt -p "distribute-stencil{strategy=3d-grid slices=2,1,1 restrict_domain=false},canonicalize-dmp,convert-stencil-to-ll-mlir,scf-parallel-loop-tiling{parallel-loop-tile-sizes=64,64,0}" %s | filecheck %s
+// RUN: xdsl-opt -p "canonicalize,cse,distribute-stencil{strategy=3d-grid slices=2,1,1 restrict_domain=false},shape-inference,canonicalize-dmp,stencil-bufferize,dmp-to-mpi{mpi_init=false},convert-stencil-to-ll-mlir,scf-parallel-loop-tiling{parallel-loop-tile-sizes=64,64,0}" %s | filecheck %s
 
 builtin.module {
   func.func @Kernel(%u_vec0 : !stencil.field<[-2,53]x[-2,103]x[-2,103]xf32>, %u_vec1 : !stencil.field<[-2,53]x[-2,103]x[-2,103]xf32>, %u_vec2 : !stencil.field<[-2,53]x[-2,103]x[-2,103]xf32>, %timers : !llvm.ptr) {

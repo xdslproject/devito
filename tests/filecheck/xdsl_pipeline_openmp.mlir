@@ -1,4 +1,4 @@
-// RUN: xdsl-opt -p "canonicalize" %s | filecheck %s
+// RUN: xdsl-opt -p "canonicalize,cse" %s | filecheck %s
 
 builtin.module {
   func.func @xDSLDiffusionOperator(%u_vec0 : memref<158x158x158xf32>, %u_vec1 : memref<158x158x158xf32>, %timers : !llvm.ptr) {
