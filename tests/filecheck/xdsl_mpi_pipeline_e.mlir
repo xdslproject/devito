@@ -1,4 +1,4 @@
-// RUN: xdsl-opt -p "canonicalize,cse,distribute-stencil{strategy=3d-grid slices=2,1,1 restrict_domain=false},shape-inference,canonicalize-dmp,stencil-bufferize,dmp-to-mpi{mpi_init=false},convert-stencil-to-ll-mlir,scf-parallel-loop-tiling{parallel-loop-tile-sizes=64,64,0},dmp-to-mpi{mpi_init=false},lower-mpi" %s | filecheck %s
+// RUN: xdsl-opt -p "canonicalize,cse,distribute-stencil{strategy=3d-grid slices=2,1,1 restrict_domain=false},shape-inference,canonicalize-dmp,stencil-bufferize,dmp-to-mpi{mpi_init=false},convert-stencil-to-ll-mlir,scf-parallel-loop-tiling{parallel-loop-tile-sizes=64,64,0},dmp-to-mpi{mpi_init=false},lower-mpi,canonicalize,cse" %s | filecheck %s
 
 builtin.module {
   func.func @Kernel(%u_vec0 : !stencil.field<[-2,53]x[-2,103]x[-2,103]xf32>, %u_vec1 : !stencil.field<[-2,53]x[-2,103]x[-2,103]xf32>, %u_vec2 : !stencil.field<[-2,53]x[-2,103]x[-2,103]xf32>, %timers : !llvm.ptr) {
@@ -110,586 +110,429 @@ builtin.module {
 // CHECK-NEXT:      %0 = func.call @timer_start() : () -> f64
 // CHECK-NEXT:      %time_m = arith.constant 1 : index
 // CHECK-NEXT:      %time_M = arith.constant 20 : index
-// CHECK-NEXT:      %1 = arith.constant 1 : index
-// CHECK-NEXT:      %2 = arith.addi %time_M, %1 : index
-// CHECK-NEXT:      %step = arith.constant 1 : index
-// CHECK-NEXT:      %3 = arith.constant 12 : i32
-// CHECK-NEXT:      %4 = "llvm.alloca"(%3) <{"alignment" = 32 : i64, "elem_type" = i32}> : (i32) -> !llvm.ptr
-// CHECK-NEXT:      %5 = arith.constant 1140850688 : i32
-// CHECK-NEXT:      %6 = arith.constant 1 : i64
-// CHECK-NEXT:      %7 = "llvm.alloca"(%6) <{"alignment" = 32 : i64, "elem_type" = i32}> : (i64) -> !llvm.ptr
-// CHECK-NEXT:      %8 = func.call @MPI_Comm_rank(%5, %7) : (i32, !llvm.ptr) -> i32
-// CHECK-NEXT:      %9 = "llvm.load"(%7) : (!llvm.ptr) -> i32
+// CHECK-NEXT:      %1 = arith.addi %time_M, %time_m : index
+// CHECK-NEXT:      %2 = arith.constant 12 : i32
+// CHECK-NEXT:      %3 = "llvm.alloca"(%2) <{"alignment" = 32 : i64, "elem_type" = i32}> : (i32) -> !llvm.ptr
+// CHECK-NEXT:      %4 = arith.constant 1140850688 : i32
+// CHECK-NEXT:      %5 = arith.constant 1 : i64
+// CHECK-NEXT:      %6 = "llvm.alloca"(%5) <{"alignment" = 32 : i64, "elem_type" = i32}> : (i64) -> !llvm.ptr
+// CHECK-NEXT:      %7 = func.call @MPI_Comm_rank(%4, %6) : (i32, !llvm.ptr) -> i32
+// CHECK-NEXT:      %8 = "llvm.load"(%6) : (!llvm.ptr) -> i32
 // CHECK-NEXT:      %send_buff_ex0 = memref.alloc() {"alignment" = 64 : i64} : memref<101x101xf32>
-// CHECK-NEXT:      %10 = "memref.extract_aligned_pointer_as_index"(%send_buff_ex0) : (memref<101x101xf32>) -> index
-// CHECK-NEXT:      %11 = arith.index_cast %10 : index to i64
-// CHECK-NEXT:      %send_buff_ex0_ptr = "llvm.inttoptr"(%11) : (i64) -> !llvm.ptr
-// CHECK-NEXT:      %12 = arith.constant 10201 : i32
-// CHECK-NEXT:      %13 = arith.constant 1275069450 : i32
+// CHECK-NEXT:      %9 = "memref.extract_aligned_pointer_as_index"(%send_buff_ex0) : (memref<101x101xf32>) -> index
+// CHECK-NEXT:      %10 = arith.index_cast %9 : index to i64
+// CHECK-NEXT:      %send_buff_ex0_ptr = "llvm.inttoptr"(%10) : (i64) -> !llvm.ptr
+// CHECK-NEXT:      %11 = arith.constant 10201 : i32
+// CHECK-NEXT:      %12 = arith.constant 1275069450 : i32
 // CHECK-NEXT:      %recv_buff_ex0 = memref.alloc() {"alignment" = 64 : i64} : memref<101x101xf32>
-// CHECK-NEXT:      %14 = "memref.extract_aligned_pointer_as_index"(%recv_buff_ex0) : (memref<101x101xf32>) -> index
-// CHECK-NEXT:      %15 = arith.index_cast %14 : index to i64
-// CHECK-NEXT:      %recv_buff_ex0_ptr = "llvm.inttoptr"(%15) : (i64) -> !llvm.ptr
-// CHECK-NEXT:      %16 = arith.constant 10201 : i32
-// CHECK-NEXT:      %17 = arith.constant 1275069450 : i32
+// CHECK-NEXT:      %13 = "memref.extract_aligned_pointer_as_index"(%recv_buff_ex0) : (memref<101x101xf32>) -> index
+// CHECK-NEXT:      %14 = arith.index_cast %13 : index to i64
+// CHECK-NEXT:      %recv_buff_ex0_ptr = "llvm.inttoptr"(%14) : (i64) -> !llvm.ptr
 // CHECK-NEXT:      %send_buff_ex1 = memref.alloc() {"alignment" = 64 : i64} : memref<101x101xf32>
-// CHECK-NEXT:      %18 = "memref.extract_aligned_pointer_as_index"(%send_buff_ex1) : (memref<101x101xf32>) -> index
-// CHECK-NEXT:      %19 = arith.index_cast %18 : index to i64
-// CHECK-NEXT:      %send_buff_ex1_ptr = "llvm.inttoptr"(%19) : (i64) -> !llvm.ptr
-// CHECK-NEXT:      %20 = arith.constant 10201 : i32
-// CHECK-NEXT:      %21 = arith.constant 1275069450 : i32
+// CHECK-NEXT:      %15 = "memref.extract_aligned_pointer_as_index"(%send_buff_ex1) : (memref<101x101xf32>) -> index
+// CHECK-NEXT:      %16 = arith.index_cast %15 : index to i64
+// CHECK-NEXT:      %send_buff_ex1_ptr = "llvm.inttoptr"(%16) : (i64) -> !llvm.ptr
 // CHECK-NEXT:      %recv_buff_ex1 = memref.alloc() {"alignment" = 64 : i64} : memref<101x101xf32>
-// CHECK-NEXT:      %22 = "memref.extract_aligned_pointer_as_index"(%recv_buff_ex1) : (memref<101x101xf32>) -> index
-// CHECK-NEXT:      %23 = arith.index_cast %22 : index to i64
-// CHECK-NEXT:      %recv_buff_ex1_ptr = "llvm.inttoptr"(%23) : (i64) -> !llvm.ptr
-// CHECK-NEXT:      %24 = arith.constant 10201 : i32
-// CHECK-NEXT:      %25 = arith.constant 1275069450 : i32
+// CHECK-NEXT:      %17 = "memref.extract_aligned_pointer_as_index"(%recv_buff_ex1) : (memref<101x101xf32>) -> index
+// CHECK-NEXT:      %18 = arith.index_cast %17 : index to i64
+// CHECK-NEXT:      %recv_buff_ex1_ptr = "llvm.inttoptr"(%18) : (i64) -> !llvm.ptr
 // CHECK-NEXT:      %send_buff_ex2 = memref.alloc() {"alignment" = 64 : i64} : memref<51x101xf32>
-// CHECK-NEXT:      %26 = "memref.extract_aligned_pointer_as_index"(%send_buff_ex2) : (memref<51x101xf32>) -> index
-// CHECK-NEXT:      %27 = arith.index_cast %26 : index to i64
-// CHECK-NEXT:      %send_buff_ex2_ptr = "llvm.inttoptr"(%27) : (i64) -> !llvm.ptr
-// CHECK-NEXT:      %28 = arith.constant 5151 : i32
-// CHECK-NEXT:      %29 = arith.constant 1275069450 : i32
+// CHECK-NEXT:      %19 = "memref.extract_aligned_pointer_as_index"(%send_buff_ex2) : (memref<51x101xf32>) -> index
+// CHECK-NEXT:      %20 = arith.index_cast %19 : index to i64
+// CHECK-NEXT:      %send_buff_ex2_ptr = "llvm.inttoptr"(%20) : (i64) -> !llvm.ptr
+// CHECK-NEXT:      %21 = arith.constant 5151 : i32
 // CHECK-NEXT:      %recv_buff_ex2 = memref.alloc() {"alignment" = 64 : i64} : memref<51x101xf32>
-// CHECK-NEXT:      %30 = "memref.extract_aligned_pointer_as_index"(%recv_buff_ex2) : (memref<51x101xf32>) -> index
-// CHECK-NEXT:      %31 = arith.index_cast %30 : index to i64
-// CHECK-NEXT:      %recv_buff_ex2_ptr = "llvm.inttoptr"(%31) : (i64) -> !llvm.ptr
-// CHECK-NEXT:      %32 = arith.constant 5151 : i32
-// CHECK-NEXT:      %33 = arith.constant 1275069450 : i32
+// CHECK-NEXT:      %22 = "memref.extract_aligned_pointer_as_index"(%recv_buff_ex2) : (memref<51x101xf32>) -> index
+// CHECK-NEXT:      %23 = arith.index_cast %22 : index to i64
+// CHECK-NEXT:      %recv_buff_ex2_ptr = "llvm.inttoptr"(%23) : (i64) -> !llvm.ptr
 // CHECK-NEXT:      %send_buff_ex3 = memref.alloc() {"alignment" = 64 : i64} : memref<51x101xf32>
-// CHECK-NEXT:      %34 = "memref.extract_aligned_pointer_as_index"(%send_buff_ex3) : (memref<51x101xf32>) -> index
-// CHECK-NEXT:      %35 = arith.index_cast %34 : index to i64
-// CHECK-NEXT:      %send_buff_ex3_ptr = "llvm.inttoptr"(%35) : (i64) -> !llvm.ptr
-// CHECK-NEXT:      %36 = arith.constant 5151 : i32
-// CHECK-NEXT:      %37 = arith.constant 1275069450 : i32
+// CHECK-NEXT:      %24 = "memref.extract_aligned_pointer_as_index"(%send_buff_ex3) : (memref<51x101xf32>) -> index
+// CHECK-NEXT:      %25 = arith.index_cast %24 : index to i64
+// CHECK-NEXT:      %send_buff_ex3_ptr = "llvm.inttoptr"(%25) : (i64) -> !llvm.ptr
 // CHECK-NEXT:      %recv_buff_ex3 = memref.alloc() {"alignment" = 64 : i64} : memref<51x101xf32>
-// CHECK-NEXT:      %38 = "memref.extract_aligned_pointer_as_index"(%recv_buff_ex3) : (memref<51x101xf32>) -> index
-// CHECK-NEXT:      %39 = arith.index_cast %38 : index to i64
-// CHECK-NEXT:      %recv_buff_ex3_ptr = "llvm.inttoptr"(%39) : (i64) -> !llvm.ptr
-// CHECK-NEXT:      %40 = arith.constant 5151 : i32
-// CHECK-NEXT:      %41 = arith.constant 1275069450 : i32
+// CHECK-NEXT:      %26 = "memref.extract_aligned_pointer_as_index"(%recv_buff_ex3) : (memref<51x101xf32>) -> index
+// CHECK-NEXT:      %27 = arith.index_cast %26 : index to i64
+// CHECK-NEXT:      %recv_buff_ex3_ptr = "llvm.inttoptr"(%27) : (i64) -> !llvm.ptr
 // CHECK-NEXT:      %send_buff_ex4 = memref.alloc() {"alignment" = 64 : i64} : memref<51x101xf32>
-// CHECK-NEXT:      %42 = "memref.extract_aligned_pointer_as_index"(%send_buff_ex4) : (memref<51x101xf32>) -> index
-// CHECK-NEXT:      %43 = arith.index_cast %42 : index to i64
-// CHECK-NEXT:      %send_buff_ex4_ptr = "llvm.inttoptr"(%43) : (i64) -> !llvm.ptr
-// CHECK-NEXT:      %44 = arith.constant 5151 : i32
-// CHECK-NEXT:      %45 = arith.constant 1275069450 : i32
+// CHECK-NEXT:      %28 = "memref.extract_aligned_pointer_as_index"(%send_buff_ex4) : (memref<51x101xf32>) -> index
+// CHECK-NEXT:      %29 = arith.index_cast %28 : index to i64
+// CHECK-NEXT:      %send_buff_ex4_ptr = "llvm.inttoptr"(%29) : (i64) -> !llvm.ptr
 // CHECK-NEXT:      %recv_buff_ex4 = memref.alloc() {"alignment" = 64 : i64} : memref<51x101xf32>
-// CHECK-NEXT:      %46 = "memref.extract_aligned_pointer_as_index"(%recv_buff_ex4) : (memref<51x101xf32>) -> index
-// CHECK-NEXT:      %47 = arith.index_cast %46 : index to i64
-// CHECK-NEXT:      %recv_buff_ex4_ptr = "llvm.inttoptr"(%47) : (i64) -> !llvm.ptr
-// CHECK-NEXT:      %48 = arith.constant 5151 : i32
-// CHECK-NEXT:      %49 = arith.constant 1275069450 : i32
+// CHECK-NEXT:      %30 = "memref.extract_aligned_pointer_as_index"(%recv_buff_ex4) : (memref<51x101xf32>) -> index
+// CHECK-NEXT:      %31 = arith.index_cast %30 : index to i64
+// CHECK-NEXT:      %recv_buff_ex4_ptr = "llvm.inttoptr"(%31) : (i64) -> !llvm.ptr
 // CHECK-NEXT:      %send_buff_ex5 = memref.alloc() {"alignment" = 64 : i64} : memref<51x101xf32>
-// CHECK-NEXT:      %50 = "memref.extract_aligned_pointer_as_index"(%send_buff_ex5) : (memref<51x101xf32>) -> index
-// CHECK-NEXT:      %51 = arith.index_cast %50 : index to i64
-// CHECK-NEXT:      %send_buff_ex5_ptr = "llvm.inttoptr"(%51) : (i64) -> !llvm.ptr
-// CHECK-NEXT:      %52 = arith.constant 5151 : i32
-// CHECK-NEXT:      %53 = arith.constant 1275069450 : i32
+// CHECK-NEXT:      %32 = "memref.extract_aligned_pointer_as_index"(%send_buff_ex5) : (memref<51x101xf32>) -> index
+// CHECK-NEXT:      %33 = arith.index_cast %32 : index to i64
+// CHECK-NEXT:      %send_buff_ex5_ptr = "llvm.inttoptr"(%33) : (i64) -> !llvm.ptr
 // CHECK-NEXT:      %recv_buff_ex5 = memref.alloc() {"alignment" = 64 : i64} : memref<51x101xf32>
-// CHECK-NEXT:      %54 = "memref.extract_aligned_pointer_as_index"(%recv_buff_ex5) : (memref<51x101xf32>) -> index
-// CHECK-NEXT:      %55 = arith.index_cast %54 : index to i64
-// CHECK-NEXT:      %recv_buff_ex5_ptr = "llvm.inttoptr"(%55) : (i64) -> !llvm.ptr
-// CHECK-NEXT:      %56 = arith.constant 5151 : i32
-// CHECK-NEXT:      %57 = arith.constant 1275069450 : i32
-// CHECK-NEXT:      %58, %59, %60 = scf.for %time = %time_m to %2 step %step iter_args(%u_t0 = %u_vec0, %u_t1 = %u_vec1, %u_t2 = %u_vec2) -> (memref<55x105x105xf32>, memref<55x105x105xf32>, memref<55x105x105xf32>) {
-// CHECK-NEXT:        %u_t1_storeview = "memref.subview"(%u_t1) <{"static_offsets" = array<i64: 2, 2, 2>, "static_sizes" = array<i64: 51, 101, 101>, "static_strides" = array<i64: 1, 1, 1>, "operandSegmentSizes" = array<i32: 1, 0, 0, 0>}> : (memref<55x105x105xf32>) -> memref<51x101x101xf32, strided<[11025, 105, 1], offset: 22262>>
-// CHECK-NEXT:        %u_t0_loadview = "memref.subview"(%u_t0) <{"static_offsets" = array<i64: 2, 2, 2>, "static_sizes" = array<i64: 53, 103, 103>, "static_strides" = array<i64: 1, 1, 1>, "operandSegmentSizes" = array<i32: 1, 0, 0, 0>}> : (memref<55x105x105xf32>) -> memref<53x103x103xf32, strided<[11025, 105, 1], offset: 22262>>
-// CHECK-NEXT:        %61 = arith.constant 0 : i32
-// CHECK-NEXT:        %62 = arith.constant 1 : i32
-// CHECK-NEXT:        %63 = arith.divui %9, %62 : i32
-// CHECK-NEXT:        %64 = arith.remui %9, %62 : i32
-// CHECK-NEXT:        %65 = arith.constant 1 : i32
-// CHECK-NEXT:        %66 = arith.divui %64, %65 : i32
-// CHECK-NEXT:        %67 = arith.remui %64, %65 : i32
-// CHECK-NEXT:        %68 = arith.constant 1 : i32
-// CHECK-NEXT:        %69 = arith.divui %67, %68 : i32
-// CHECK-NEXT:        %70 = arith.remui %67, %68 : i32
-// CHECK-NEXT:        %71 = arith.constant 1 : i32
-// CHECK-NEXT:        %72 = arith.addi %63, %71 : i32
-// CHECK-NEXT:        %73 = arith.constant 2 : i32
-// CHECK-NEXT:        %74 = arith.cmpi slt, %72, %73 : i32
-// CHECK-NEXT:        %75 = arith.constant true
-// CHECK-NEXT:        %76 = arith.constant true
-// CHECK-NEXT:        %77 = arith.andi %74, %75 : i1
-// CHECK-NEXT:        %78 = arith.andi %77, %76 : i1
-// CHECK-NEXT:        %79 = arith.constant 1 : i32
-// CHECK-NEXT:        %80 = arith.muli %79, %72 : i32
-// CHECK-NEXT:        %81 = arith.addi %69, %80 : i32
-// CHECK-NEXT:        %82 = arith.constant 1 : i32
-// CHECK-NEXT:        %83 = arith.muli %82, %66 : i32
-// CHECK-NEXT:        %84 = arith.addi %81, %83 : i32
-// CHECK-NEXT:        %85 = arith.constant 0 : i32
-// CHECK-NEXT:        %86 = arith.constant 6 : i32
-// CHECK-NEXT:        %87 = "llvm.ptrtoint"(%4) : (!llvm.ptr) -> i64
-// CHECK-NEXT:        %88 = arith.constant 4 : i64
-// CHECK-NEXT:        %89 = arith.index_cast %85 : i32 to index
-// CHECK-NEXT:        %90 = arith.index_cast %89 : index to i64
-// CHECK-NEXT:        %91 = arith.muli %88, %90 : i64
-// CHECK-NEXT:        %92 = arith.addi %91, %87 : i64
-// CHECK-NEXT:        %93 = "llvm.inttoptr"(%92) : (i64) -> !llvm.ptr
-// CHECK-NEXT:        %94 = "llvm.ptrtoint"(%4) : (!llvm.ptr) -> i64
-// CHECK-NEXT:        %95 = arith.constant 4 : i64
-// CHECK-NEXT:        %96 = arith.index_cast %86 : i32 to index
-// CHECK-NEXT:        %97 = arith.index_cast %96 : index to i64
-// CHECK-NEXT:        %98 = arith.muli %95, %97 : i64
-// CHECK-NEXT:        %99 = arith.addi %98, %94 : i64
-// CHECK-NEXT:        %100 = "llvm.inttoptr"(%99) : (i64) -> !llvm.ptr
-// CHECK-NEXT:        "scf.if"(%78) ({
-// CHECK-NEXT:          %101 = "memref.subview"(%u_t0_loadview) <{"static_offsets" = array<i64: 50, 0, 0>, "static_sizes" = array<i64: 1, 101, 101>, "static_strides" = array<i64: 1, 1, 1>, "operandSegmentSizes" = array<i32: 1, 0, 0, 0>}> : (memref<53x103x103xf32, strided<[11025, 105, 1], offset: 22262>>) -> memref<101x101xf32, strided<[105, 1], offset: 573512>>
-// CHECK-NEXT:          "memref.copy"(%101, %send_buff_ex0) : (memref<101x101xf32, strided<[105, 1], offset: 573512>>, memref<101x101xf32>) -> ()
-// CHECK-NEXT:          %102 = arith.constant 1140850688 : i32
-// CHECK-NEXT:          %103 = func.call @MPI_Isend(%send_buff_ex0_ptr, %12, %13, %84, %61, %102, %93) : (!llvm.ptr, i32, i32, i32, i32, i32, !llvm.ptr) -> i32
-// CHECK-NEXT:          %104 = arith.constant 1140850688 : i32
-// CHECK-NEXT:          %105 = func.call @MPI_Irecv(%recv_buff_ex0_ptr, %16, %17, %84, %61, %104, %100) : (!llvm.ptr, i32, i32, i32, i32, i32, !llvm.ptr) -> i32
+// CHECK-NEXT:      %34 = "memref.extract_aligned_pointer_as_index"(%recv_buff_ex5) : (memref<51x101xf32>) -> index
+// CHECK-NEXT:      %35 = arith.index_cast %34 : index to i64
+// CHECK-NEXT:      %recv_buff_ex5_ptr = "llvm.inttoptr"(%35) : (i64) -> !llvm.ptr
+// CHECK-NEXT:      %36, %37, %38 = scf.for %time = %time_m to %1 step %time_m iter_args(%u_t0 = %u_vec0, %u_t1 = %u_vec1, %u_t2 = %u_vec2) -> (memref<55x105x105xf32>, memref<55x105x105xf32>, memref<55x105x105xf32>) {
+// CHECK-NEXT:        %39 = arith.constant 0 : i32
+// CHECK-NEXT:        %40 = arith.constant 1 : i32
+// CHECK-NEXT:        %41 = arith.divui %8, %40 : i32
+// CHECK-NEXT:        %42 = arith.remui %8, %40 : i32
+// CHECK-NEXT:        %43 = arith.divui %42, %40 : i32
+// CHECK-NEXT:        %44 = arith.remui %42, %40 : i32
+// CHECK-NEXT:        %45 = arith.divui %44, %40 : i32
+// CHECK-NEXT:        %46 = arith.remui %44, %40 : i32
+// CHECK-NEXT:        %47 = arith.addi %41, %40 : i32
+// CHECK-NEXT:        %48 = arith.constant 2 : i32
+// CHECK-NEXT:        %49 = arith.cmpi slt, %47, %48 : i32
+// CHECK-NEXT:        %50 = arith.constant true
+// CHECK-NEXT:        %51 = arith.andi %49, %50 : i1
+// CHECK-NEXT:        %52 = arith.andi %51, %50 : i1
+// CHECK-NEXT:        %53 = arith.muli %40, %47 : i32
+// CHECK-NEXT:        %54 = arith.addi %45, %53 : i32
+// CHECK-NEXT:        %55 = arith.muli %40, %43 : i32
+// CHECK-NEXT:        %56 = arith.addi %54, %55 : i32
+// CHECK-NEXT:        %57 = arith.constant 6 : i32
+// CHECK-NEXT:        %58 = "llvm.ptrtoint"(%3) : (!llvm.ptr) -> i64
+// CHECK-NEXT:        %59 = arith.constant 4 : i64
+// CHECK-NEXT:        %60 = arith.index_cast %39 : i32 to index
+// CHECK-NEXT:        %61 = arith.index_cast %60 : index to i64
+// CHECK-NEXT:        %62 = arith.muli %59, %61 : i64
+// CHECK-NEXT:        %63 = arith.addi %62, %58 : i64
+// CHECK-NEXT:        %64 = "llvm.inttoptr"(%63) : (i64) -> !llvm.ptr
+// CHECK-NEXT:        %65 = "llvm.ptrtoint"(%3) : (!llvm.ptr) -> i64
+// CHECK-NEXT:        %66 = arith.index_cast %57 : i32 to index
+// CHECK-NEXT:        %67 = arith.index_cast %66 : index to i64
+// CHECK-NEXT:        %68 = arith.muli %59, %67 : i64
+// CHECK-NEXT:        %69 = arith.addi %68, %65 : i64
+// CHECK-NEXT:        %70 = "llvm.inttoptr"(%69) : (i64) -> !llvm.ptr
+// CHECK-NEXT:        "scf.if"(%52) ({
+// CHECK-NEXT:          %71 = builtin.unrealized_conversion_cast %u_t0 : memref<55x105x105xf32> to memref<55x105x105xf32>
+// CHECK-NEXT:          %72 = memref.subview %71[52, 2, 2] [1, 101, 101] [1, 1, 1] : memref<55x105x105xf32> to memref<101x101xf32, strided<[105, 1], offset: 573512>>
+// CHECK-NEXT:          "memref.copy"(%72, %send_buff_ex0) : (memref<101x101xf32, strided<[105, 1], offset: 573512>>, memref<101x101xf32>) -> ()
+// CHECK-NEXT:          %73 = func.call @MPI_Isend(%send_buff_ex0_ptr, %11, %12, %56, %39, %4, %64) : (!llvm.ptr, i32, i32, i32, i32, i32, !llvm.ptr) -> i32
+// CHECK-NEXT:          %74 = func.call @MPI_Irecv(%recv_buff_ex0_ptr, %11, %12, %56, %39, %4, %70) : (!llvm.ptr, i32, i32, i32, i32, i32, !llvm.ptr) -> i32
 // CHECK-NEXT:          scf.yield
 // CHECK-NEXT:        }, {
-// CHECK-NEXT:          %106 = arith.constant 738197504 : i32
-// CHECK-NEXT:          "llvm.store"(%106, %93) <{"ordering" = 0 : i64}> : (i32, !llvm.ptr) -> ()
+// CHECK-NEXT:          %75 = arith.constant 738197504 : i32
+// CHECK-NEXT:          "llvm.store"(%75, %64) <{"ordering" = 0 : i64}> : (i32, !llvm.ptr) -> ()
+// CHECK-NEXT:          "llvm.store"(%75, %70) <{"ordering" = 0 : i64}> : (i32, !llvm.ptr) -> ()
+// CHECK-NEXT:          scf.yield
+// CHECK-NEXT:        }) : (i1) -> ()
+// CHECK-NEXT:        %76 = arith.remui %8, %40 : i32
+// CHECK-NEXT:        %77 = arith.divui %76, %40 : i32
+// CHECK-NEXT:        %78 = arith.remui %76, %40 : i32
+// CHECK-NEXT:        %79 = arith.divui %78, %40 : i32
+// CHECK-NEXT:        %80 = arith.remui %78, %40 : i32
+// CHECK-NEXT:        %81 = arith.constant -1 : i32
+// CHECK-NEXT:        %82 = arith.addi %41, %81 : i32
+// CHECK-NEXT:        %83 = arith.cmpi sge, %82, %39 : i32
+// CHECK-NEXT:        %84 = arith.andi %83, %50 : i1
+// CHECK-NEXT:        %85 = arith.andi %84, %50 : i1
+// CHECK-NEXT:        %86 = arith.muli %40, %82 : i32
+// CHECK-NEXT:        %87 = arith.addi %79, %86 : i32
+// CHECK-NEXT:        %88 = arith.muli %40, %77 : i32
+// CHECK-NEXT:        %89 = arith.addi %87, %88 : i32
+// CHECK-NEXT:        %90 = arith.constant 7 : i32
+// CHECK-NEXT:        %91 = "llvm.ptrtoint"(%3) : (!llvm.ptr) -> i64
+// CHECK-NEXT:        %92 = arith.index_cast %40 : i32 to index
+// CHECK-NEXT:        %93 = arith.index_cast %92 : index to i64
+// CHECK-NEXT:        %94 = arith.muli %59, %93 : i64
+// CHECK-NEXT:        %95 = arith.addi %94, %91 : i64
+// CHECK-NEXT:        %96 = "llvm.inttoptr"(%95) : (i64) -> !llvm.ptr
+// CHECK-NEXT:        %97 = "llvm.ptrtoint"(%3) : (!llvm.ptr) -> i64
+// CHECK-NEXT:        %98 = arith.index_cast %90 : i32 to index
+// CHECK-NEXT:        %99 = arith.index_cast %98 : index to i64
+// CHECK-NEXT:        %100 = arith.muli %59, %99 : i64
+// CHECK-NEXT:        %101 = arith.addi %100, %97 : i64
+// CHECK-NEXT:        %102 = "llvm.inttoptr"(%101) : (i64) -> !llvm.ptr
+// CHECK-NEXT:        "scf.if"(%85) ({
+// CHECK-NEXT:          %103 = builtin.unrealized_conversion_cast %u_t0 : memref<55x105x105xf32> to memref<55x105x105xf32>
+// CHECK-NEXT:          %104 = memref.subview %103[2, 2, 2] [1, 101, 101] [1, 1, 1] : memref<55x105x105xf32> to memref<101x101xf32, strided<[105, 1], offset: 22262>>
+// CHECK-NEXT:          "memref.copy"(%104, %send_buff_ex1) : (memref<101x101xf32, strided<[105, 1], offset: 22262>>, memref<101x101xf32>) -> ()
+// CHECK-NEXT:          %105 = func.call @MPI_Isend(%send_buff_ex1_ptr, %11, %12, %89, %39, %4, %96) : (!llvm.ptr, i32, i32, i32, i32, i32, !llvm.ptr) -> i32
+// CHECK-NEXT:          %106 = func.call @MPI_Irecv(%recv_buff_ex1_ptr, %11, %12, %89, %39, %4, %102) : (!llvm.ptr, i32, i32, i32, i32, i32, !llvm.ptr) -> i32
+// CHECK-NEXT:          scf.yield
+// CHECK-NEXT:        }, {
 // CHECK-NEXT:          %107 = arith.constant 738197504 : i32
-// CHECK-NEXT:          "llvm.store"(%107, %100) <{"ordering" = 0 : i64}> : (i32, !llvm.ptr) -> ()
+// CHECK-NEXT:          "llvm.store"(%107, %96) <{"ordering" = 0 : i64}> : (i32, !llvm.ptr) -> ()
+// CHECK-NEXT:          "llvm.store"(%107, %102) <{"ordering" = 0 : i64}> : (i32, !llvm.ptr) -> ()
 // CHECK-NEXT:          scf.yield
 // CHECK-NEXT:        }) : (i1) -> ()
-// CHECK-NEXT:        %108 = arith.constant 1 : i32
-// CHECK-NEXT:        %109 = arith.divui %9, %108 : i32
-// CHECK-NEXT:        %110 = arith.remui %9, %108 : i32
-// CHECK-NEXT:        %111 = arith.constant 1 : i32
-// CHECK-NEXT:        %112 = arith.divui %110, %111 : i32
-// CHECK-NEXT:        %113 = arith.remui %110, %111 : i32
-// CHECK-NEXT:        %114 = arith.constant 1 : i32
-// CHECK-NEXT:        %115 = arith.divui %113, %114 : i32
-// CHECK-NEXT:        %116 = arith.remui %113, %114 : i32
-// CHECK-NEXT:        %117 = arith.constant -1 : i32
-// CHECK-NEXT:        %118 = arith.addi %109, %117 : i32
-// CHECK-NEXT:        %119 = arith.constant 0 : i32
-// CHECK-NEXT:        %120 = arith.cmpi sge, %118, %119 : i32
-// CHECK-NEXT:        %121 = arith.constant true
-// CHECK-NEXT:        %122 = arith.constant true
-// CHECK-NEXT:        %123 = arith.andi %120, %121 : i1
-// CHECK-NEXT:        %124 = arith.andi %123, %122 : i1
-// CHECK-NEXT:        %125 = arith.constant 1 : i32
-// CHECK-NEXT:        %126 = arith.muli %125, %118 : i32
-// CHECK-NEXT:        %127 = arith.addi %115, %126 : i32
-// CHECK-NEXT:        %128 = arith.constant 1 : i32
-// CHECK-NEXT:        %129 = arith.muli %128, %112 : i32
-// CHECK-NEXT:        %130 = arith.addi %127, %129 : i32
-// CHECK-NEXT:        %131 = arith.constant 1 : i32
-// CHECK-NEXT:        %132 = arith.constant 7 : i32
-// CHECK-NEXT:        %133 = "llvm.ptrtoint"(%4) : (!llvm.ptr) -> i64
-// CHECK-NEXT:        %134 = arith.constant 4 : i64
-// CHECK-NEXT:        %135 = arith.index_cast %131 : i32 to index
-// CHECK-NEXT:        %136 = arith.index_cast %135 : index to i64
-// CHECK-NEXT:        %137 = arith.muli %134, %136 : i64
-// CHECK-NEXT:        %138 = arith.addi %137, %133 : i64
-// CHECK-NEXT:        %139 = "llvm.inttoptr"(%138) : (i64) -> !llvm.ptr
-// CHECK-NEXT:        %140 = "llvm.ptrtoint"(%4) : (!llvm.ptr) -> i64
-// CHECK-NEXT:        %141 = arith.constant 4 : i64
-// CHECK-NEXT:        %142 = arith.index_cast %132 : i32 to index
-// CHECK-NEXT:        %143 = arith.index_cast %142 : index to i64
-// CHECK-NEXT:        %144 = arith.muli %141, %143 : i64
-// CHECK-NEXT:        %145 = arith.addi %144, %140 : i64
-// CHECK-NEXT:        %146 = "llvm.inttoptr"(%145) : (i64) -> !llvm.ptr
-// CHECK-NEXT:        "scf.if"(%124) ({
-// CHECK-NEXT:          %147 = "memref.subview"(%u_t0_loadview) <{"static_offsets" = array<i64: 0, 0, 0>, "static_sizes" = array<i64: 1, 101, 101>, "static_strides" = array<i64: 1, 1, 1>, "operandSegmentSizes" = array<i32: 1, 0, 0, 0>}> : (memref<53x103x103xf32, strided<[11025, 105, 1], offset: 22262>>) -> memref<101x101xf32, strided<[105, 1], offset: 22262>>
-// CHECK-NEXT:          "memref.copy"(%147, %send_buff_ex1) : (memref<101x101xf32, strided<[105, 1], offset: 22262>>, memref<101x101xf32>) -> ()
-// CHECK-NEXT:          %148 = arith.constant 1140850688 : i32
-// CHECK-NEXT:          %149 = func.call @MPI_Isend(%send_buff_ex1_ptr, %20, %21, %130, %61, %148, %139) : (!llvm.ptr, i32, i32, i32, i32, i32, !llvm.ptr) -> i32
-// CHECK-NEXT:          %150 = arith.constant 1140850688 : i32
-// CHECK-NEXT:          %151 = func.call @MPI_Irecv(%recv_buff_ex1_ptr, %24, %25, %130, %61, %150, %146) : (!llvm.ptr, i32, i32, i32, i32, i32, !llvm.ptr) -> i32
+// CHECK-NEXT:        %108 = arith.remui %8, %40 : i32
+// CHECK-NEXT:        %109 = arith.divui %108, %40 : i32
+// CHECK-NEXT:        %110 = arith.remui %108, %40 : i32
+// CHECK-NEXT:        %111 = arith.divui %110, %40 : i32
+// CHECK-NEXT:        %112 = arith.remui %110, %40 : i32
+// CHECK-NEXT:        %113 = arith.addi %109, %40 : i32
+// CHECK-NEXT:        %114 = arith.cmpi slt, %113, %40 : i32
+// CHECK-NEXT:        %115 = arith.andi %50, %114 : i1
+// CHECK-NEXT:        %116 = arith.andi %115, %50 : i1
+// CHECK-NEXT:        %117 = arith.muli %40, %41 : i32
+// CHECK-NEXT:        %118 = arith.addi %111, %117 : i32
+// CHECK-NEXT:        %119 = arith.muli %40, %113 : i32
+// CHECK-NEXT:        %120 = arith.addi %118, %119 : i32
+// CHECK-NEXT:        %121 = arith.constant 8 : i32
+// CHECK-NEXT:        %122 = "llvm.ptrtoint"(%3) : (!llvm.ptr) -> i64
+// CHECK-NEXT:        %123 = arith.index_cast %48 : i32 to index
+// CHECK-NEXT:        %124 = arith.index_cast %123 : index to i64
+// CHECK-NEXT:        %125 = arith.muli %59, %124 : i64
+// CHECK-NEXT:        %126 = arith.addi %125, %122 : i64
+// CHECK-NEXT:        %127 = "llvm.inttoptr"(%126) : (i64) -> !llvm.ptr
+// CHECK-NEXT:        %128 = "llvm.ptrtoint"(%3) : (!llvm.ptr) -> i64
+// CHECK-NEXT:        %129 = arith.index_cast %121 : i32 to index
+// CHECK-NEXT:        %130 = arith.index_cast %129 : index to i64
+// CHECK-NEXT:        %131 = arith.muli %59, %130 : i64
+// CHECK-NEXT:        %132 = arith.addi %131, %128 : i64
+// CHECK-NEXT:        %133 = "llvm.inttoptr"(%132) : (i64) -> !llvm.ptr
+// CHECK-NEXT:        "scf.if"(%116) ({
+// CHECK-NEXT:          %134 = builtin.unrealized_conversion_cast %u_t0 : memref<55x105x105xf32> to memref<55x105x105xf32>
+// CHECK-NEXT:          %135 = memref.subview %134[2, 102, 2] [51, 1, 101] [1, 1, 1] : memref<55x105x105xf32> to memref<51x101xf32, strided<[11025, 1], offset: 32762>>
+// CHECK-NEXT:          "memref.copy"(%135, %send_buff_ex2) : (memref<51x101xf32, strided<[11025, 1], offset: 32762>>, memref<51x101xf32>) -> ()
+// CHECK-NEXT:          %136 = func.call @MPI_Isend(%send_buff_ex2_ptr, %21, %12, %120, %39, %4, %127) : (!llvm.ptr, i32, i32, i32, i32, i32, !llvm.ptr) -> i32
+// CHECK-NEXT:          %137 = func.call @MPI_Irecv(%recv_buff_ex2_ptr, %21, %12, %120, %39, %4, %133) : (!llvm.ptr, i32, i32, i32, i32, i32, !llvm.ptr) -> i32
 // CHECK-NEXT:          scf.yield
 // CHECK-NEXT:        }, {
-// CHECK-NEXT:          %152 = arith.constant 738197504 : i32
-// CHECK-NEXT:          "llvm.store"(%152, %139) <{"ordering" = 0 : i64}> : (i32, !llvm.ptr) -> ()
-// CHECK-NEXT:          %153 = arith.constant 738197504 : i32
-// CHECK-NEXT:          "llvm.store"(%153, %146) <{"ordering" = 0 : i64}> : (i32, !llvm.ptr) -> ()
+// CHECK-NEXT:          %138 = arith.constant 738197504 : i32
+// CHECK-NEXT:          "llvm.store"(%138, %127) <{"ordering" = 0 : i64}> : (i32, !llvm.ptr) -> ()
+// CHECK-NEXT:          "llvm.store"(%138, %133) <{"ordering" = 0 : i64}> : (i32, !llvm.ptr) -> ()
 // CHECK-NEXT:          scf.yield
 // CHECK-NEXT:        }) : (i1) -> ()
-// CHECK-NEXT:        %154 = arith.constant 1 : i32
-// CHECK-NEXT:        %155 = arith.divui %9, %154 : i32
-// CHECK-NEXT:        %156 = arith.remui %9, %154 : i32
-// CHECK-NEXT:        %157 = arith.constant 1 : i32
-// CHECK-NEXT:        %158 = arith.divui %156, %157 : i32
-// CHECK-NEXT:        %159 = arith.remui %156, %157 : i32
-// CHECK-NEXT:        %160 = arith.constant 1 : i32
-// CHECK-NEXT:        %161 = arith.divui %159, %160 : i32
-// CHECK-NEXT:        %162 = arith.remui %159, %160 : i32
-// CHECK-NEXT:        %163 = arith.constant true
-// CHECK-NEXT:        %164 = arith.constant 1 : i32
-// CHECK-NEXT:        %165 = arith.addi %158, %164 : i32
-// CHECK-NEXT:        %166 = arith.constant 1 : i32
-// CHECK-NEXT:        %167 = arith.cmpi slt, %165, %166 : i32
-// CHECK-NEXT:        %168 = arith.constant true
-// CHECK-NEXT:        %169 = arith.andi %163, %167 : i1
-// CHECK-NEXT:        %170 = arith.andi %169, %168 : i1
-// CHECK-NEXT:        %171 = arith.constant 1 : i32
-// CHECK-NEXT:        %172 = arith.muli %171, %155 : i32
-// CHECK-NEXT:        %173 = arith.addi %161, %172 : i32
-// CHECK-NEXT:        %174 = arith.constant 1 : i32
-// CHECK-NEXT:        %175 = arith.muli %174, %165 : i32
-// CHECK-NEXT:        %176 = arith.addi %173, %175 : i32
-// CHECK-NEXT:        %177 = arith.constant 2 : i32
-// CHECK-NEXT:        %178 = arith.constant 8 : i32
-// CHECK-NEXT:        %179 = "llvm.ptrtoint"(%4) : (!llvm.ptr) -> i64
-// CHECK-NEXT:        %180 = arith.constant 4 : i64
-// CHECK-NEXT:        %181 = arith.index_cast %177 : i32 to index
-// CHECK-NEXT:        %182 = arith.index_cast %181 : index to i64
-// CHECK-NEXT:        %183 = arith.muli %180, %182 : i64
-// CHECK-NEXT:        %184 = arith.addi %183, %179 : i64
-// CHECK-NEXT:        %185 = "llvm.inttoptr"(%184) : (i64) -> !llvm.ptr
-// CHECK-NEXT:        %186 = "llvm.ptrtoint"(%4) : (!llvm.ptr) -> i64
-// CHECK-NEXT:        %187 = arith.constant 4 : i64
-// CHECK-NEXT:        %188 = arith.index_cast %178 : i32 to index
-// CHECK-NEXT:        %189 = arith.index_cast %188 : index to i64
-// CHECK-NEXT:        %190 = arith.muli %187, %189 : i64
-// CHECK-NEXT:        %191 = arith.addi %190, %186 : i64
-// CHECK-NEXT:        %192 = "llvm.inttoptr"(%191) : (i64) -> !llvm.ptr
-// CHECK-NEXT:        "scf.if"(%170) ({
-// CHECK-NEXT:          %193 = "memref.subview"(%u_t0_loadview) <{"static_offsets" = array<i64: 0, 100, 0>, "static_sizes" = array<i64: 51, 1, 101>, "static_strides" = array<i64: 1, 1, 1>, "operandSegmentSizes" = array<i32: 1, 0, 0, 0>}> : (memref<53x103x103xf32, strided<[11025, 105, 1], offset: 22262>>) -> memref<51x101xf32, strided<[11025, 1], offset: 32762>>
-// CHECK-NEXT:          "memref.copy"(%193, %send_buff_ex2) : (memref<51x101xf32, strided<[11025, 1], offset: 32762>>, memref<51x101xf32>) -> ()
-// CHECK-NEXT:          %194 = arith.constant 1140850688 : i32
-// CHECK-NEXT:          %195 = func.call @MPI_Isend(%send_buff_ex2_ptr, %28, %29, %176, %61, %194, %185) : (!llvm.ptr, i32, i32, i32, i32, i32, !llvm.ptr) -> i32
-// CHECK-NEXT:          %196 = arith.constant 1140850688 : i32
-// CHECK-NEXT:          %197 = func.call @MPI_Irecv(%recv_buff_ex2_ptr, %32, %33, %176, %61, %196, %192) : (!llvm.ptr, i32, i32, i32, i32, i32, !llvm.ptr) -> i32
+// CHECK-NEXT:        %139 = arith.remui %8, %40 : i32
+// CHECK-NEXT:        %140 = arith.divui %139, %40 : i32
+// CHECK-NEXT:        %141 = arith.remui %139, %40 : i32
+// CHECK-NEXT:        %142 = arith.divui %141, %40 : i32
+// CHECK-NEXT:        %143 = arith.remui %141, %40 : i32
+// CHECK-NEXT:        %144 = arith.addi %140, %81 : i32
+// CHECK-NEXT:        %145 = arith.cmpi sge, %144, %39 : i32
+// CHECK-NEXT:        %146 = arith.andi %50, %145 : i1
+// CHECK-NEXT:        %147 = arith.andi %146, %50 : i1
+// CHECK-NEXT:        %148 = arith.addi %142, %117 : i32
+// CHECK-NEXT:        %149 = arith.muli %40, %144 : i32
+// CHECK-NEXT:        %150 = arith.addi %148, %149 : i32
+// CHECK-NEXT:        %151 = arith.constant 3 : i32
+// CHECK-NEXT:        %152 = arith.constant 9 : i32
+// CHECK-NEXT:        %153 = "llvm.ptrtoint"(%3) : (!llvm.ptr) -> i64
+// CHECK-NEXT:        %154 = arith.index_cast %151 : i32 to index
+// CHECK-NEXT:        %155 = arith.index_cast %154 : index to i64
+// CHECK-NEXT:        %156 = arith.muli %59, %155 : i64
+// CHECK-NEXT:        %157 = arith.addi %156, %153 : i64
+// CHECK-NEXT:        %158 = "llvm.inttoptr"(%157) : (i64) -> !llvm.ptr
+// CHECK-NEXT:        %159 = "llvm.ptrtoint"(%3) : (!llvm.ptr) -> i64
+// CHECK-NEXT:        %160 = arith.index_cast %152 : i32 to index
+// CHECK-NEXT:        %161 = arith.index_cast %160 : index to i64
+// CHECK-NEXT:        %162 = arith.muli %59, %161 : i64
+// CHECK-NEXT:        %163 = arith.addi %162, %159 : i64
+// CHECK-NEXT:        %164 = "llvm.inttoptr"(%163) : (i64) -> !llvm.ptr
+// CHECK-NEXT:        "scf.if"(%147) ({
+// CHECK-NEXT:          %165 = builtin.unrealized_conversion_cast %u_t0 : memref<55x105x105xf32> to memref<55x105x105xf32>
+// CHECK-NEXT:          %166 = memref.subview %165[2, 2, 2] [51, 1, 101] [1, 1, 1] : memref<55x105x105xf32> to memref<51x101xf32, strided<[11025, 1], offset: 22262>>
+// CHECK-NEXT:          "memref.copy"(%166, %send_buff_ex3) : (memref<51x101xf32, strided<[11025, 1], offset: 22262>>, memref<51x101xf32>) -> ()
+// CHECK-NEXT:          %167 = func.call @MPI_Isend(%send_buff_ex3_ptr, %21, %12, %150, %39, %4, %158) : (!llvm.ptr, i32, i32, i32, i32, i32, !llvm.ptr) -> i32
+// CHECK-NEXT:          %168 = func.call @MPI_Irecv(%recv_buff_ex3_ptr, %21, %12, %150, %39, %4, %164) : (!llvm.ptr, i32, i32, i32, i32, i32, !llvm.ptr) -> i32
 // CHECK-NEXT:          scf.yield
 // CHECK-NEXT:        }, {
-// CHECK-NEXT:          %198 = arith.constant 738197504 : i32
-// CHECK-NEXT:          "llvm.store"(%198, %185) <{"ordering" = 0 : i64}> : (i32, !llvm.ptr) -> ()
-// CHECK-NEXT:          %199 = arith.constant 738197504 : i32
-// CHECK-NEXT:          "llvm.store"(%199, %192) <{"ordering" = 0 : i64}> : (i32, !llvm.ptr) -> ()
+// CHECK-NEXT:          %169 = arith.constant 738197504 : i32
+// CHECK-NEXT:          "llvm.store"(%169, %158) <{"ordering" = 0 : i64}> : (i32, !llvm.ptr) -> ()
+// CHECK-NEXT:          "llvm.store"(%169, %164) <{"ordering" = 0 : i64}> : (i32, !llvm.ptr) -> ()
 // CHECK-NEXT:          scf.yield
 // CHECK-NEXT:        }) : (i1) -> ()
-// CHECK-NEXT:        %200 = arith.constant 1 : i32
-// CHECK-NEXT:        %201 = arith.divui %9, %200 : i32
-// CHECK-NEXT:        %202 = arith.remui %9, %200 : i32
-// CHECK-NEXT:        %203 = arith.constant 1 : i32
-// CHECK-NEXT:        %204 = arith.divui %202, %203 : i32
-// CHECK-NEXT:        %205 = arith.remui %202, %203 : i32
-// CHECK-NEXT:        %206 = arith.constant 1 : i32
-// CHECK-NEXT:        %207 = arith.divui %205, %206 : i32
-// CHECK-NEXT:        %208 = arith.remui %205, %206 : i32
-// CHECK-NEXT:        %209 = arith.constant true
-// CHECK-NEXT:        %210 = arith.constant -1 : i32
-// CHECK-NEXT:        %211 = arith.addi %204, %210 : i32
-// CHECK-NEXT:        %212 = arith.constant 0 : i32
-// CHECK-NEXT:        %213 = arith.cmpi sge, %211, %212 : i32
-// CHECK-NEXT:        %214 = arith.constant true
-// CHECK-NEXT:        %215 = arith.andi %209, %213 : i1
-// CHECK-NEXT:        %216 = arith.andi %215, %214 : i1
-// CHECK-NEXT:        %217 = arith.constant 1 : i32
-// CHECK-NEXT:        %218 = arith.muli %217, %201 : i32
-// CHECK-NEXT:        %219 = arith.addi %207, %218 : i32
-// CHECK-NEXT:        %220 = arith.constant 1 : i32
-// CHECK-NEXT:        %221 = arith.muli %220, %211 : i32
-// CHECK-NEXT:        %222 = arith.addi %219, %221 : i32
-// CHECK-NEXT:        %223 = arith.constant 3 : i32
-// CHECK-NEXT:        %224 = arith.constant 9 : i32
-// CHECK-NEXT:        %225 = "llvm.ptrtoint"(%4) : (!llvm.ptr) -> i64
-// CHECK-NEXT:        %226 = arith.constant 4 : i64
-// CHECK-NEXT:        %227 = arith.index_cast %223 : i32 to index
-// CHECK-NEXT:        %228 = arith.index_cast %227 : index to i64
-// CHECK-NEXT:        %229 = arith.muli %226, %228 : i64
-// CHECK-NEXT:        %230 = arith.addi %229, %225 : i64
-// CHECK-NEXT:        %231 = "llvm.inttoptr"(%230) : (i64) -> !llvm.ptr
-// CHECK-NEXT:        %232 = "llvm.ptrtoint"(%4) : (!llvm.ptr) -> i64
-// CHECK-NEXT:        %233 = arith.constant 4 : i64
-// CHECK-NEXT:        %234 = arith.index_cast %224 : i32 to index
-// CHECK-NEXT:        %235 = arith.index_cast %234 : index to i64
-// CHECK-NEXT:        %236 = arith.muli %233, %235 : i64
-// CHECK-NEXT:        %237 = arith.addi %236, %232 : i64
-// CHECK-NEXT:        %238 = "llvm.inttoptr"(%237) : (i64) -> !llvm.ptr
-// CHECK-NEXT:        "scf.if"(%216) ({
-// CHECK-NEXT:          %239 = "memref.subview"(%u_t0_loadview) <{"static_offsets" = array<i64: 0, 0, 0>, "static_sizes" = array<i64: 51, 1, 101>, "static_strides" = array<i64: 1, 1, 1>, "operandSegmentSizes" = array<i32: 1, 0, 0, 0>}> : (memref<53x103x103xf32, strided<[11025, 105, 1], offset: 22262>>) -> memref<51x101xf32, strided<[11025, 1], offset: 22262>>
-// CHECK-NEXT:          "memref.copy"(%239, %send_buff_ex3) : (memref<51x101xf32, strided<[11025, 1], offset: 22262>>, memref<51x101xf32>) -> ()
-// CHECK-NEXT:          %240 = arith.constant 1140850688 : i32
-// CHECK-NEXT:          %241 = func.call @MPI_Isend(%send_buff_ex3_ptr, %36, %37, %222, %61, %240, %231) : (!llvm.ptr, i32, i32, i32, i32, i32, !llvm.ptr) -> i32
-// CHECK-NEXT:          %242 = arith.constant 1140850688 : i32
-// CHECK-NEXT:          %243 = func.call @MPI_Irecv(%recv_buff_ex3_ptr, %40, %41, %222, %61, %242, %238) : (!llvm.ptr, i32, i32, i32, i32, i32, !llvm.ptr) -> i32
+// CHECK-NEXT:        %170 = arith.remui %8, %40 : i32
+// CHECK-NEXT:        %171 = arith.divui %170, %40 : i32
+// CHECK-NEXT:        %172 = arith.remui %170, %40 : i32
+// CHECK-NEXT:        %173 = arith.divui %172, %40 : i32
+// CHECK-NEXT:        %174 = arith.remui %172, %40 : i32
+// CHECK-NEXT:        %175 = arith.addi %173, %40 : i32
+// CHECK-NEXT:        %176 = arith.cmpi slt, %175, %40 : i32
+// CHECK-NEXT:        %177 = arith.andi %50, %50 : i1
+// CHECK-NEXT:        %178 = arith.andi %177, %176 : i1
+// CHECK-NEXT:        %179 = arith.addi %175, %117 : i32
+// CHECK-NEXT:        %180 = arith.muli %40, %171 : i32
+// CHECK-NEXT:        %181 = arith.addi %179, %180 : i32
+// CHECK-NEXT:        %182 = arith.constant 4 : i32
+// CHECK-NEXT:        %183 = arith.constant 10 : i32
+// CHECK-NEXT:        %184 = "llvm.ptrtoint"(%3) : (!llvm.ptr) -> i64
+// CHECK-NEXT:        %185 = arith.index_cast %182 : i32 to index
+// CHECK-NEXT:        %186 = arith.index_cast %185 : index to i64
+// CHECK-NEXT:        %187 = arith.muli %59, %186 : i64
+// CHECK-NEXT:        %188 = arith.addi %187, %184 : i64
+// CHECK-NEXT:        %189 = "llvm.inttoptr"(%188) : (i64) -> !llvm.ptr
+// CHECK-NEXT:        %190 = "llvm.ptrtoint"(%3) : (!llvm.ptr) -> i64
+// CHECK-NEXT:        %191 = arith.index_cast %183 : i32 to index
+// CHECK-NEXT:        %192 = arith.index_cast %191 : index to i64
+// CHECK-NEXT:        %193 = arith.muli %59, %192 : i64
+// CHECK-NEXT:        %194 = arith.addi %193, %190 : i64
+// CHECK-NEXT:        %195 = "llvm.inttoptr"(%194) : (i64) -> !llvm.ptr
+// CHECK-NEXT:        "scf.if"(%178) ({
+// CHECK-NEXT:          %196 = builtin.unrealized_conversion_cast %u_t0 : memref<55x105x105xf32> to memref<55x105x105xf32>
+// CHECK-NEXT:          %197 = memref.subview %196[2, 2, 102] [51, 101, 1] [1, 1, 1] : memref<55x105x105xf32> to memref<51x101xf32, strided<[11025, 105], offset: 22362>>
+// CHECK-NEXT:          "memref.copy"(%197, %send_buff_ex4) : (memref<51x101xf32, strided<[11025, 105], offset: 22362>>, memref<51x101xf32>) -> ()
+// CHECK-NEXT:          %198 = func.call @MPI_Isend(%send_buff_ex4_ptr, %21, %12, %181, %39, %4, %189) : (!llvm.ptr, i32, i32, i32, i32, i32, !llvm.ptr) -> i32
+// CHECK-NEXT:          %199 = func.call @MPI_Irecv(%recv_buff_ex4_ptr, %21, %12, %181, %39, %4, %195) : (!llvm.ptr, i32, i32, i32, i32, i32, !llvm.ptr) -> i32
 // CHECK-NEXT:          scf.yield
 // CHECK-NEXT:        }, {
-// CHECK-NEXT:          %244 = arith.constant 738197504 : i32
-// CHECK-NEXT:          "llvm.store"(%244, %231) <{"ordering" = 0 : i64}> : (i32, !llvm.ptr) -> ()
-// CHECK-NEXT:          %245 = arith.constant 738197504 : i32
-// CHECK-NEXT:          "llvm.store"(%245, %238) <{"ordering" = 0 : i64}> : (i32, !llvm.ptr) -> ()
+// CHECK-NEXT:          %200 = arith.constant 738197504 : i32
+// CHECK-NEXT:          "llvm.store"(%200, %189) <{"ordering" = 0 : i64}> : (i32, !llvm.ptr) -> ()
+// CHECK-NEXT:          "llvm.store"(%200, %195) <{"ordering" = 0 : i64}> : (i32, !llvm.ptr) -> ()
 // CHECK-NEXT:          scf.yield
 // CHECK-NEXT:        }) : (i1) -> ()
-// CHECK-NEXT:        %246 = arith.constant 1 : i32
-// CHECK-NEXT:        %247 = arith.divui %9, %246 : i32
-// CHECK-NEXT:        %248 = arith.remui %9, %246 : i32
-// CHECK-NEXT:        %249 = arith.constant 1 : i32
-// CHECK-NEXT:        %250 = arith.divui %248, %249 : i32
-// CHECK-NEXT:        %251 = arith.remui %248, %249 : i32
-// CHECK-NEXT:        %252 = arith.constant 1 : i32
-// CHECK-NEXT:        %253 = arith.divui %251, %252 : i32
-// CHECK-NEXT:        %254 = arith.remui %251, %252 : i32
-// CHECK-NEXT:        %255 = arith.constant true
-// CHECK-NEXT:        %256 = arith.constant true
-// CHECK-NEXT:        %257 = arith.constant 1 : i32
-// CHECK-NEXT:        %258 = arith.addi %253, %257 : i32
-// CHECK-NEXT:        %259 = arith.constant 1 : i32
-// CHECK-NEXT:        %260 = arith.cmpi slt, %258, %259 : i32
-// CHECK-NEXT:        %261 = arith.andi %255, %256 : i1
-// CHECK-NEXT:        %262 = arith.andi %261, %260 : i1
-// CHECK-NEXT:        %263 = arith.constant 1 : i32
-// CHECK-NEXT:        %264 = arith.muli %263, %247 : i32
-// CHECK-NEXT:        %265 = arith.addi %258, %264 : i32
-// CHECK-NEXT:        %266 = arith.constant 1 : i32
-// CHECK-NEXT:        %267 = arith.muli %266, %250 : i32
-// CHECK-NEXT:        %268 = arith.addi %265, %267 : i32
-// CHECK-NEXT:        %269 = arith.constant 4 : i32
-// CHECK-NEXT:        %270 = arith.constant 10 : i32
-// CHECK-NEXT:        %271 = "llvm.ptrtoint"(%4) : (!llvm.ptr) -> i64
-// CHECK-NEXT:        %272 = arith.constant 4 : i64
-// CHECK-NEXT:        %273 = arith.index_cast %269 : i32 to index
-// CHECK-NEXT:        %274 = arith.index_cast %273 : index to i64
-// CHECK-NEXT:        %275 = arith.muli %272, %274 : i64
-// CHECK-NEXT:        %276 = arith.addi %275, %271 : i64
-// CHECK-NEXT:        %277 = "llvm.inttoptr"(%276) : (i64) -> !llvm.ptr
-// CHECK-NEXT:        %278 = "llvm.ptrtoint"(%4) : (!llvm.ptr) -> i64
-// CHECK-NEXT:        %279 = arith.constant 4 : i64
-// CHECK-NEXT:        %280 = arith.index_cast %270 : i32 to index
-// CHECK-NEXT:        %281 = arith.index_cast %280 : index to i64
-// CHECK-NEXT:        %282 = arith.muli %279, %281 : i64
-// CHECK-NEXT:        %283 = arith.addi %282, %278 : i64
-// CHECK-NEXT:        %284 = "llvm.inttoptr"(%283) : (i64) -> !llvm.ptr
-// CHECK-NEXT:        "scf.if"(%262) ({
-// CHECK-NEXT:          %285 = "memref.subview"(%u_t0_loadview) <{"static_offsets" = array<i64: 0, 0, 100>, "static_sizes" = array<i64: 51, 101, 1>, "static_strides" = array<i64: 1, 1, 1>, "operandSegmentSizes" = array<i32: 1, 0, 0, 0>}> : (memref<53x103x103xf32, strided<[11025, 105, 1], offset: 22262>>) -> memref<51x101xf32, strided<[11025, 105], offset: 22362>>
-// CHECK-NEXT:          "memref.copy"(%285, %send_buff_ex4) : (memref<51x101xf32, strided<[11025, 105], offset: 22362>>, memref<51x101xf32>) -> ()
-// CHECK-NEXT:          %286 = arith.constant 1140850688 : i32
-// CHECK-NEXT:          %287 = func.call @MPI_Isend(%send_buff_ex4_ptr, %44, %45, %268, %61, %286, %277) : (!llvm.ptr, i32, i32, i32, i32, i32, !llvm.ptr) -> i32
-// CHECK-NEXT:          %288 = arith.constant 1140850688 : i32
-// CHECK-NEXT:          %289 = func.call @MPI_Irecv(%recv_buff_ex4_ptr, %48, %49, %268, %61, %288, %284) : (!llvm.ptr, i32, i32, i32, i32, i32, !llvm.ptr) -> i32
+// CHECK-NEXT:        %201 = arith.remui %8, %40 : i32
+// CHECK-NEXT:        %202 = arith.divui %201, %40 : i32
+// CHECK-NEXT:        %203 = arith.remui %201, %40 : i32
+// CHECK-NEXT:        %204 = arith.divui %203, %40 : i32
+// CHECK-NEXT:        %205 = arith.remui %203, %40 : i32
+// CHECK-NEXT:        %206 = arith.addi %204, %81 : i32
+// CHECK-NEXT:        %207 = arith.cmpi sge, %206, %39 : i32
+// CHECK-NEXT:        %208 = arith.andi %177, %207 : i1
+// CHECK-NEXT:        %209 = arith.addi %206, %117 : i32
+// CHECK-NEXT:        %210 = arith.muli %40, %202 : i32
+// CHECK-NEXT:        %211 = arith.addi %209, %210 : i32
+// CHECK-NEXT:        %212 = arith.constant 5 : i32
+// CHECK-NEXT:        %213 = arith.constant 11 : i32
+// CHECK-NEXT:        %214 = "llvm.ptrtoint"(%3) : (!llvm.ptr) -> i64
+// CHECK-NEXT:        %215 = arith.index_cast %212 : i32 to index
+// CHECK-NEXT:        %216 = arith.index_cast %215 : index to i64
+// CHECK-NEXT:        %217 = arith.muli %59, %216 : i64
+// CHECK-NEXT:        %218 = arith.addi %217, %214 : i64
+// CHECK-NEXT:        %219 = "llvm.inttoptr"(%218) : (i64) -> !llvm.ptr
+// CHECK-NEXT:        %220 = "llvm.ptrtoint"(%3) : (!llvm.ptr) -> i64
+// CHECK-NEXT:        %221 = arith.index_cast %213 : i32 to index
+// CHECK-NEXT:        %222 = arith.index_cast %221 : index to i64
+// CHECK-NEXT:        %223 = arith.muli %59, %222 : i64
+// CHECK-NEXT:        %224 = arith.addi %223, %220 : i64
+// CHECK-NEXT:        %225 = "llvm.inttoptr"(%224) : (i64) -> !llvm.ptr
+// CHECK-NEXT:        "scf.if"(%208) ({
+// CHECK-NEXT:          %226 = builtin.unrealized_conversion_cast %u_t0 : memref<55x105x105xf32> to memref<55x105x105xf32>
+// CHECK-NEXT:          %227 = memref.subview %226[2, 2, 2] [51, 101, 1] [1, 1, 1] : memref<55x105x105xf32> to memref<51x101xf32, strided<[11025, 105], offset: 22262>>
+// CHECK-NEXT:          "memref.copy"(%227, %send_buff_ex5) : (memref<51x101xf32, strided<[11025, 105], offset: 22262>>, memref<51x101xf32>) -> ()
+// CHECK-NEXT:          %228 = func.call @MPI_Isend(%send_buff_ex5_ptr, %21, %12, %211, %39, %4, %219) : (!llvm.ptr, i32, i32, i32, i32, i32, !llvm.ptr) -> i32
+// CHECK-NEXT:          %229 = func.call @MPI_Irecv(%recv_buff_ex5_ptr, %21, %12, %211, %39, %4, %225) : (!llvm.ptr, i32, i32, i32, i32, i32, !llvm.ptr) -> i32
 // CHECK-NEXT:          scf.yield
 // CHECK-NEXT:        }, {
-// CHECK-NEXT:          %290 = arith.constant 738197504 : i32
-// CHECK-NEXT:          "llvm.store"(%290, %277) <{"ordering" = 0 : i64}> : (i32, !llvm.ptr) -> ()
-// CHECK-NEXT:          %291 = arith.constant 738197504 : i32
-// CHECK-NEXT:          "llvm.store"(%291, %284) <{"ordering" = 0 : i64}> : (i32, !llvm.ptr) -> ()
+// CHECK-NEXT:          %230 = arith.constant 738197504 : i32
+// CHECK-NEXT:          "llvm.store"(%230, %219) <{"ordering" = 0 : i64}> : (i32, !llvm.ptr) -> ()
+// CHECK-NEXT:          "llvm.store"(%230, %225) <{"ordering" = 0 : i64}> : (i32, !llvm.ptr) -> ()
 // CHECK-NEXT:          scf.yield
 // CHECK-NEXT:        }) : (i1) -> ()
-// CHECK-NEXT:        %292 = arith.constant 1 : i32
-// CHECK-NEXT:        %293 = arith.divui %9, %292 : i32
-// CHECK-NEXT:        %294 = arith.remui %9, %292 : i32
-// CHECK-NEXT:        %295 = arith.constant 1 : i32
-// CHECK-NEXT:        %296 = arith.divui %294, %295 : i32
-// CHECK-NEXT:        %297 = arith.remui %294, %295 : i32
-// CHECK-NEXT:        %298 = arith.constant 1 : i32
-// CHECK-NEXT:        %299 = arith.divui %297, %298 : i32
-// CHECK-NEXT:        %300 = arith.remui %297, %298 : i32
-// CHECK-NEXT:        %301 = arith.constant true
-// CHECK-NEXT:        %302 = arith.constant true
-// CHECK-NEXT:        %303 = arith.constant -1 : i32
-// CHECK-NEXT:        %304 = arith.addi %299, %303 : i32
-// CHECK-NEXT:        %305 = arith.constant 0 : i32
-// CHECK-NEXT:        %306 = arith.cmpi sge, %304, %305 : i32
-// CHECK-NEXT:        %307 = arith.andi %301, %302 : i1
-// CHECK-NEXT:        %308 = arith.andi %307, %306 : i1
-// CHECK-NEXT:        %309 = arith.constant 1 : i32
-// CHECK-NEXT:        %310 = arith.muli %309, %293 : i32
-// CHECK-NEXT:        %311 = arith.addi %304, %310 : i32
-// CHECK-NEXT:        %312 = arith.constant 1 : i32
-// CHECK-NEXT:        %313 = arith.muli %312, %296 : i32
-// CHECK-NEXT:        %314 = arith.addi %311, %313 : i32
-// CHECK-NEXT:        %315 = arith.constant 5 : i32
-// CHECK-NEXT:        %316 = arith.constant 11 : i32
-// CHECK-NEXT:        %317 = "llvm.ptrtoint"(%4) : (!llvm.ptr) -> i64
-// CHECK-NEXT:        %318 = arith.constant 4 : i64
-// CHECK-NEXT:        %319 = arith.index_cast %315 : i32 to index
-// CHECK-NEXT:        %320 = arith.index_cast %319 : index to i64
-// CHECK-NEXT:        %321 = arith.muli %318, %320 : i64
-// CHECK-NEXT:        %322 = arith.addi %321, %317 : i64
-// CHECK-NEXT:        %323 = "llvm.inttoptr"(%322) : (i64) -> !llvm.ptr
-// CHECK-NEXT:        %324 = "llvm.ptrtoint"(%4) : (!llvm.ptr) -> i64
-// CHECK-NEXT:        %325 = arith.constant 4 : i64
-// CHECK-NEXT:        %326 = arith.index_cast %316 : i32 to index
-// CHECK-NEXT:        %327 = arith.index_cast %326 : index to i64
-// CHECK-NEXT:        %328 = arith.muli %325, %327 : i64
-// CHECK-NEXT:        %329 = arith.addi %328, %324 : i64
-// CHECK-NEXT:        %330 = "llvm.inttoptr"(%329) : (i64) -> !llvm.ptr
-// CHECK-NEXT:        "scf.if"(%308) ({
-// CHECK-NEXT:          %331 = "memref.subview"(%u_t0_loadview) <{"static_offsets" = array<i64: 0, 0, 0>, "static_sizes" = array<i64: 51, 101, 1>, "static_strides" = array<i64: 1, 1, 1>, "operandSegmentSizes" = array<i32: 1, 0, 0, 0>}> : (memref<53x103x103xf32, strided<[11025, 105, 1], offset: 22262>>) -> memref<51x101xf32, strided<[11025, 105], offset: 22262>>
-// CHECK-NEXT:          "memref.copy"(%331, %send_buff_ex5) : (memref<51x101xf32, strided<[11025, 105], offset: 22262>>, memref<51x101xf32>) -> ()
-// CHECK-NEXT:          %332 = arith.constant 1140850688 : i32
-// CHECK-NEXT:          %333 = func.call @MPI_Isend(%send_buff_ex5_ptr, %52, %53, %314, %61, %332, %323) : (!llvm.ptr, i32, i32, i32, i32, i32, !llvm.ptr) -> i32
-// CHECK-NEXT:          %334 = arith.constant 1140850688 : i32
-// CHECK-NEXT:          %335 = func.call @MPI_Irecv(%recv_buff_ex5_ptr, %56, %57, %314, %61, %334, %330) : (!llvm.ptr, i32, i32, i32, i32, i32, !llvm.ptr) -> i32
-// CHECK-NEXT:          scf.yield
-// CHECK-NEXT:        }, {
-// CHECK-NEXT:          %336 = arith.constant 738197504 : i32
-// CHECK-NEXT:          "llvm.store"(%336, %323) <{"ordering" = 0 : i64}> : (i32, !llvm.ptr) -> ()
-// CHECK-NEXT:          %337 = arith.constant 738197504 : i32
-// CHECK-NEXT:          "llvm.store"(%337, %330) <{"ordering" = 0 : i64}> : (i32, !llvm.ptr) -> ()
-// CHECK-NEXT:          scf.yield
-// CHECK-NEXT:        }) : (i1) -> ()
-// CHECK-NEXT:        %338 = arith.constant 1 : i64
-// CHECK-NEXT:        %339 = "llvm.inttoptr"(%338) : (i64) -> !llvm.ptr
-// CHECK-NEXT:        %340 = func.call @MPI_Waitall(%3, %4, %339) : (i32, !llvm.ptr, !llvm.ptr) -> i32
-// CHECK-NEXT:        "scf.if"(%78) ({
-// CHECK-NEXT:          %341 = "memref.subview"(%u_t0_loadview) <{"static_offsets" = array<i64: 51, 0, 0>, "static_sizes" = array<i64: 1, 101, 101>, "static_strides" = array<i64: 1, 1, 1>, "operandSegmentSizes" = array<i32: 1, 0, 0, 0>}> : (memref<53x103x103xf32, strided<[11025, 105, 1], offset: 22262>>) -> memref<101x101xf32, strided<[105, 1], offset: 584537>>
-// CHECK-NEXT:          "memref.copy"(%recv_buff_ex0, %341) : (memref<101x101xf32>, memref<101x101xf32, strided<[105, 1], offset: 584537>>) -> ()
+// CHECK-NEXT:        %231 = "llvm.inttoptr"(%5) : (i64) -> !llvm.ptr
+// CHECK-NEXT:        %232 = func.call @MPI_Waitall(%2, %3, %231) : (i32, !llvm.ptr, !llvm.ptr) -> i32
+// CHECK-NEXT:        "scf.if"(%52) ({
+// CHECK-NEXT:          %233 = builtin.unrealized_conversion_cast %u_t0 : memref<55x105x105xf32> to memref<55x105x105xf32>
+// CHECK-NEXT:          %234 = memref.subview %233[53, 2, 2] [1, 101, 101] [1, 1, 1] : memref<55x105x105xf32> to memref<101x101xf32, strided<[105, 1], offset: 584537>>
+// CHECK-NEXT:          "memref.copy"(%recv_buff_ex0, %234) : (memref<101x101xf32>, memref<101x101xf32, strided<[105, 1], offset: 584537>>) -> ()
 // CHECK-NEXT:          scf.yield
 // CHECK-NEXT:        }, {
 // CHECK-NEXT:          scf.yield
 // CHECK-NEXT:        }) : (i1) -> ()
-// CHECK-NEXT:        "scf.if"(%124) ({
-// CHECK-NEXT:          %342 = "memref.subview"(%u_t0_loadview) <{"static_offsets" = array<i64: -1, 0, 0>, "static_sizes" = array<i64: 1, 101, 101>, "static_strides" = array<i64: 1, 1, 1>, "operandSegmentSizes" = array<i32: 1, 0, 0, 0>}> : (memref<53x103x103xf32, strided<[11025, 105, 1], offset: 22262>>) -> memref<101x101xf32, strided<[105, 1], offset: 11237>>
-// CHECK-NEXT:          "memref.copy"(%recv_buff_ex1, %342) : (memref<101x101xf32>, memref<101x101xf32, strided<[105, 1], offset: 11237>>) -> ()
+// CHECK-NEXT:        "scf.if"(%85) ({
+// CHECK-NEXT:          %235 = builtin.unrealized_conversion_cast %u_t0 : memref<55x105x105xf32> to memref<55x105x105xf32>
+// CHECK-NEXT:          %236 = memref.subview %235[1, 2, 2] [1, 101, 101] [1, 1, 1] : memref<55x105x105xf32> to memref<101x101xf32, strided<[105, 1], offset: 11237>>
+// CHECK-NEXT:          "memref.copy"(%recv_buff_ex1, %236) : (memref<101x101xf32>, memref<101x101xf32, strided<[105, 1], offset: 11237>>) -> ()
 // CHECK-NEXT:          scf.yield
 // CHECK-NEXT:        }, {
 // CHECK-NEXT:          scf.yield
 // CHECK-NEXT:        }) : (i1) -> ()
-// CHECK-NEXT:        "scf.if"(%170) ({
-// CHECK-NEXT:          %343 = "memref.subview"(%u_t0_loadview) <{"static_offsets" = array<i64: 0, 101, 0>, "static_sizes" = array<i64: 51, 1, 101>, "static_strides" = array<i64: 1, 1, 1>, "operandSegmentSizes" = array<i32: 1, 0, 0, 0>}> : (memref<53x103x103xf32, strided<[11025, 105, 1], offset: 22262>>) -> memref<51x101xf32, strided<[11025, 1], offset: 32867>>
-// CHECK-NEXT:          "memref.copy"(%recv_buff_ex2, %343) : (memref<51x101xf32>, memref<51x101xf32, strided<[11025, 1], offset: 32867>>) -> ()
+// CHECK-NEXT:        "scf.if"(%116) ({
+// CHECK-NEXT:          %237 = builtin.unrealized_conversion_cast %u_t0 : memref<55x105x105xf32> to memref<55x105x105xf32>
+// CHECK-NEXT:          %238 = memref.subview %237[2, 103, 2] [51, 1, 101] [1, 1, 1] : memref<55x105x105xf32> to memref<51x101xf32, strided<[11025, 1], offset: 32867>>
+// CHECK-NEXT:          "memref.copy"(%recv_buff_ex2, %238) : (memref<51x101xf32>, memref<51x101xf32, strided<[11025, 1], offset: 32867>>) -> ()
 // CHECK-NEXT:          scf.yield
 // CHECK-NEXT:        }, {
 // CHECK-NEXT:          scf.yield
 // CHECK-NEXT:        }) : (i1) -> ()
-// CHECK-NEXT:        "scf.if"(%216) ({
-// CHECK-NEXT:          %344 = "memref.subview"(%u_t0_loadview) <{"static_offsets" = array<i64: 0, -1, 0>, "static_sizes" = array<i64: 51, 1, 101>, "static_strides" = array<i64: 1, 1, 1>, "operandSegmentSizes" = array<i32: 1, 0, 0, 0>}> : (memref<53x103x103xf32, strided<[11025, 105, 1], offset: 22262>>) -> memref<51x101xf32, strided<[11025, 1], offset: 22157>>
-// CHECK-NEXT:          "memref.copy"(%recv_buff_ex3, %344) : (memref<51x101xf32>, memref<51x101xf32, strided<[11025, 1], offset: 22157>>) -> ()
+// CHECK-NEXT:        "scf.if"(%147) ({
+// CHECK-NEXT:          %239 = builtin.unrealized_conversion_cast %u_t0 : memref<55x105x105xf32> to memref<55x105x105xf32>
+// CHECK-NEXT:          %240 = memref.subview %239[2, 1, 2] [51, 1, 101] [1, 1, 1] : memref<55x105x105xf32> to memref<51x101xf32, strided<[11025, 1], offset: 22157>>
+// CHECK-NEXT:          "memref.copy"(%recv_buff_ex3, %240) : (memref<51x101xf32>, memref<51x101xf32, strided<[11025, 1], offset: 22157>>) -> ()
 // CHECK-NEXT:          scf.yield
 // CHECK-NEXT:        }, {
 // CHECK-NEXT:          scf.yield
 // CHECK-NEXT:        }) : (i1) -> ()
-// CHECK-NEXT:        "scf.if"(%262) ({
-// CHECK-NEXT:          %345 = "memref.subview"(%u_t0_loadview) <{"static_offsets" = array<i64: 0, 0, 101>, "static_sizes" = array<i64: 51, 101, 1>, "static_strides" = array<i64: 1, 1, 1>, "operandSegmentSizes" = array<i32: 1, 0, 0, 0>}> : (memref<53x103x103xf32, strided<[11025, 105, 1], offset: 22262>>) -> memref<51x101xf32, strided<[11025, 105], offset: 22363>>
-// CHECK-NEXT:          "memref.copy"(%recv_buff_ex4, %345) : (memref<51x101xf32>, memref<51x101xf32, strided<[11025, 105], offset: 22363>>) -> ()
+// CHECK-NEXT:        "scf.if"(%178) ({
+// CHECK-NEXT:          %241 = builtin.unrealized_conversion_cast %u_t0 : memref<55x105x105xf32> to memref<55x105x105xf32>
+// CHECK-NEXT:          %242 = memref.subview %241[2, 2, 103] [51, 101, 1] [1, 1, 1] : memref<55x105x105xf32> to memref<51x101xf32, strided<[11025, 105], offset: 22363>>
+// CHECK-NEXT:          "memref.copy"(%recv_buff_ex4, %242) : (memref<51x101xf32>, memref<51x101xf32, strided<[11025, 105], offset: 22363>>) -> ()
 // CHECK-NEXT:          scf.yield
 // CHECK-NEXT:        }, {
 // CHECK-NEXT:          scf.yield
 // CHECK-NEXT:        }) : (i1) -> ()
-// CHECK-NEXT:        "scf.if"(%308) ({
-// CHECK-NEXT:          %346 = "memref.subview"(%u_t0_loadview) <{"static_offsets" = array<i64: 0, 0, -1>, "static_sizes" = array<i64: 51, 101, 1>, "static_strides" = array<i64: 1, 1, 1>, "operandSegmentSizes" = array<i32: 1, 0, 0, 0>}> : (memref<53x103x103xf32, strided<[11025, 105, 1], offset: 22262>>) -> memref<51x101xf32, strided<[11025, 105], offset: 22261>>
-// CHECK-NEXT:          "memref.copy"(%recv_buff_ex5, %346) : (memref<51x101xf32>, memref<51x101xf32, strided<[11025, 105], offset: 22261>>) -> ()
+// CHECK-NEXT:        "scf.if"(%208) ({
+// CHECK-NEXT:          %243 = builtin.unrealized_conversion_cast %u_t0 : memref<55x105x105xf32> to memref<55x105x105xf32>
+// CHECK-NEXT:          %244 = memref.subview %243[2, 2, 1] [51, 101, 1] [1, 1, 1] : memref<55x105x105xf32> to memref<51x101xf32, strided<[11025, 105], offset: 22261>>
+// CHECK-NEXT:          "memref.copy"(%recv_buff_ex5, %244) : (memref<51x101xf32>, memref<51x101xf32, strided<[11025, 105], offset: 22261>>) -> ()
 // CHECK-NEXT:          scf.yield
 // CHECK-NEXT:        }, {
 // CHECK-NEXT:          scf.yield
 // CHECK-NEXT:        }) : (i1) -> ()
-// CHECK-NEXT:        %u_t2_loadview = "memref.subview"(%u_t2) <{"static_offsets" = array<i64: 2, 2, 2>, "static_sizes" = array<i64: 51, 101, 101>, "static_strides" = array<i64: 1, 1, 1>, "operandSegmentSizes" = array<i32: 1, 0, 0, 0>}> : (memref<55x105x105xf32>) -> memref<51x101x101xf32, strided<[11025, 105, 1], offset: 22262>>
-// CHECK-NEXT:        %347 = arith.constant 0 : index
-// CHECK-NEXT:        %348 = arith.constant 0 : index
-// CHECK-NEXT:        %349 = arith.constant 0 : index
-// CHECK-NEXT:        %350 = arith.constant 1 : index
-// CHECK-NEXT:        %351 = arith.constant 1 : index
-// CHECK-NEXT:        %352 = arith.constant 1 : index
-// CHECK-NEXT:        %353 = arith.constant 51 : index
-// CHECK-NEXT:        %354 = arith.constant 101 : index
-// CHECK-NEXT:        %355 = arith.constant 101 : index
-// CHECK-NEXT:        %356 = arith.constant 0 : index
-// CHECK-NEXT:        %357 = arith.constant 64 : index
-// CHECK-NEXT:        %358 = arith.constant 64 : index
-// CHECK-NEXT:        %359 = arith.muli %350, %357 : index
-// CHECK-NEXT:        %360 = arith.muli %351, %358 : index
-// CHECK-NEXT:        "scf.parallel"(%347, %348, %353, %354, %359, %360) <{"operandSegmentSizes" = array<i32: 2, 2, 2, 0>}> ({
-// CHECK-NEXT:        ^0(%361 : index, %362 : index):
-// CHECK-NEXT:          %363 = "affine.min"(%357, %353, %361) <{"map" = affine_map<(d0, d1, d2) -> (d0, (d1 + (d2 * -1)))>}> : (index, index, index) -> index
-// CHECK-NEXT:          %364 = "affine.min"(%358, %354, %362) <{"map" = affine_map<(d0, d1, d2) -> (d0, (d1 + (d2 * -1)))>}> : (index, index, index) -> index
-// CHECK-NEXT:          "scf.parallel"(%356, %356, %349, %363, %364, %355, %350, %351, %352) <{"operandSegmentSizes" = array<i32: 3, 3, 3, 0>}> ({
-// CHECK-NEXT:          ^1(%365 : index, %366 : index, %367 : index):
-// CHECK-NEXT:            %368 = arith.addi %361, %365 : index
-// CHECK-NEXT:            %369 = arith.addi %362, %366 : index
+// CHECK-NEXT:        %245 = memref.subview %u_t1[2, 2, 2] [55, 105, 105] [1, 1, 1] : memref<55x105x105xf32> to memref<55x105x105xf32, strided<[11025, 105, 1], offset: 22262>>
+// CHECK-NEXT:        %u_t0_blk = memref.subview %u_t0[2, 2, 2] [55, 105, 105] [1, 1, 1] : memref<55x105x105xf32> to memref<55x105x105xf32, strided<[11025, 105, 1], offset: 22262>>
+// CHECK-NEXT:        %u_t2_blk = memref.subview %u_t2[2, 2, 2] [55, 105, 105] [1, 1, 1] : memref<55x105x105xf32> to memref<55x105x105xf32, strided<[11025, 105, 1], offset: 22262>>
+// CHECK-NEXT:        %246 = arith.constant 0 : index
+// CHECK-NEXT:        %247 = arith.constant 51 : index
+// CHECK-NEXT:        %248 = arith.constant 101 : index
+// CHECK-NEXT:        %249 = arith.constant 64 : index
+// CHECK-NEXT:        %250 = arith.muli %time_m, %249 : index
+// CHECK-NEXT:        "scf.parallel"(%246, %246, %247, %248, %250, %250) <{"operandSegmentSizes" = array<i32: 2, 2, 2, 0>}> ({
+// CHECK-NEXT:        ^0(%251 : index, %252 : index):
+// CHECK-NEXT:          %253 = "affine.min"(%249, %247, %251) <{"map" = affine_map<(d0, d1, d2) -> (d0, (d1 + (d2 * -1)))>}> : (index, index, index) -> index
+// CHECK-NEXT:          %254 = "affine.min"(%249, %248, %252) <{"map" = affine_map<(d0, d1, d2) -> (d0, (d1 + (d2 * -1)))>}> : (index, index, index) -> index
+// CHECK-NEXT:          "scf.parallel"(%246, %246, %246, %253, %254, %248, %time_m, %time_m, %time_m) <{"operandSegmentSizes" = array<i32: 3, 3, 3, 0>}> ({
+// CHECK-NEXT:          ^1(%255 : index, %256 : index, %257 : index):
+// CHECK-NEXT:            %258 = arith.addi %251, %255 : index
+// CHECK-NEXT:            %259 = arith.addi %252, %256 : index
 // CHECK-NEXT:            %dt = arith.constant 1.000000e-04 : f32
-// CHECK-NEXT:            %370 = arith.constant 2 : i64
-// CHECK-NEXT:            %371 = "math.fpowi"(%dt, %370) : (f32, i64) -> f32
-// CHECK-NEXT:            %372 = arith.constant -1 : i64
-// CHECK-NEXT:            %dt_1 = arith.constant 1.000000e-04 : f32
-// CHECK-NEXT:            %373 = arith.constant -2 : i64
-// CHECK-NEXT:            %374 = "math.fpowi"(%dt_1, %373) : (f32, i64) -> f32
-// CHECK-NEXT:            %375 = memref.load %u_t2_loadview[%368, %369, %367] : memref<51x101x101xf32, strided<[11025, 105, 1], offset: 22262>>
-// CHECK-NEXT:            %376 = arith.mulf %374, %375 : f32
-// CHECK-NEXT:            %377 = arith.constant -2.000000e+00 : f32
-// CHECK-NEXT:            %dt_2 = arith.constant 1.000000e-04 : f32
-// CHECK-NEXT:            %378 = arith.constant -2 : i64
-// CHECK-NEXT:            %379 = "math.fpowi"(%dt_2, %378) : (f32, i64) -> f32
-// CHECK-NEXT:            %380 = memref.load %u_t0_loadview[%368, %369, %367] : memref<53x103x103xf32, strided<[11025, 105, 1], offset: 22262>>
-// CHECK-NEXT:            %381 = arith.mulf %377, %379 : f32
-// CHECK-NEXT:            %382 = arith.mulf %381, %380 : f32
-// CHECK-NEXT:            %383 = arith.addf %376, %382 : f32
-// CHECK-NEXT:            %384 = arith.sitofp %372 : i64 to f32
-// CHECK-NEXT:            %385 = arith.mulf %384, %383 : f32
+// CHECK-NEXT:            %260 = arith.constant 2 : i64
+// CHECK-NEXT:            %261 = "math.fpowi"(%dt, %260) : (f32, i64) -> f32
+// CHECK-NEXT:            %262 = arith.constant -1 : i64
+// CHECK-NEXT:            %263 = arith.constant -2 : i64
+// CHECK-NEXT:            %264 = "math.fpowi"(%dt, %263) : (f32, i64) -> f32
+// CHECK-NEXT:            %265 = memref.load %u_t2_blk[%258, %259, %257] : memref<55x105x105xf32, strided<[11025, 105, 1], offset: 22262>>
+// CHECK-NEXT:            %266 = arith.mulf %264, %265 : f32
+// CHECK-NEXT:            %267 = arith.constant -2.000000e+00 : f32
+// CHECK-NEXT:            %268 = memref.load %u_t0_blk[%258, %259, %257] : memref<55x105x105xf32, strided<[11025, 105, 1], offset: 22262>>
+// CHECK-NEXT:            %269 = arith.mulf %267, %264 : f32
+// CHECK-NEXT:            %270 = arith.mulf %269, %268 : f32
+// CHECK-NEXT:            %271 = arith.addf %266, %270 : f32
+// CHECK-NEXT:            %272 = arith.sitofp %262 : i64 to f32
+// CHECK-NEXT:            %273 = arith.mulf %272, %271 : f32
 // CHECK-NEXT:            %h_x = arith.constant 1.000000e-02 : f32
-// CHECK-NEXT:            %386 = arith.constant -2 : i64
-// CHECK-NEXT:            %387 = "math.fpowi"(%h_x, %386) : (f32, i64) -> f32
-// CHECK-NEXT:            %388 = arith.constant -1 : index
-// CHECK-NEXT:            %389 = arith.addi %368, %388 : index
-// CHECK-NEXT:            %390 = memref.load %u_t0_loadview[%389, %369, %367] : memref<53x103x103xf32, strided<[11025, 105, 1], offset: 22262>>
-// CHECK-NEXT:            %391 = arith.mulf %387, %390 : f32
-// CHECK-NEXT:            %h_x_1 = arith.constant 1.000000e-02 : f32
-// CHECK-NEXT:            %392 = arith.constant -2 : i64
-// CHECK-NEXT:            %393 = "math.fpowi"(%h_x_1, %392) : (f32, i64) -> f32
-// CHECK-NEXT:            %394 = arith.constant 1 : index
-// CHECK-NEXT:            %395 = arith.addi %368, %394 : index
-// CHECK-NEXT:            %396 = memref.load %u_t0_loadview[%395, %369, %367] : memref<53x103x103xf32, strided<[11025, 105, 1], offset: 22262>>
-// CHECK-NEXT:            %397 = arith.mulf %393, %396 : f32
-// CHECK-NEXT:            %398 = arith.constant -2.000000e+00 : f32
-// CHECK-NEXT:            %h_x_2 = arith.constant 1.000000e-02 : f32
-// CHECK-NEXT:            %399 = arith.constant -2 : i64
-// CHECK-NEXT:            %400 = "math.fpowi"(%h_x_2, %399) : (f32, i64) -> f32
-// CHECK-NEXT:            %401 = memref.load %u_t0_loadview[%368, %369, %367] : memref<53x103x103xf32, strided<[11025, 105, 1], offset: 22262>>
-// CHECK-NEXT:            %402 = arith.mulf %398, %400 : f32
-// CHECK-NEXT:            %403 = arith.mulf %402, %401 : f32
-// CHECK-NEXT:            %404 = arith.addf %391, %397 : f32
-// CHECK-NEXT:            %405 = arith.addf %404, %403 : f32
-// CHECK-NEXT:            %h_y = arith.constant 1.000000e-02 : f32
-// CHECK-NEXT:            %406 = arith.constant -2 : i64
-// CHECK-NEXT:            %407 = "math.fpowi"(%h_y, %406) : (f32, i64) -> f32
-// CHECK-NEXT:            %408 = arith.constant -1 : index
-// CHECK-NEXT:            %409 = arith.addi %369, %408 : index
-// CHECK-NEXT:            %410 = memref.load %u_t0_loadview[%368, %409, %367] : memref<53x103x103xf32, strided<[11025, 105, 1], offset: 22262>>
-// CHECK-NEXT:            %411 = arith.mulf %407, %410 : f32
-// CHECK-NEXT:            %h_y_1 = arith.constant 1.000000e-02 : f32
-// CHECK-NEXT:            %412 = arith.constant -2 : i64
-// CHECK-NEXT:            %413 = "math.fpowi"(%h_y_1, %412) : (f32, i64) -> f32
-// CHECK-NEXT:            %414 = arith.constant 1 : index
-// CHECK-NEXT:            %415 = arith.addi %369, %414 : index
-// CHECK-NEXT:            %416 = memref.load %u_t0_loadview[%368, %415, %367] : memref<53x103x103xf32, strided<[11025, 105, 1], offset: 22262>>
-// CHECK-NEXT:            %417 = arith.mulf %413, %416 : f32
-// CHECK-NEXT:            %418 = arith.constant -2.000000e+00 : f32
-// CHECK-NEXT:            %h_y_2 = arith.constant 1.000000e-02 : f32
-// CHECK-NEXT:            %419 = arith.constant -2 : i64
-// CHECK-NEXT:            %420 = "math.fpowi"(%h_y_2, %419) : (f32, i64) -> f32
-// CHECK-NEXT:            %421 = memref.load %u_t0_loadview[%368, %369, %367] : memref<53x103x103xf32, strided<[11025, 105, 1], offset: 22262>>
-// CHECK-NEXT:            %422 = arith.mulf %418, %420 : f32
-// CHECK-NEXT:            %423 = arith.mulf %422, %421 : f32
-// CHECK-NEXT:            %424 = arith.addf %411, %417 : f32
-// CHECK-NEXT:            %425 = arith.addf %424, %423 : f32
-// CHECK-NEXT:            %h_z = arith.constant 1.000000e-02 : f32
-// CHECK-NEXT:            %426 = arith.constant -2 : i64
-// CHECK-NEXT:            %427 = "math.fpowi"(%h_z, %426) : (f32, i64) -> f32
-// CHECK-NEXT:            %428 = arith.constant -1 : index
-// CHECK-NEXT:            %429 = arith.addi %367, %428 : index
-// CHECK-NEXT:            %430 = memref.load %u_t0_loadview[%368, %369, %429] : memref<53x103x103xf32, strided<[11025, 105, 1], offset: 22262>>
-// CHECK-NEXT:            %431 = arith.mulf %427, %430 : f32
-// CHECK-NEXT:            %h_z_1 = arith.constant 1.000000e-02 : f32
-// CHECK-NEXT:            %432 = arith.constant -2 : i64
-// CHECK-NEXT:            %433 = "math.fpowi"(%h_z_1, %432) : (f32, i64) -> f32
-// CHECK-NEXT:            %434 = arith.constant 1 : index
-// CHECK-NEXT:            %435 = arith.addi %367, %434 : index
-// CHECK-NEXT:            %436 = memref.load %u_t0_loadview[%368, %369, %435] : memref<53x103x103xf32, strided<[11025, 105, 1], offset: 22262>>
-// CHECK-NEXT:            %437 = arith.mulf %433, %436 : f32
-// CHECK-NEXT:            %438 = arith.constant -2.000000e+00 : f32
-// CHECK-NEXT:            %h_z_2 = arith.constant 1.000000e-02 : f32
-// CHECK-NEXT:            %439 = arith.constant -2 : i64
-// CHECK-NEXT:            %440 = "math.fpowi"(%h_z_2, %439) : (f32, i64) -> f32
-// CHECK-NEXT:            %441 = memref.load %u_t0_loadview[%368, %369, %367] : memref<53x103x103xf32, strided<[11025, 105, 1], offset: 22262>>
-// CHECK-NEXT:            %442 = arith.mulf %438, %440 : f32
-// CHECK-NEXT:            %443 = arith.mulf %442, %441 : f32
-// CHECK-NEXT:            %444 = arith.addf %431, %437 : f32
-// CHECK-NEXT:            %445 = arith.addf %444, %443 : f32
-// CHECK-NEXT:            %446 = arith.addf %385, %405 : f32
-// CHECK-NEXT:            %447 = arith.addf %446, %425 : f32
-// CHECK-NEXT:            %448 = arith.addf %447, %445 : f32
-// CHECK-NEXT:            %449 = arith.mulf %371, %448 : f32
-// CHECK-NEXT:            memref.store %449, %u_t1_storeview[%368, %369, %367] : memref<51x101x101xf32, strided<[11025, 105, 1], offset: 22262>>
+// CHECK-NEXT:            %274 = "math.fpowi"(%h_x, %263) : (f32, i64) -> f32
+// CHECK-NEXT:            %275 = arith.constant -1 : index
+// CHECK-NEXT:            %276 = arith.addi %258, %275 : index
+// CHECK-NEXT:            %277 = memref.load %u_t0_blk[%276, %259, %257] : memref<55x105x105xf32, strided<[11025, 105, 1], offset: 22262>>
+// CHECK-NEXT:            %278 = arith.mulf %274, %277 : f32
+// CHECK-NEXT:            %279 = arith.addi %258, %time_m : index
+// CHECK-NEXT:            %280 = memref.load %u_t0_blk[%279, %259, %257] : memref<55x105x105xf32, strided<[11025, 105, 1], offset: 22262>>
+// CHECK-NEXT:            %281 = arith.mulf %274, %280 : f32
+// CHECK-NEXT:            %282 = arith.mulf %267, %274 : f32
+// CHECK-NEXT:            %283 = arith.mulf %282, %268 : f32
+// CHECK-NEXT:            %284 = arith.addf %278, %281 : f32
+// CHECK-NEXT:            %285 = arith.addf %284, %283 : f32
+// CHECK-NEXT:            %286 = arith.addi %259, %275 : index
+// CHECK-NEXT:            %287 = memref.load %u_t0_blk[%258, %286, %257] : memref<55x105x105xf32, strided<[11025, 105, 1], offset: 22262>>
+// CHECK-NEXT:            %288 = arith.mulf %274, %287 : f32
+// CHECK-NEXT:            %289 = arith.addi %259, %time_m : index
+// CHECK-NEXT:            %290 = memref.load %u_t0_blk[%258, %289, %257] : memref<55x105x105xf32, strided<[11025, 105, 1], offset: 22262>>
+// CHECK-NEXT:            %291 = arith.mulf %274, %290 : f32
+// CHECK-NEXT:            %292 = arith.addf %288, %291 : f32
+// CHECK-NEXT:            %293 = arith.addf %292, %283 : f32
+// CHECK-NEXT:            %294 = arith.addi %257, %275 : index
+// CHECK-NEXT:            %295 = memref.load %u_t0_blk[%258, %259, %294] : memref<55x105x105xf32, strided<[11025, 105, 1], offset: 22262>>
+// CHECK-NEXT:            %296 = arith.mulf %274, %295 : f32
+// CHECK-NEXT:            %297 = arith.addi %257, %time_m : index
+// CHECK-NEXT:            %298 = memref.load %u_t0_blk[%258, %259, %297] : memref<55x105x105xf32, strided<[11025, 105, 1], offset: 22262>>
+// CHECK-NEXT:            %299 = arith.mulf %274, %298 : f32
+// CHECK-NEXT:            %300 = arith.addf %296, %299 : f32
+// CHECK-NEXT:            %301 = arith.addf %300, %283 : f32
+// CHECK-NEXT:            %302 = arith.addf %273, %285 : f32
+// CHECK-NEXT:            %303 = arith.addf %302, %293 : f32
+// CHECK-NEXT:            %304 = arith.addf %303, %301 : f32
+// CHECK-NEXT:            %305 = arith.mulf %261, %304 : f32
+// CHECK-NEXT:            memref.store %305, %245[%258, %259, %257] : memref<55x105x105xf32, strided<[11025, 105, 1], offset: 22262>>
 // CHECK-NEXT:            scf.yield
 // CHECK-NEXT:          }) : (index, index, index, index, index, index, index, index, index) -> ()
 // CHECK-NEXT:          scf.yield
 // CHECK-NEXT:        }) : (index, index, index, index, index, index) -> ()
-// CHECK-NEXT:        %u_t1_temp = "memref.subview"(%u_t1) <{"static_offsets" = array<i64: 2, 2, 2>, "static_sizes" = array<i64: 51, 101, 101>, "static_strides" = array<i64: 1, 1, 1>, "operandSegmentSizes" = array<i32: 1, 0, 0, 0>}> : (memref<55x105x105xf32>) -> memref<51x101x101xf32, strided<[11025, 105, 1], offset: 22262>>
 // CHECK-NEXT:        scf.yield %u_t1, %u_t2, %u_t0 : memref<55x105x105xf32>, memref<55x105x105xf32>, memref<55x105x105xf32>
 // CHECK-NEXT:      }
-// CHECK-NEXT:      %450 = func.call @timer_end(%0) : (f64) -> f64
-// CHECK-NEXT:      "llvm.store"(%450, %timers) <{"ordering" = 0 : i64}> : (f64, !llvm.ptr) -> ()
+// CHECK-NEXT:      %306 = func.call @timer_end(%0) : (f64) -> f64
+// CHECK-NEXT:      "llvm.store"(%306, %timers) <{"ordering" = 0 : i64}> : (f64, !llvm.ptr) -> ()
 // CHECK-NEXT:      func.return
 // CHECK-NEXT:    }
 // CHECK-NEXT:    func.func private @timer_start() -> f64

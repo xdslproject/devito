@@ -1,4 +1,4 @@
-// RUN: xdsl-opt -p canonicalize,cse,shape-inference,stencil-bufferize,convert-stencil-to-ll-mlir,scf-parallel-loop-tiling{parallel-loop-tile-sizes=64,0},printf-to-llvm,canonicalize %s | filecheck %s
+// RUN: xdsl-opt -p "canonicalize,cse,shape-inference,stencil-bufferize,convert-stencil-to-ll-mlir,scf-parallel-loop-tiling{parallel-loop-tile-sizes=64,0},printf-to-llvm,canonicalize,cse" %s | filecheck %s
 
 builtin.module {
   func.func @Kernel(%f2_vec0 : !stencil.field<[-2,5]x[-2,5]xf32>, %f2_vec1 : !stencil.field<[-2,5]x[-2,5]xf32>, %timers : !llvm.ptr) {
@@ -81,98 +81,63 @@ builtin.module {
 // CHECK-NEXT:      %0 = func.call @timer_start() : () -> f64
 // CHECK-NEXT:      %time_m = arith.constant 0 : index
 // CHECK-NEXT:      %time_M = arith.constant 1 : index
-// CHECK-NEXT:      %1 = arith.constant 1 : index
-// CHECK-NEXT:      %2 = arith.addi %time_M, %1 : index
-// CHECK-NEXT:      %step = arith.constant 1 : index
-// CHECK-NEXT:      %3, %4 = scf.for %time = %time_m to %2 step %step iter_args(%f2_t0 = %f2_vec0, %f2_t1 = %f2_vec1) -> (memref<7x7xf32>, memref<7x7xf32>) {
-// CHECK-NEXT:        %f2_t1_storeview = "memref.subview"(%f2_t1) <{"static_offsets" = array<i64: 2, 2>, "static_sizes" = array<i64: 3, 3>, "static_strides" = array<i64: 1, 1>, "operandSegmentSizes" = array<i32: 1, 0, 0, 0>}> : (memref<7x7xf32>) -> memref<3x3xf32, strided<[7, 1], offset: 16>>
-// CHECK-NEXT:        %f2_t0_loadview = "memref.subview"(%f2_t0) <{"static_offsets" = array<i64: 2, 2>, "static_sizes" = array<i64: 5, 5>, "static_strides" = array<i64: 1, 1>, "operandSegmentSizes" = array<i32: 1, 0, 0, 0>}> : (memref<7x7xf32>) -> memref<5x5xf32, strided<[7, 1], offset: 16>>
-// CHECK-NEXT:        %5 = arith.constant 0 : index
-// CHECK-NEXT:        %6 = arith.constant 0 : index
-// CHECK-NEXT:        %7 = arith.constant 1 : index
-// CHECK-NEXT:        %8 = arith.constant 1 : index
-// CHECK-NEXT:        %9 = arith.constant 3 : index
-// CHECK-NEXT:        %10 = arith.constant 3 : index
-// CHECK-NEXT:        %11 = arith.constant 0 : index
-// CHECK-NEXT:        %12 = arith.constant 64 : index
-// CHECK-NEXT:        %13 = arith.muli %7, %12 : index
-// CHECK-NEXT:        "scf.parallel"(%5, %9, %13) <{"operandSegmentSizes" = array<i32: 1, 1, 1, 0>}> ({
-// CHECK-NEXT:        ^0(%14 : index):
-// CHECK-NEXT:          %15 = "affine.min"(%12, %9, %14) <{"map" = affine_map<(d0, d1, d2) -> (d0, (d1 + (d2 * -1)))>}> : (index, index, index) -> index
-// CHECK-NEXT:          "scf.parallel"(%11, %6, %15, %10, %7, %8) <{"operandSegmentSizes" = array<i32: 2, 2, 2, 0>}> ({
-// CHECK-NEXT:          ^1(%16 : index, %17 : index):
-// CHECK-NEXT:            %18 = arith.addi %14, %16 : index
-// CHECK-NEXT:            %19 = arith.constant 5.000000e-01 : f32
+// CHECK-NEXT:      %1 = arith.addi %time_M, %time_M : index
+// CHECK-NEXT:      %2, %3 = scf.for %time = %time_m to %1 step %time_M iter_args(%f2_t0 = %f2_vec0, %f2_t1 = %f2_vec1) -> (memref<7x7xf32>, memref<7x7xf32>) {
+// CHECK-NEXT:        %4 = memref.subview %f2_t1[2, 2] [7, 7] [1, 1] : memref<7x7xf32> to memref<7x7xf32, strided<[7, 1], offset: 16>>
+// CHECK-NEXT:        %f2_t0_blk = memref.subview %f2_t0[2, 2] [7, 7] [1, 1] : memref<7x7xf32> to memref<7x7xf32, strided<[7, 1], offset: 16>>
+// CHECK-NEXT:        %5 = arith.constant 3 : index
+// CHECK-NEXT:        %6 = arith.constant 64 : index
+// CHECK-NEXT:        %7 = arith.muli %time_M, %6 : index
+// CHECK-NEXT:        "scf.parallel"(%time_m, %5, %7) <{"operandSegmentSizes" = array<i32: 1, 1, 1, 0>}> ({
+// CHECK-NEXT:        ^0(%8 : index):
+// CHECK-NEXT:          %9 = "affine.min"(%6, %5, %8) <{"map" = affine_map<(d0, d1, d2) -> (d0, (d1 + (d2 * -1)))>}> : (index, index, index) -> index
+// CHECK-NEXT:          "scf.parallel"(%time_m, %time_m, %9, %5, %time_M, %time_M) <{"operandSegmentSizes" = array<i32: 2, 2, 2, 0>}> ({
+// CHECK-NEXT:          ^1(%10 : index, %11 : index):
+// CHECK-NEXT:            %12 = arith.addi %8, %10 : index
 // CHECK-NEXT:            %h_x = arith.constant 5.000000e-01 : f32
-// CHECK-NEXT:            %20 = arith.constant -2 : i64
-// CHECK-NEXT:            %21 = "math.fpowi"(%h_x, %20) : (f32, i64) -> f32
-// CHECK-NEXT:            %22 = arith.constant -1 : index
-// CHECK-NEXT:            %23 = arith.addi %18, %22 : index
-// CHECK-NEXT:            %24 = memref.load %f2_t0_loadview[%23, %17] : memref<5x5xf32, strided<[7, 1], offset: 16>>
-// CHECK-NEXT:            %25 = arith.mulf %21, %24 : f32
-// CHECK-NEXT:            %h_x_1 = arith.constant 5.000000e-01 : f32
-// CHECK-NEXT:            %26 = arith.constant -2 : i64
-// CHECK-NEXT:            %27 = "math.fpowi"(%h_x_1, %26) : (f32, i64) -> f32
-// CHECK-NEXT:            %28 = arith.constant 1 : index
-// CHECK-NEXT:            %29 = arith.addi %18, %28 : index
-// CHECK-NEXT:            %30 = memref.load %f2_t0_loadview[%29, %17] : memref<5x5xf32, strided<[7, 1], offset: 16>>
-// CHECK-NEXT:            %31 = arith.mulf %27, %30 : f32
-// CHECK-NEXT:            %32 = arith.constant -2.000000e+00 : f32
-// CHECK-NEXT:            %h_x_2 = arith.constant 5.000000e-01 : f32
-// CHECK-NEXT:            %33 = arith.constant -2 : i64
-// CHECK-NEXT:            %34 = "math.fpowi"(%h_x_2, %33) : (f32, i64) -> f32
-// CHECK-NEXT:            %35 = memref.load %f2_t0_loadview[%18, %17] : memref<5x5xf32, strided<[7, 1], offset: 16>>
-// CHECK-NEXT:            %36 = arith.mulf %32, %34 : f32
-// CHECK-NEXT:            %37 = arith.mulf %36, %35 : f32
-// CHECK-NEXT:            %38 = arith.addf %25, %31 : f32
-// CHECK-NEXT:            %39 = arith.addf %38, %37 : f32
-// CHECK-NEXT:            %40 = arith.mulf %19, %39 : f32
-// CHECK-NEXT:            %41 = arith.constant 5.000000e-01 : f32
-// CHECK-NEXT:            %h_y = arith.constant 5.000000e-01 : f32
-// CHECK-NEXT:            %42 = arith.constant -2 : i64
-// CHECK-NEXT:            %43 = "math.fpowi"(%h_y, %42) : (f32, i64) -> f32
-// CHECK-NEXT:            %44 = arith.constant -1 : index
-// CHECK-NEXT:            %45 = arith.addi %17, %44 : index
-// CHECK-NEXT:            %46 = memref.load %f2_t0_loadview[%18, %45] : memref<5x5xf32, strided<[7, 1], offset: 16>>
-// CHECK-NEXT:            %47 = arith.mulf %43, %46 : f32
-// CHECK-NEXT:            %h_y_1 = arith.constant 5.000000e-01 : f32
-// CHECK-NEXT:            %48 = arith.constant -2 : i64
-// CHECK-NEXT:            %49 = "math.fpowi"(%h_y_1, %48) : (f32, i64) -> f32
-// CHECK-NEXT:            %50 = arith.constant 1 : index
-// CHECK-NEXT:            %51 = arith.addi %17, %50 : index
-// CHECK-NEXT:            %52 = memref.load %f2_t0_loadview[%18, %51] : memref<5x5xf32, strided<[7, 1], offset: 16>>
-// CHECK-NEXT:            %53 = arith.mulf %49, %52 : f32
-// CHECK-NEXT:            %54 = arith.constant -2.000000e+00 : f32
-// CHECK-NEXT:            %h_y_2 = arith.constant 5.000000e-01 : f32
-// CHECK-NEXT:            %55 = arith.constant -2 : i64
-// CHECK-NEXT:            %56 = "math.fpowi"(%h_y_2, %55) : (f32, i64) -> f32
-// CHECK-NEXT:            %57 = memref.load %f2_t0_loadview[%18, %17] : memref<5x5xf32, strided<[7, 1], offset: 16>>
-// CHECK-NEXT:            %58 = arith.mulf %54, %56 : f32
-// CHECK-NEXT:            %59 = arith.mulf %58, %57 : f32
-// CHECK-NEXT:            %60 = arith.addf %47, %53 : f32
-// CHECK-NEXT:            %61 = arith.addf %60, %59 : f32
-// CHECK-NEXT:            %62 = arith.mulf %41, %61 : f32
+// CHECK-NEXT:            %13 = arith.constant -2 : i64
+// CHECK-NEXT:            %14 = "math.fpowi"(%h_x, %13) : (f32, i64) -> f32
+// CHECK-NEXT:            %15 = arith.constant -1 : index
+// CHECK-NEXT:            %16 = arith.addi %12, %15 : index
+// CHECK-NEXT:            %17 = memref.load %f2_t0_blk[%16, %11] : memref<7x7xf32, strided<[7, 1], offset: 16>>
+// CHECK-NEXT:            %18 = arith.mulf %14, %17 : f32
+// CHECK-NEXT:            %19 = arith.addi %12, %time_M : index
+// CHECK-NEXT:            %20 = memref.load %f2_t0_blk[%19, %11] : memref<7x7xf32, strided<[7, 1], offset: 16>>
+// CHECK-NEXT:            %21 = arith.mulf %14, %20 : f32
+// CHECK-NEXT:            %22 = arith.constant -2.000000e+00 : f32
+// CHECK-NEXT:            %23 = memref.load %f2_t0_blk[%12, %11] : memref<7x7xf32, strided<[7, 1], offset: 16>>
+// CHECK-NEXT:            %24 = arith.mulf %22, %14 : f32
+// CHECK-NEXT:            %25 = arith.mulf %24, %23 : f32
+// CHECK-NEXT:            %26 = arith.addf %18, %21 : f32
+// CHECK-NEXT:            %27 = arith.addf %26, %25 : f32
+// CHECK-NEXT:            %28 = arith.mulf %h_x, %27 : f32
+// CHECK-NEXT:            %29 = arith.addi %11, %15 : index
+// CHECK-NEXT:            %30 = memref.load %f2_t0_blk[%12, %29] : memref<7x7xf32, strided<[7, 1], offset: 16>>
+// CHECK-NEXT:            %31 = arith.mulf %14, %30 : f32
+// CHECK-NEXT:            %32 = arith.addi %11, %time_M : index
+// CHECK-NEXT:            %33 = memref.load %f2_t0_blk[%12, %32] : memref<7x7xf32, strided<[7, 1], offset: 16>>
+// CHECK-NEXT:            %34 = arith.mulf %14, %33 : f32
+// CHECK-NEXT:            %35 = arith.addf %31, %34 : f32
+// CHECK-NEXT:            %36 = arith.addf %35, %25 : f32
+// CHECK-NEXT:            %37 = arith.mulf %h_x, %36 : f32
 // CHECK-NEXT:            %dt = arith.constant 1.000000e-01 : f32
-// CHECK-NEXT:            %63 = arith.constant -1 : i64
-// CHECK-NEXT:            %64 = "math.fpowi"(%dt, %63) : (f32, i64) -> f32
-// CHECK-NEXT:            %65 = memref.load %f2_t0_loadview[%18, %17] : memref<5x5xf32, strided<[7, 1], offset: 16>>
-// CHECK-NEXT:            %66 = arith.mulf %64, %65 : f32
-// CHECK-NEXT:            %67 = arith.addf %40, %62 : f32
-// CHECK-NEXT:            %68 = arith.addf %67, %66 : f32
-// CHECK-NEXT:            %dt_1 = arith.constant 1.000000e-01 : f32
-// CHECK-NEXT:            %69 = arith.mulf %68, %dt_1 : f32
-// CHECK-NEXT:            memref.store %69, %f2_t1_storeview[%18, %17] : memref<3x3xf32, strided<[7, 1], offset: 16>>
+// CHECK-NEXT:            %38 = arith.constant -1 : i64
+// CHECK-NEXT:            %39 = "math.fpowi"(%dt, %38) : (f32, i64) -> f32
+// CHECK-NEXT:            %40 = arith.mulf %39, %23 : f32
+// CHECK-NEXT:            %41 = arith.addf %28, %37 : f32
+// CHECK-NEXT:            %42 = arith.addf %41, %40 : f32
+// CHECK-NEXT:            %43 = arith.mulf %42, %dt : f32
+// CHECK-NEXT:            memref.store %43, %4[%12, %11] : memref<7x7xf32, strided<[7, 1], offset: 16>>
 // CHECK-NEXT:            scf.yield
 // CHECK-NEXT:          }) : (index, index, index, index, index, index) -> ()
 // CHECK-NEXT:          scf.yield
 // CHECK-NEXT:        }) : (index, index, index) -> ()
 // CHECK-NEXT:        scf.yield %f2_t1, %f2_t0 : memref<7x7xf32>, memref<7x7xf32>
 // CHECK-NEXT:      }
-// CHECK-NEXT:      %70 = func.call @timer_end(%0) : (f64) -> f64
-// CHECK-NEXT:      "llvm.store"(%70, %timers) <{"ordering" = 0 : i64}> : (f64, !llvm.ptr) -> ()
+// CHECK-NEXT:      %44 = func.call @timer_end(%0) : (f64) -> f64
+// CHECK-NEXT:      "llvm.store"(%44, %timers) <{"ordering" = 0 : i64}> : (f64, !llvm.ptr) -> ()
 // CHECK-NEXT:      func.return
 // CHECK-NEXT:    }
 // CHECK-NEXT:    func.func private @timer_start() -> f64
 // CHECK-NEXT:    func.func private @timer_end(f64) -> f64
 // CHECK-NEXT:  }
-// CHECK-NEXT:  
