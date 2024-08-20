@@ -35,7 +35,7 @@ jobs:
     - name: Install requirements and xDSL
       run: |
         pip install -e .[tests]
-        pip install git+https://github.com/xdslproject/xdsl@f6fdfb86d20f39f2d0e2e3f76900a1013bc5ef79
+        pip install git+https://github.com/xdslproject/xdsl@935675efd470505028466917126f8cc8f64ce4e3
         
     - name: Test no-MPI, no-Openmp
       run: |

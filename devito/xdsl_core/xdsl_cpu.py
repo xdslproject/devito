@@ -184,7 +184,6 @@ class XdslnoopOperator(Cpu64OperatorMixin, CoreOperator):
                 xdsl_args = [source_name,
                              "--allow-unregistered-dialect",
                              "-p",
-                             "--disable-verify",
                              xdsl_pipeline[1:-1],]
                 # We use the Python API to run xDSL rather than a subprocess
                 # This avoids reimport overhead
@@ -461,7 +460,6 @@ class XdslAdvOperator(XdslnoopOperator):
                 # Run the first pipeline, mostly xDSL-centric
                 xdsl_args = [source_name,
                              "--allow-unregistered-dialect",
-                             "--disable-verify",
                              "-p",
                              xdsl_pipeline[1:-1],]
                 # We use the Python API to run xDSL rather than a subprocess
