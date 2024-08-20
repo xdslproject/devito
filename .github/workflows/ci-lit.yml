@@ -27,7 +27,7 @@ jobs:
 
     - name: Install requirements and xDSL
       run: |
-        pip install git+https://github.com/xdslproject/xdsl@306c5e00e3f715ae6710467bb1179e9fb3f394c8
+        pip install git+https://github.com/xdslproject/xdsl@f6fdfb86d20f39f2d0e2e3f76900a1013bc5ef79
         pip install -e .[tests]
 
     - name: Execute lit tests
