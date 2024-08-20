@@ -32,15 +32,16 @@ def test_create_xdsl_operator():
     assert type(ops[6] == For)
 
     scffor_ops = list(ops[6].regions[0].blocks[0].ops)
-    assert len(scffor_ops) == 4
+    assert len(scffor_ops) == 5
 
     # First
     assert isinstance(scffor_ops[0], LoadOp)
     assert isinstance(scffor_ops[1], ApplyOp)
     assert isinstance(scffor_ops[2], StoreOp)
+    assert isinstance(scffor_ops[3], LoadOp)
 
     # Yield
-    assert isinstance(scffor_ops[3], Yield)
+    assert isinstance(scffor_ops[4], Yield)
 
     assert type(ops[7] == Call)
     assert type(ops[8] == StoreOp)
