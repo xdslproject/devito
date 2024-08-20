@@ -94,7 +94,7 @@ builtin.module {
         %73 = arith.mulf %7, %72 : f32
         stencil.return %73 : f32
       }
-      %u_t1_temp_1 = stencil.store %u_t1_temp to %u_t1 ([0, 0, 0] : [51, 101, 101]) : !stencil.temp<?x?x?xf32> to !stencil.field<[-2,53]x[-2,103]x[-2,103]xf32> with_halo : !stencil.temp<?x?x?xf32>
+      stencil.store %u_t1_temp to %u_t1(<[0, 0, 0], [51, 101, 101]>)  : !stencil.temp<?x?x?xf32> to !stencil.field<[-2,53]x[-2,103]x[-2,103]xf32>
       scf.yield %u_t1, %u_t2, %u_t0 : !stencil.field<[-2,53]x[-2,103]x[-2,103]xf32>, !stencil.field<[-2,53]x[-2,103]x[-2,103]xf32>, !stencil.field<[-2,53]x[-2,103]x[-2,103]xf32>
     }
     %6 = func.call @timer_end(%0) : (f64) -> f64

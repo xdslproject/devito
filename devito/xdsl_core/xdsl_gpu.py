@@ -140,7 +140,7 @@ class XdslAdvDeviceOperator(XdslAdvOperator):
 
 def generate_XDSL_GPU_PIPELINE():
     passes = [
-        "stencil-shape-inference",
+        "shape-inference",
         "convert-stencil-to-ll-mlir",
         "reconcile-unrealized-casts",
         "printf-to-llvm",

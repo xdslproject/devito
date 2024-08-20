@@ -1,4 +1,4 @@
-// RUN: xdsl-opt -p stencil-shape-inference,convert-stencil-to-ll-mlir,scf-parallel-loop-tiling{parallel-loop-tile-sizes=64,0},printf-to-llvm,canonicalize %s | filecheck %s
+// RUN: xdsl-opt -p shape-inference,convert-stencil-to-ll-mlir,scf-parallel-loop-tiling{parallel-loop-tile-sizes=64,0},printf-to-llvm,canonicalize %s | filecheck %s
 
 builtin.module {
   func.func @Kernel(%f2_vec0 : !stencil.field<[-2,5]x[-2,5]xf32>, %f2_vec1 : !stencil.field<[-2,5]x[-2,5]xf32>, %timers : !llvm.ptr) {
@@ -64,7 +64,7 @@ builtin.module {
         %47 = arith.mulf %46, %dt_1 : f32
         stencil.return %47 : f32
       }
-      %f2_t1_temp_1 = stencil.store %f2_t1_temp to %f2_t1 ([0, 0] : [3, 3]) : !stencil.temp<?x?xf32> to !stencil.field<[-2,5]x[-2,5]xf32> with_halo : !stencil.temp<?x?xf32>
+      stencil.store %f2_t1_temp to %f2_t1(<[0, 0], [3, 3]>)  : !stencil.temp<?x?xf32> to !stencil.field<[-2,5]x[-2,5]xf32>
       scf.yield %f2_t1, %f2_t0 : !stencil.field<[-2,5]x[-2,5]xf32>, !stencil.field<[-2,5]x[-2,5]xf32>
     }
     %5 = func.call @timer_end(%0) : (f64) -> f64
