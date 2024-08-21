@@ -130,6 +130,7 @@ def test_symbol_I():
     assert ops[0].result.name_hint == a.name
     assert type(ops[0] == Return)
 
+
 def test_inplace():
     # Define a simple Devito Operator
     grid = Grid(shape=(3, 3))
