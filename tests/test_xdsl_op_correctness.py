@@ -130,9 +130,6 @@ def test_symbol_I():
     assert ops[0].result.name_hint == a.name
     assert type(ops[0] == Return)
 
-
-# This test should fail, as we are trying to use an inplace operation
-@pytest.mark.xfail(reason="Cannot store to a field that is loaded from")
 def test_inplace():
     # Define a simple Devito Operator
     grid = Grid(shape=(3, 3))

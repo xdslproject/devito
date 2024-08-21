@@ -386,13 +386,12 @@ class ExtractDevitoStencilConversion:
 
         lb = stencil.IndexAttr.get(*([0] * len(shape)))
         ub = stencil.IndexAttr.get(*shape)
-
         store = stencil.StoreOp.get(
             apply.res[0],
-            self.function_values[self.out_time_buffer],
+            self.block_args[self.out_time_buffer],
             stencil.StencilBoundsAttr(zip(lb, ub)),
         )
-        load = stencil.LoadOp.get(self.function_values[self.out_time_buffer])
+        load = stencil.LoadOp.get(self.block_args[self.out_time_buffer])
         load.res.name_hint = f"{write_function.name}_t{self.out_time_buffer[1]}_temp"  # noqa
         self.temps[self.out_time_buffer] = load.res
 
