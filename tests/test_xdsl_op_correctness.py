@@ -131,7 +131,22 @@ def test_symbol_I():
     assert type(ops[0] == Return)
 
 
-def test_inplace():
+def test_inplace_I():
+    # Define a simple Devito Operator
+    grid = Grid(shape=(3, 3))
+    u = TimeFunction(name="u", grid=grid, time_order=2)
+
+    u.data[:] = 0.0001
+
+    eq0 = Eq(u, u + 2)
+
+    xdsl_op = Operator([eq0], opt="xdsl")
+    xdsl_op.apply(time_M=5, dt=0.1)
+
+
+# This test should fail, as we are trying to use an inplace operation with some dependencies
+@pytest.mark.xfail(reason="Cannot store to a field that is loaded from")
+def test_inplace_II():
     # Define a simple Devito Operator
     grid = Grid(shape=(3, 3))
     u = TimeFunction(name='u', grid=grid, time_order=2)
