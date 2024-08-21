@@ -144,7 +144,8 @@ def test_inplace_I():
     xdsl_op.apply(time_M=5, dt=0.1)
 
 
-# This test should fail, as we are trying to use an inplace operation with some dependencies
+# This test should fail, as we are trying to use an inplace operation with some
+# dependencies
 @pytest.mark.xfail(reason="Cannot store to a field that is loaded from")
 def test_inplace_II():
     # Define a simple Devito Operator
