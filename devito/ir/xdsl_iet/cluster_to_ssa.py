@@ -198,7 +198,7 @@ class ExtractDevitoStencilConversion:
             if output_indexed is not None:
                 space_offsets = ([node.indices[d] - output_indexed.indices[d]
                                  for d in node.function.space_dimensions])
-                temp = self.function_values[(node.function, time_offset)]
+                temp = self.apply_temps[(node.function, time_offset)]
                 access = stencil.AccessOp.get(temp, space_offsets)
                 return access.res
             # Otherwise, generate a load op
@@ -378,8 +378,6 @@ class ExtractDevitoStencilConversion:
             apply_arg.name_hint = apply_op.name_hint.replace("temp", "blk")
 
         self.apply_temps = {k: v for k, v in zip(read_functions, apply.region.block.args)}
-        # Update the function values with the new temps
-        self.function_values |= self.apply_temps
 
         with ImplicitBuilder(apply.region.block):
             stencil.ReturnOp.get([self._visit_math_nodes(dim, eq.rhs, eq.lhs)])
