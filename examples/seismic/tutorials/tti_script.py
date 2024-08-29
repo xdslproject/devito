@@ -77,15 +77,7 @@ q = Function(name="q", grid=model.grid, space_order=8)
 
 # Main equations
 
-# Problem with the following line
-term1_p = q.dx
-# term2_p = (1 + 2*delta*(sintheta**2)*(costheta**2) + 2*epsilon*sintheta**4)*q.dy
-# term3_p = (2-delta*(sin2theta)**2 + 3*epsilon*(sin2theta)**2 + 2*delta*(cos2theta)**2)*((q.dy2).dx2)
-
-# term4_p = ( delta*sin4theta - 4*epsilon*sin2theta*costheta**2)*((q.dy).dx3)
-# term5_p = (-delta*sin4theta - 4*epsilon*sin2theta*sintheta**2)*((q.dy3).dx)
-
-stencil_p = solve(m*p.dt2 - 0.01, p.forward)
+stencil_p = solve(m*p.dt2 - q.dx, p.forward)
 # update_p = Eq(p.forward, stencil_p)
 update_p = Eq(p.forward, stencil_p)
 
@@ -100,16 +92,14 @@ xnorm1 = np.linalg.norm(p.data[1])
 xnorm2 = np.linalg.norm(p.data[2])
 
 p.data[:] = 0.1
-print("Norm xdsl(p) before is ", norm(p))
+print("Norm devito(p) before is ", norm(p))
 opd = Operator([update_p])
 opd.apply(time_m=0, time_M=time_range.num-2, dt=dt)
-print("Norm devito(p) is ", norm(p))
+print("Norm devito(p) after is ", norm(p))
 
 dnorm0 = np.linalg.norm(p.data[0])
 dnorm1 = np.linalg.norm(p.data[1])
 dnorm2 = np.linalg.norm(p.data[2])
 
-
-print("Norm p is ", norm(p))
 
 import pdb; pdb.set_trace()
