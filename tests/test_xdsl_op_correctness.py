@@ -91,20 +91,22 @@ def test_u_and_v_conversion():
 
     scffor_ops = list(ops[6].regions[0].blocks[0].ops)
 
-    assert len(scffor_ops) == 7
+    assert len(scffor_ops) == 9
 
     # First
     assert isinstance(scffor_ops[0], LoadOp)
     assert isinstance(scffor_ops[1], LoadOp)
     assert isinstance(scffor_ops[2], ApplyOp)
     assert isinstance(scffor_ops[3], StoreOp)
+    assert isinstance(scffor_ops[4], LoadOp)
 
     # Second
-    assert isinstance(scffor_ops[4], ApplyOp)
-    assert isinstance(scffor_ops[5], StoreOp)
+    assert isinstance(scffor_ops[5], ApplyOp)
+    assert isinstance(scffor_ops[6], StoreOp)
+    assert isinstance(scffor_ops[7], LoadOp)
 
     # Yield
-    assert isinstance(scffor_ops[6], Yield)
+    assert isinstance(scffor_ops[8], Yield)
 
     assert type(ops[7] == Call)
     assert type(ops[8] == StoreOp)

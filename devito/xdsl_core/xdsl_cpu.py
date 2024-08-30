@@ -597,7 +597,10 @@ def generate_MLIR_OPENMP_PIPELINE(kwargs):
 
 def generate_XDSL_CPU_PIPELINE(nb_tiled_dims):
     passes = [
-        "stencil-shape-inference",
+        "canonicalize",
+        "cse",
+        "shape-inference",
+        "stencil-bufferize",
         "convert-stencil-to-ll-mlir",
         f"scf-parallel-loop-tiling{{{generate_tiling_arg(nb_tiled_dims)}}}",
         "printf-to-llvm",
@@ -609,7 +612,10 @@ def generate_XDSL_CPU_PIPELINE(nb_tiled_dims):
 
 def generate_XDSL_CPU_noop_PIPELINE():
     passes = [
-        "stencil-shape-inference",
+        "canonicalize",
+        "cse",
+        "shape-inference",
+        "stencil-bufferize",
         "convert-stencil-to-ll-mlir",
         "printf-to-llvm"
     ]
@@ -619,11 +625,15 @@ def generate_XDSL_CPU_noop_PIPELINE():
 
 def generate_XDSL_MPI_PIPELINE(decomp, nb_tiled_dims):
     passes = [
+        "canonicalize",
+        "cse",
         f"distribute-stencil{decomp}",
+        "shape-inference",
         "canonicalize-dmp",
+        "stencil-bufferize",
+        "dmp-to-mpi{mpi_init=false}",
         "convert-stencil-to-ll-mlir",
         f"scf-parallel-loop-tiling{{{generate_tiling_arg(nb_tiled_dims)}}}",
-        "dmp-to-mpi{mpi_init=false}",
         "lower-mpi",
         "printf-to-llvm",
         "canonicalize"

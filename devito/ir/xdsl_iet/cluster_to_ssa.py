@@ -198,7 +198,7 @@ class ExtractDevitoStencilConversion:
             if output_indexed is not None:
                 space_offsets = ([node.indices[d] - output_indexed.indices[d]
                                  for d in node.function.space_dimensions])
-                temp = self.function_values[(node.function, time_offset)]
+                temp = self.apply_temps[(node.function, time_offset)]
                 access = stencil.AccessOp.get(temp, space_offsets)
                 return access.res
             # Otherwise, generate a load op
@@ -378,8 +378,6 @@ class ExtractDevitoStencilConversion:
             apply_arg.name_hint = apply_op.name_hint.replace("temp", "blk")
 
         self.apply_temps = {k: v for k, v in zip(read_functions, apply.region.block.args)}
-        # Update the function values with the new temps
-        self.function_values |= self.apply_temps
 
         with ImplicitBuilder(apply.region.block):
             result = self._visit_math_nodes(dim, eq.rhs, eq.lhs)
@@ -404,12 +402,10 @@ class ExtractDevitoStencilConversion:
             apply.res[0],
             self.function_values[self.out_time_buffer],
             stencil.StencilBoundsAttr(zip(lb, ub)),
-            stencil.TempType(len(shape),
-                             element_type=dtype_to_xdsltype(write_function.dtype))
         )
-
-        store.temp_with_halo.name_hint = f"{write_function.name}_t{self.out_time_buffer[1]}_temp"  # noqa
-        self.temps[self.out_time_buffer] = store.temp_with_halo
+        load = stencil.LoadOp.get(self.function_values[self.out_time_buffer])
+        load.res.name_hint = f"{write_function.name}_t{self.out_time_buffer[1]}_temp"  # noqa
+        self.temps[self.out_time_buffer] = load.res
 
     def build_generic_step_expression(self, dim: SteppingDimension, eq: LoweredEq):
         # Sources

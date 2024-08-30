@@ -1,0 +1,9 @@
+1.568606e-01 shape_inference.mlir
+8.218265e-02 version.mlir
+2.304106e-01 xdsl_mpi_pipeline.mlir
+2.372591e-01 xdsl_mpi_pipeline_b.mlir
+7.415709e-01 xdsl_mpi_pipeline_c.mlir
+7.533531e-01 xdsl_mpi_pipeline_d.mlir
+7.714086e-01 xdsl_mpi_pipeline_e.mlir
+2.611284e-01 xdsl_pipeline.mlir
+1.698225e-01 xdsl_pipeline_openmp.mlir
