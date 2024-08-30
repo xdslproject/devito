@@ -380,7 +380,20 @@ class ExtractDevitoStencilConversion:
         self.apply_temps = {k: v for k, v in zip(read_functions, apply.region.block.args)}
 
         with ImplicitBuilder(apply.region.block):
-            stencil.ReturnOp.get([self._visit_math_nodes(dim, eq.rhs, eq.lhs)])
+            result = self._visit_math_nodes(dim, eq.rhs, eq.lhs)
+            expected_type = apply.res[0].type.get_element_type()
+            match expected_type:
+                case result.type:
+                    pass
+                case builtin.f32:
+                    if result.type == IndexType():
+                        result = arith.IndexCastOp(result, builtin.i64).result
+                    result = arith.SIToFPOp(result, builtin.f32).result
+                case builtin.IndexType:
+                    result = arith.IndexCastOp(result, IndexType()).result
+                case _:
+                    raise Exception(f"Unexpected result type {type(result)}")
+            stencil.ReturnOp.get([result])
 
         lb = stencil.IndexAttr.get(*([0] * len(shape)))
         ub = stencil.IndexAttr.get(*shape)
