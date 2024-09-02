@@ -101,6 +101,7 @@ class ExtractDevitoStencilConversion:
 
     def lower_Function(self, eq: LoweredEq, **kwargs):
 
+        import pdb; pdb.set_trace()
         # Get the LHS of the equation, where we write
         write_function = eq.lhs.function
         # Get Grid and stepping dimension
@@ -110,7 +111,7 @@ class ExtractDevitoStencilConversion:
         if isinstance(write_function, TimeFunction):
             time_size = write_function.time_size
             output_time_offset = (eq.lhs.indices[step_dim] - step_dim) % time_size
-            import pdb;pdb.set_trace()
+            # import pdb;pdb.set_trace()
             self.out_time_buffer = (write_function, output_time_offset)
         elif isinstance(write_function, Function):
             self.out_time_buffer = (write_function, 0)
@@ -187,6 +188,9 @@ class ExtractDevitoStencilConversion:
 
     def _visit_math_nodes(self, dim: SteppingDimension, node: Expr,
                           output_indexed: Indexed) -> SSAValue:
+        
+        import pdb; pdb.set_trace()
+
         # Handle Indexeds
         if isinstance(node, Indexed):
             # If we have a time function, we compute its time offset
@@ -222,7 +226,7 @@ class ExtractDevitoStencilConversion:
 
         # Handle Integers
         elif isinstance(node, Integer):
-            cst = arith.Constant.from_int_and_width(int(node), builtin.i64)
+            cst = arith.Constant.from_int_and_width(int(node), builtin.i32)
             return cst.result
         # Handle Floats
         elif isinstance(node, Float):
@@ -363,7 +367,7 @@ class ExtractDevitoStencilConversion:
 
         apply_args = [self.temps[f] for f in read_functions]
 
-        import pdb; pdb.set_trace()
+        # import pdb; pdb.set_trace()
 
         write_function = self.out_time_buffer[0]
         shape = write_function.grid.shape_local
@@ -524,6 +528,7 @@ class ExtractDevitoStencilConversion:
                 self.block_args[(f, (t + 1) % f.time_size)]
                 for (f, t) in self.block_args.keys()
             ]
+            import pdb; pdb.set_trace()
             scf.Yield(*yield_args)
 
     def lower_devito_Eqs(self, eqs: list[Any], **kwargs):
@@ -772,7 +777,7 @@ class ExtractDevitoStencilConversion:
             # insert a cast op
             if cast_to_floats:
                 if val.type == IndexType():
-                    val = arith.IndexCastOp(val, builtin.i64).result
+                    val = arith.IndexCastOp(val, builtin.i32).result
                 conv = arith.SIToFPOp(val, builtin.f32)
             else:
                 conv = arith.IndexCastOp(val, IndexType())
