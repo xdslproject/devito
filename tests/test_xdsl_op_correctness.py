@@ -91,20 +91,22 @@ def test_u_and_v_conversion():
 
     scffor_ops = list(ops[6].regions[0].blocks[0].ops)
 
-    assert len(scffor_ops) == 7
+    assert len(scffor_ops) == 9
 
     # First
     assert isinstance(scffor_ops[0], LoadOp)
     assert isinstance(scffor_ops[1], LoadOp)
     assert isinstance(scffor_ops[2], ApplyOp)
     assert isinstance(scffor_ops[3], StoreOp)
+    assert isinstance(scffor_ops[4], LoadOp)
 
     # Second
-    assert isinstance(scffor_ops[4], ApplyOp)
-    assert isinstance(scffor_ops[5], StoreOp)
+    assert isinstance(scffor_ops[5], ApplyOp)
+    assert isinstance(scffor_ops[6], StoreOp)
+    assert isinstance(scffor_ops[7], LoadOp)
 
     # Yield
-    assert isinstance(scffor_ops[6], Yield)
+    assert isinstance(scffor_ops[8], Yield)
 
     assert type(ops[7] == Call)
     assert type(ops[8] == StoreOp)
@@ -129,9 +131,23 @@ def test_symbol_I():
     assert type(ops[0] == Return)
 
 
-# This test should fail, as we are trying to use an inplace operation
+def test_inplace_I():
+    # Define a simple Devito Operator
+    grid = Grid(shape=(3, 3))
+    u = TimeFunction(name="u", grid=grid, time_order=2)
+
+    u.data[:] = 0.0001
+
+    eq0 = Eq(u, u + 2)
+
+    xdsl_op = Operator([eq0], opt="xdsl")
+    xdsl_op.apply(time_M=5, dt=0.1)
+
+
+# This test should fail, as we are trying to use an inplace operation with some
+# dependencies
 @pytest.mark.xfail(reason="Cannot store to a field that is loaded from")
-def test_inplace():
+def test_inplace_II():
     # Define a simple Devito Operator
     grid = Grid(shape=(3, 3))
     u = TimeFunction(name='u', grid=grid, time_order=2)

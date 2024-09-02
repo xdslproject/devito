@@ -1,4 +1,4 @@
-// RUN: xdsl-opt -p stencil-shape-inference %s | filecheck %s
+// RUN: xdsl-opt -p shape-inference %s | filecheck %s
 
 builtin.module {
   func.func @Kernel(%f2_vec0 : !stencil.field<[-2,5]x[-2,5]xf32>, %f2_vec1 : !stencil.field<[-2,5]x[-2,5]xf32>, %timers : !llvm.ptr) {
@@ -64,7 +64,7 @@ builtin.module {
         %47 = arith.mulf %46, %dt_1 : f32
         stencil.return %47 : f32
       }
-      %f2_t1_temp_1 = stencil.store %f2_t1_temp to %f2_t1 ([0, 0] : [3, 3]) : !stencil.temp<?x?xf32> to !stencil.field<[-2,5]x[-2,5]xf32> with_halo : !stencil.temp<?x?xf32>
+      stencil.store %f2_t1_temp to %f2_t1(<[0, 0], [3, 3]>)  : !stencil.temp<?x?xf32> to !stencil.field<[-2,5]x[-2,5]xf32>
       scf.yield %f2_t1, %f2_t0 : !stencil.field<[-2,5]x[-2,5]xf32>, !stencil.field<[-2,5]x[-2,5]xf32>
     }
     %5 = func.call @timer_end(%0) : (f64) -> f64
@@ -139,7 +139,7 @@ builtin.module {
 // CHECK-NEXT:          %47 = arith.mulf %46, %dt_1 : f32
 // CHECK-NEXT:          stencil.return %47 : f32
 // CHECK-NEXT:        }
-// CHECK-NEXT:        %f2_t1_temp_1 = stencil.store %f2_t1_temp to %f2_t1 ([0, 0] : [3, 3]) : !stencil.temp<[0,3]x[0,3]xf32> to !stencil.field<[-2,5]x[-2,5]xf32> with_halo : !stencil.temp<?x?xf32>
+// CHECK-NEXT:        stencil.store %f2_t1_temp to %f2_t1(<[0, 0], [3, 3]>)  : !stencil.temp<[0,3]x[0,3]xf32> to !stencil.field<[-2,5]x[-2,5]xf32>
 // CHECK-NEXT:        scf.yield %f2_t1, %f2_t0 : !stencil.field<[-2,5]x[-2,5]xf32>, !stencil.field<[-2,5]x[-2,5]xf32>
 // CHECK-NEXT:      }
 // CHECK-NEXT:      %5 = func.call @timer_end(%0) : (f64) -> f64

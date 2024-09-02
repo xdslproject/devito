@@ -73,7 +73,8 @@ def test_xdsl_III():
     assert isinstance(scffor_ops[0], LoadOp)
     assert isinstance(scffor_ops[1], ApplyOp)
     assert isinstance(scffor_ops[2], StoreOp)
-    assert isinstance(scffor_ops[3], Yield)
+    assert isinstance(scffor_ops[3], LoadOp)
+    assert isinstance(scffor_ops[4], Yield)
 
     assert type(ops[7] == Call)
     assert type(ops[8] == StoreOp)
@@ -947,7 +948,6 @@ def test_function_III():
     assert np.isclose(norm(v), devito_norm_v)
 
 
-@pytest.mark.xfail(reason="Operation does not verify: Cannot Load and Store the same field!")  # noqa
 def test_function_IV():
     # Define a Devito Operator with multiple eqs
     grid = Grid(shape=(4, 4))
@@ -970,6 +970,20 @@ def test_function_IV():
     op.apply()
 
     assert np.isclose(norm(u), devito_norm_u)
+
+
+def test_function_V():
+    grid = Grid(shape=(5, 5))
+    x, y = grid.dimensions
+
+    f = Function(name="f", grid=grid)
+
+    eqns = [Eq(f, 2)]
+
+    op = Operator(eqns, opt="xdsl")
+    op.apply()
+
+    assert np.all(f.data == 2)
 
 
 class TestTrigonometric(object):
@@ -1028,37 +1042,20 @@ class TestTrigonometric(object):
         assert np.isclose(norm(u), exp, rtol=1e-4)
 
 
-class TestOperatorUnsupported(object):
+def test_forward_assignment():
+    # simple forward assignment
 
-    @pytest.mark.xfail(reason="stencil.return operation does not verify for i64")
-    def test_forward_assignment(self):
-        # simple forward assignment
+    grid = Grid(shape=(4, 4))
+    u = TimeFunction(name="u", grid=grid, space_order=2)
+    u.data[:, :, :] = 0
 
-        grid = Grid(shape=(4, 4))
-        u = TimeFunction(name="u", grid=grid, space_order=2)
-        u.data[:, :, :] = 0
+    eq0 = Eq(u.forward, 1)
 
-        eq0 = Eq(u.forward, 1)
+    op = Operator([eq0], opt='xdsl')
 
-        op = Operator([eq0], opt='xdsl')
+    op.apply(time_M=1)
 
-        op.apply(time_M=1)
-
-        assert np.isclose(norm(u), 5.6584, rtol=0.001)
-
-    @pytest.mark.xfail(reason="stencil.return operation does not verify for i64")
-    def test_function(self):
-        grid = Grid(shape=(5, 5))
-        x, y = grid.dimensions
-
-        f = Function(name="f", grid=grid)
-
-        eqns = [Eq(f, 2)]
-
-        op = Operator(eqns, opt='xdsl')
-        op.apply()
-
-        assert np.all(f.data == 4)
+    assert np.isclose(norm(u), 5.6584, rtol=0.001)
 
 
 class TestElastic():
