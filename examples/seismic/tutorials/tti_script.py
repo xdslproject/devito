@@ -27,7 +27,9 @@ spacing = (10.,10.) # spacing of 10 meters
 origin  = (0.,0.)  
 nbl = 0  # number of pad points
 
-model = demo_model('layers-tti', spacing=spacing, space_order=8,
+so = 4 # space order
+
+model = demo_model('layers-tti', spacing=spacing, space_order=so,
                    shape=shape, nbl=nbl, nlayers=0)
 
 # initialize Thomsem parameters to those used in Mu et al., (2020)
@@ -46,15 +48,6 @@ delta = model.delta
 epsilon = model.epsilon
 m = model.m
 
-#  Use trigonometric functions from Devito
-costheta  = cos(theta)
-sintheta  = sin(theta)
-cos2theta = cos(2*theta)
-sin2theta = sin(2*theta)
-sin4theta = sin(4*theta)
-
-# NBVAL_IGNORE_OUTPUT
-
 # Values used to compute the time sampling
 epsilonmax = np.max(np.abs(epsilon.data[:]))
 deltamax = np.max(np.abs(delta.data[:]))
@@ -72,18 +65,22 @@ time_range = TimeAxis(start=t0, stop=tn, step=dt)
 print("time_range; ", time_range)
 
 # time stepping 
-p = TimeFunction(name="p", grid=model.grid, time_order=2, space_order=8)
-q = Function(name="q", grid=model.grid, space_order=8)
+p = TimeFunction(name="p", grid=model.grid, time_order=2, space_order=so)
+q = Function(name="q", grid=model.grid, space_order=so)
 
 # Main equations
 
+# stencil_p = solve(m*p.dt2 - q.dx, p.forward)
 stencil_p = solve(m*p.dt2 - q.dx, p.forward)
 # update_p = Eq(p.forward, stencil_p)
 update_p = Eq(p.forward, stencil_p)
 
-p.data[:] = 0.1
+import pdb;pdb.set_trace()
+
+p.data[:] = 0.01
 print("Norm xdsl(p) before is ", norm(p))
 opx = Operator([update_p], opt='xdsl')
+# opx = Operator([update_p], opt='xdsl')
 opx.apply(time_m=0, time_M=time_range.num-2, dt=dt)
 print("Norm xdsl(p) after is ", norm(p))
 
@@ -91,7 +88,12 @@ xnorm0 = np.linalg.norm(p.data[0])
 xnorm1 = np.linalg.norm(p.data[1])
 xnorm2 = np.linalg.norm(p.data[2])
 
-p.data[:] = 0.1
+print("Norm xdsl(p0) after is ", xnorm0)
+print("Norm xdsl(p1) after is ", xnorm1)
+print("Norm xdsl(p2) after is ", xnorm2)
+
+p.data[:] = 0.01
+
 print("Norm devito(p) before is ", norm(p))
 opd = Operator([update_p])
 opd.apply(time_m=0, time_M=time_range.num-2, dt=dt)
@@ -101,5 +103,8 @@ dnorm0 = np.linalg.norm(p.data[0])
 dnorm1 = np.linalg.norm(p.data[1])
 dnorm2 = np.linalg.norm(p.data[2])
 
+print("Norm devito(p0) after is ", dnorm0)
+print("Norm devito(p1) after is ", dnorm1)
+print("Norm devito(p2) after is ", dnorm2)
 
 import pdb; pdb.set_trace()
