@@ -1,5 +1,5 @@
 cloudpickle
-pip>=9.0.1
+pip>=26.0.1
 numpy>1.16
 sympy>=1.9,<1.13
 cached-property
